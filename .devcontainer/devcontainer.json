@@ -1,0 +1,18 @@
+{
+  "name": "Hello-Dalat-PMS",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:20",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {},
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "supabase.supabase-vscode"
+      ]
+    }
+  },
+  "postCreateCommand": "npm install && npm install -g supabase"
+}
