@@ -1,20 +1,9 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { message } from 'antd'
 import { supabase } from '@/api/supabase'
+import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
+import type { CheckinGuestPayload } from '@/types/checkin'
 
-export interface CheckinGuestPayload {
-	full_name: string
-	document_type: 'cccd' | 'passport' | 'other'
-	document_number: string
-	nationality: string
-	date_of_birth?: string
-	gender?: string
-	residency_type?: string
-	province?: string
-	district?: string
-	ward?: string
-	address_detail?: string
-}
+export type { CheckinGuestPayload }
 
 export interface CheckinPayload {
 	booking_id: string
@@ -30,9 +19,12 @@ interface CheckinRpcResponse {
 // Hook check-in gọi RPC transaction và tự refresh cache liên quan.
 export function useCheckIn() {
 	const queryClient = useQueryClient()
+	const { message } = useAppFeedback()
 
 	return useMutation({
 		mutationFn: async ({ booking_id, guests }: CheckinPayload) => {
+			console.log('checkin payload:', JSON.stringify({ p_booking_id: booking_id, p_guests: guests }, null, 2))
+			
 			const { data, error } = await supabase.rpc('checkin_booking_txn', {
 				p_booking_id: booking_id,
 				p_guests: guests,

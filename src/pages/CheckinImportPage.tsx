@@ -4,7 +4,6 @@ import {
   Button,
   Card,
   Divider,
-  message,
   Space,
   Table,
   Tag,
@@ -14,12 +13,14 @@ import {
 import { CheckCircleOutlined, CloseCircleOutlined, UploadOutlined } from '@ant-design/icons';
 import type { UploadFile } from 'antd';
 import { useCheckinImport } from '@/hooks/useCheckinImport';
+import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
 import type { ImportGroup } from '@/types/checkin';
 
 const { Title, Text } = Typography;
 
 export default function CheckinImportPage() {
   const { importing, preview, results, loadPreview, confirmImport, reset } = useCheckinImport();
+  const { message } = useAppFeedback()
   const [loading, setLoading] = useState(false);
   const [fileList, setFileList] = useState<UploadFile[]>([]);
 

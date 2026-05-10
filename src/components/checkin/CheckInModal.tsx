@@ -15,8 +15,12 @@ import {
 import { UploadOutlined } from '@ant-design/icons'
 import { supabase } from '@/api/supabase'
 import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
-import type { ExcelGuestRow } from '@/types/checkin'
-import { useCheckIn, type CheckinGuestPayload } from '@/hooks/useCheckIn'
+import type { ExcelGuestRow, CheckinGuestPayload } from '@/types/checkin'
+import {
+  DOCUMENT_TYPE_OPTIONS,
+  mapExcelIdTypeToDatabaseFormat,
+} from '@/types/checkin'
+import { useCheckIn } from '@/hooks/useCheckIn'
 import { groupByRoomAndDate, parseCheckinExcel } from '@/utils/parseCheckinExcel'
 
 interface CheckInModalProps {
@@ -27,7 +31,7 @@ interface CheckInModalProps {
 
 interface ManualGuestFormValues {
   full_name: string
-  document_type: 'cccd' | 'passport' | 'other'
+  document_type: string
   document_number: string
   nationality: string
   date_of_birth?: Dayjs
@@ -37,7 +41,7 @@ interface ManualGuestFormValues {
 function toGuestPayloadFromExcel(row: ExcelGuestRow): CheckinGuestPayload {
   return {
     full_name: row.full_name,
-    document_type: row.id_type,
+    document_type: mapExcelIdTypeToDatabaseFormat(row.id_type), // Mapping từ Excel -> DB format
     document_number: row.id_number,
     nationality: row.nationality,
     date_of_birth: row.date_of_birth || undefined,
@@ -58,6 +62,146 @@ export function CheckInModal({ isOpen, onClose, bookingId }: CheckInModalProps):
   const [manualForm] = Form.useForm<ManualGuestFormValues>()
   const { message } = useAppFeedback()
   const { mutate: checkin, isPending } = useCheckIn()
+
+  const handleExcelUpload = async (file: File): Promise<boolean> => {
+    setIsParsingExcel(true)
+    try {
+      const { data: booking, error: bookingError } = await supabase
+        .from('bookings')
+        .select('room_id, check_in')
+        .eq('id', bookingId)
+        .single()
+
+      if (bookingError || !booking) {
+        message.error('Không tải được thông tin booking hiện tại để lọc dữ liệu Excel')
+        return false
+      }
+
+      const rows = await parseCheckinExcel(file)
+      if (rows.length === 0) {
+        setExcelRows([])
+        message.warning('File Excel không có dữ liệu khách')
+        return false
+      }
+
+      const bookingCheckInDate = dayjs(booking.check_in).format('YYYY-MM-DD')
+      const groupedRows = groupByRoomAndDate(rows)
+      const exactKey = `${booking.room_id}__${bookingCheckInDate}`
+
+      let matchedRows = groupedRows.get(exactKey) ?? []
+
+      if (matchedRows.length === 0) {
+        const normalizedBookingRoom = normalizeRoomCode(booking.room_id)
+        for (const [groupKey, guests] of groupedRows.entries()) {
+          const [roomNumber, checkInDate] = groupKey.split('__')
+          if (
+            normalizeRoomCode(roomNumber) === normalizedBookingRoom &&
+            checkInDate === bookingCheckInDate
+          ) {
+            matchedRows = guests
+            break
+          }
+        }
+      }
+
+      setExcelRows(matchedRows)
+
+      if (matchedRows.length > 0) {
+        message.success(
+          `Đã lọc ${matchedRows.length}/${rows.length} khách cho phòng ${booking.room_id} ngày ${dayjs(booking.check_in).format('DD/MM/YYYY')}`,
+        )
+      } else {
+        const availableGroups = [...groupedRows.entries()]
+          .map(([groupKey, guests]) => {
+            const [roomNumber, checkInDate] = groupKey.split('__')
+            const displayDate = checkInDate
+              ? dayjs(checkInDate).format('DD/MM/YYYY')
+              : 'không rõ ngày'
+
+            return `Phòng ${roomNumber} (${displayDate}) - ${guests.length} khách`
+          })
+          .join('; ')
+
+        message.error(
+          `Không tìm thấy khách cho booking hiện tại (phòng ${booking.room_id}, ngày ${dayjs(booking.check_in).format('DD/MM/YYYY')}). Dữ liệu trong file: ${availableGroups || 'không có nhóm hợp lệ'}`,
+        )
+      }
+    } catch {
+      message.error('Không đọc được file Excel')
+    } finally {
+      setIsParsingExcel(false)
+    }
+
+    return false
+  }
+
+  const submitExcelCheckIn = () => {
+    if (excelRows.length === 0) {
+      message.error('Vui lòng import file Excel trước khi xác nhận')
+      return
+    }
+
+    handleConfirm(excelRows.map(toGuestPayloadFromExcel))
+  }
+
+  const submitManualCheckIn = async () => {
+    try {
+      const values = await manualForm.validateFields()
+      handleConfirm([
+        {
+          full_name: values.full_name,
+          document_type: values.document_type as any, // Đã validate là một trong options
+          document_number: values.document_number,
+          nationality: values.nationality,
+          date_of_birth: values.date_of_birth ? dayjs(values.date_of_birth).format('YYYY-MM-DD') : undefined,
+          gender: values.gender ?? undefined,
+        },
+      ])
+    } catch {
+      message.error('Vui lòng kiểm tra lại thông tin nhập tay')
+    }
+  }
+
+  const handleConfirm = (guests: CheckinGuestPayload[]) => {
+    if (guests.length === 0) {
+      message.error('Danh sách khách check-in trống')
+      return
+    }
+
+    checkin(
+      { booking_id: bookingId, guests },
+      { onSuccess: () => handleClose() },
+    )
+  }
+
+  const handleClose = () => {
+    setExcelRows([])
+    setActiveTab('excel')
+    manualForm.resetFields()
+    onClose()
+  }
+
+  return (
+    <Modal
+      open={isOpen}
+      onCancel={handleClose}
+      title="Nhận phòng"
+      width={960}
+      destroyOnHidden
+      footer={
+        <Space>
+          <Button onClick={handleClose} disabled={isPending}>
+            Huỷ
+          </Button>
+          <Button
+            type="primary"
+            loading={isPending}
+            onClick={activeTab === 'excel' ? submitExcelCheckIn : () => void submitManualCheckIn()}
+          >
+            Xác nhận Check-in
+          </Button>
+        </Space>
+      }
 
   const handleExcelUpload = async (file: File): Promise<boolean> => {
     setIsParsingExcel(true)
@@ -266,15 +410,11 @@ export function CheckInModal({ isOpen, onClose, bookingId }: CheckInModalProps):
                 <Form.Item
                   label="Loại giấy tờ"
                   name="document_type"
-                  initialValue="cccd"
+                  initialValue="CCCD"
                   rules={[{ required: true, message: 'Vui lòng chọn loại giấy tờ' }]}
                 >
                   <Select
-                    options={[
-                      { label: 'CCCD', value: 'cccd' },
-                      { label: 'Passport', value: 'passport' },
-                      { label: 'Giấy tờ khác', value: 'other' },
-                    ]}
+                    options={DOCUMENT_TYPE_OPTIONS}
                     placeholder="Chọn loại giấy tờ"
                   />
                 </Form.Item>

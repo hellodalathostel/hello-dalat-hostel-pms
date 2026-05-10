@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Button, Divider, Input, Modal, Select, Space, Tag, Typography, message } from 'antd'
+import { Button, Divider, Input, Modal, Select, Space, Tag, Typography } from 'antd'
 import { DollarOutlined, LogoutOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { useCheckout } from '@/hooks/useCheckOut'
+import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
 import type { PaymentMethod } from '@/types/database'
 
 const { Text, Title } = Typography
@@ -39,6 +40,7 @@ export function CheckoutModal({ target, onClose }: CheckoutModalProps) {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash')
   const [note, setNote] = useState('')
   const { mutateAsync, isPending } = useCheckout()
+  const { message } = useAppFeedback()
 
   useEffect(() => {
     if (!target) {

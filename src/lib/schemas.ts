@@ -83,3 +83,31 @@ export const paymentSchema = z.object({
 })
 
 export type PaymentFormValues = z.infer<typeof paymentSchema>
+
+// Schema validate cho check-in guest payload
+export const checkinGuestSchema = z.object({
+  full_name: z.string({ message: 'Vui lòng nhập họ tên' }).min(1, 'Họ tên là bắt buộc'),
+  document_type: z.enum(['CCCD', 'Hộ chiếu', 'Giấy tờ khác'], {
+    message: 'Loại giấy tờ không hợp lệ',
+  }),
+  document_number: z.string({ message: 'Vui lòng nhập số giấy tờ' }).min(1, 'Số giấy tờ là bắt buộc'),
+  nationality: z.string({ message: 'Vui lòng nhập quốc tịch' }).min(1, 'Quốc tịch là bắt buộc'),
+  date_of_birth: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Ngày sinh phải ở định dạng YYYY-MM-DD')
+    .or(z.literal(''))
+    .optional(),
+  gender: z.string().optional().or(z.literal('')),
+  residency_type: z
+    .enum(['Thường trú', 'Tạm trú', 'Địa chỉ khác'], {
+      message: 'Loại cư trú không hợp lệ',
+    })
+    .or(z.literal(''))
+    .optional(),
+  province: z.string().optional().or(z.literal('')),
+  district: z.string().optional().or(z.literal('')),
+  ward: z.string().optional().or(z.literal('')),
+  address_detail: z.string().optional().or(z.literal('')),
+})
+
+export type CheckinGuestFormValues = z.infer<typeof checkinGuestSchema>
