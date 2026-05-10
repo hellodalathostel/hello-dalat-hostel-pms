@@ -53,3 +53,6 @@ entrypoint = "./functions/dk13-reminder/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/dk13-reminder/*.html" ]
+
+[functions.daily-revenue-summary]
+verify_jwt = false

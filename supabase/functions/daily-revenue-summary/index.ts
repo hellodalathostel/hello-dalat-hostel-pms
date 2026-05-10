@@ -12,7 +12,7 @@ serve(async (req) => {
     })
   }
 
-  const supabase = createClient(
+  const supabasePublic = createClient(
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
   )
@@ -34,7 +34,7 @@ serve(async (req) => {
   }
 
   // ── 1. PAYMENTS trong ngày ──────────────────────────────────────────────
-  const { data: payments, error: pmError } = await supabase
+  const { data: payments, error: pmError } = await supabasePublic
     .from('payment_history')
     .select('amount, method, group_id')
     .eq('date', targetDate)
@@ -53,7 +53,7 @@ serve(async (req) => {
   }
 
   // ── 2. CHECK-INS ngày target ────────────────────────────────────────────
-  const { data: checkIns, error: ciError } = await supabase
+  const { data: checkIns, error: ciError } = await supabasePublic
     .from('bookings')
     .select('id, room_id, grand_total, group_id, status')
     .eq('check_in', targetDate)
@@ -68,7 +68,7 @@ serve(async (req) => {
   }
 
   // ── 3. STAYOVERS (đang ở): check_in < target < check_out ───────────────
-  const { data: stayovers, error: soError } = await supabase
+  const { data: stayovers, error: soError } = await supabasePublic
     .from('bookings')
     .select('id, room_id')
     .lt('check_in', targetDate)
@@ -88,7 +88,7 @@ serve(async (req) => {
   let sourceBreakdown: Record<string, number> = {}
 
   if (groupIds.length > 0) {
-    const { data: groups } = await supabase
+    const { data: groups } = await supabasePublic
       .from('groups')
       .select('id, source')
       .in('id', groupIds)
@@ -116,30 +116,13 @@ serve(async (req) => {
     generated_at: new Date().toISOString(),
   }
 
-  // ── 6. Ghi brain.daily_log (delete-then-insert để idempotent) ───────────
-  const { error: delError } = await supabase
-    .schema('brain')
-    .from('daily_log')
-    .delete()
-    .eq('log_date', targetDate)
-    .eq('category', 'revenue_summary')
-
-  if (delError) {
-    return new Response(JSON.stringify({ error: 'delete old log: ' + delError.message }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    })
-  }
-
-  const { error: logError } = await supabase
-    .schema('brain')
-    .from('daily_log')
-    .insert({
-      log_date: targetDate,
-      category: 'revenue_summary',
-      content: JSON.stringify(summary),
-      source: 'edge-function',
-    })
+  // ── 6. Ghi brain.daily_log qua RPC ─────────────────────────────────────
+  const { error: logError } = await supabasePublic.rpc('upsert_brain_daily_log', {
+    p_log_date: targetDate,
+    p_category: 'revenue_summary',
+    p_content: JSON.stringify(summary),
+    p_source: 'edge-function',
+  })
 
   if (logError) {
     return new Response(JSON.stringify({ error: 'insert log: ' + logError.message }), {

@@ -17,6 +17,9 @@ dist-ssr
 !.vscode/extensions.json
 .idea
 .DS_Store
+desktop.ini
+Desktop.ini
+.tmp.driveupload/
 *.suo
 *.ntvs*
 *.njsproj
