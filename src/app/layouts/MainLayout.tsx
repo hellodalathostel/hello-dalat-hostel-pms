@@ -2,8 +2,10 @@ import {
   FileExcelOutlined,
   FormOutlined,
   HomeOutlined,
+  LinkOutlined,
   RiseOutlined,
   TableOutlined,
+  UserAddOutlined,
 } from '@ant-design/icons'
 import { Layout, Menu, Space, Typography } from 'antd'
 import { useMemo } from 'react'
@@ -39,6 +41,16 @@ const menuItems: ItemType[] = [
     icon: <FileExcelOutlined />,
     label: 'Báo cáo ĐK14',
   },
+  {
+    key: '/checkin-import',
+    icon: <UserAddOutlined />,
+    label: 'Import Check-in (Excel)',
+  },
+  {
+    key: '/settings/ical',
+    icon: <LinkOutlined />,
+    label: 'iCal Feed',
+  },
 ]
 
 export function MainLayout(): JSX.Element {
@@ -60,6 +72,14 @@ export function MainLayout(): JSX.Element {
 
     if (location.pathname.startsWith('/dk14-report')) {
       return ['/dk14-report']
+    }
+
+    if (location.pathname.startsWith('/checkin-import')) {
+      return ['/checkin-import']
+    }
+
+    if (location.pathname.startsWith('/settings')) {
+      return ['/settings/ical']
     }
 
     if (location.pathname.startsWith('/dashboard')) {

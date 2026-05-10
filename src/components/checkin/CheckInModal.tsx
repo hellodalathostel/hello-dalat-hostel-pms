@@ -1,12 +1,14 @@
-﻿import { useRef, useMemo, useState, type JSX } from 'react'
+﻿import { useMemo, useState, type JSX } from 'react'
 import { useFieldArray, useForm, type SubmitHandler } from 'react-hook-form'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Alert, Button, Card, Checkbox, Collapse, Form, Input, Modal, Select, Space, Spin, Tooltip } from 'antd'
-import { ScanOutlined } from '@ant-design/icons'
+import { Alert, Button, Card, Checkbox, Collapse, Form, Input, Modal, Select, Space, Upload, message } from 'antd'
+import { UploadOutlined } from '@ant-design/icons'
+import { supabase } from '@/api/supabase'
 import { processCheckInTxn } from '@/api/checkInOutApi'
-import { useOcrScan } from '@/hooks/useCheckIn'
+import { parseCheckinExcel, groupByRoomAndDate } from '@/utils/parseCheckinExcel'
 import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
 import type { DocumentType, Gender, GuestCheckInPayload, ResidencyType } from '@/lib/schemas/checkInOut'
+import type { ExcelGuestRow } from '@/types/checkin'
 
 interface CheckInModalProps {
   isOpen: boolean
@@ -55,75 +57,36 @@ function createDefaultGuest(isPrimary: boolean): GuestCheckInPayload {
   }
 }
 
-/**
- * Resize + compress ảnh xuống tối đa 1200px, quality 0.85
- * Giảm dung lượng ảnh camera trước khi gửi OCR để tránh timeout.
- */
-async function compressImageToBase64(file: File): Promise<{ base64: string; mimeType: string }> {
-  return new Promise((resolve, reject) => {
-    const img = new Image()
-    const objectUrl = URL.createObjectURL(file)
-
-    img.onload = () => {
-      URL.revokeObjectURL(objectUrl)
-
-      const MAX_SIDE = 1200
-      let { width, height } = img
-
-      if (width > MAX_SIDE || height > MAX_SIDE) {
-        if (width > height) {
-          height = Math.round((height * MAX_SIDE) / width)
-          width = MAX_SIDE
-        } else {
-          width = Math.round((width * MAX_SIDE) / height)
-          height = MAX_SIDE
-        }
-      }
-
-      const canvas = document.createElement('canvas')
-      canvas.width = width
-      canvas.height = height
-
-      const ctx = canvas.getContext('2d')
-      if (!ctx) {
-        reject(new Error('Canvas không khả dụng'))
-        return
-      }
-
-      ctx.drawImage(img, 0, 0, width, height)
-
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.85)
-      const base64 = dataUrl.split(',')[1]
-      resolve({ base64, mimeType: 'image/jpeg' })
-    }
-
-    img.onerror = () => {
-      URL.revokeObjectURL(objectUrl)
-      reject(new Error('Không thể đọc file ảnh'))
-    }
-
-    img.src = objectUrl
-  })
+// Chuyển đổi ExcelGuestRow sang GuestCheckInPayload
+function excelRowToCheckInPayload(row: ExcelGuestRow, isPrimary: boolean): GuestCheckInPayload {
+  return {
+    is_primary: isPrimary,
+    full_name: row.full_name,
+    document_type:
+      row.id_type === 'cccd'
+        ? 'CCCD'
+        : row.id_type === 'passport'
+          ? 'Hộ chiếu'
+          : 'Giấy tờ khác',
+    document_number: row.id_number || undefined,
+    date_of_birth: row.date_of_birth || undefined,
+    gender: row.gender === 'male' ? 'Nam' : row.gender === 'female' ? 'Nữ' : undefined,
+    phone: row.phone || undefined,
+    nationality: row.nationality || undefined,
+    address_detail: row.address || undefined,
+  }
 }
 
 /**
  * Modal Check-in nhiều khách hàng
- * - Mỗi card khách có nút "Quét CCCD/Passport" → gọi OCR Edge Function → auto-fill form
- * - OCR dùng useOcrScan hook, kết quả map thẳng vào GuestCheckInPayload (field names khớp 1-1)
+ * - Import file Excel khai báo lưu trú → tự động điền dữ liệu khách
+ * - Parse Excel bằng parseCheckinExcel, chuyển đổi sang GuestCheckInPayload
  */
 export function CheckInModal({ isOpen, onClose, bookingId }: CheckInModalProps): JSX.Element {
   const queryClient = useQueryClient()
   const { notification } = useAppFeedback()
   const [formError, setFormError] = useState<string | null>(null)
-
-  // Ref array để trigger file input ẩn cho từng khách
-  const fileInputRefs = useRef<(HTMLInputElement | null)[]>([])
-
-  // Track index nào đang chạy OCR
-  const [ocrLoadingIndex, setOcrLoadingIndex] = useState<number | null>(null)
-  const [pendingImages, setPendingImages] = useState<File[]>([])
-  const [showImagePreview, setShowImagePreview] = useState(false)
-  const [targetGuestIndex, setTargetGuestIndex] = useState<number | null>(null)
+  const [excelLoading, setExcelLoading] = useState(false)
 
   const { control, handleSubmit, reset, watch, setValue } = useForm<CheckInFormValues>({
     defaultValues: {
@@ -138,133 +101,65 @@ export function CheckInModal({ isOpen, onClose, bookingId }: CheckInModalProps):
     return (guests ?? []).filter((g) => g?.is_primary).length
   }, [guests])
 
-  // OCR mutation (dùng hook có sẵn)
-  const ocrMutation = useOcrScan()
-
-  const ocrFieldMap: (keyof GuestCheckInPayload)[] = [
-    'full_name',
-    'date_of_birth',
-    'gender',
-    'nationality',
-    'country',
-    'document_type',
-    'document_number',
-    'document_name',
-    'province',
-    'district',
-    'ward',
-    'address_detail',
-    'residency_type',
-  ]
-
-  /**
-   * Bước 1: User chọn file(s) → hiện preview để confirm
-   * accept multiple để chụp/chọn nhiều mặt CCCD cùng lúc
-   */
-  const handleFileSelect = (
-    event: React.ChangeEvent<HTMLInputElement>,
-    guestIndex: number
-  ): void => {
-    const files = Array.from(event.target.files ?? [])
-    event.target.value = '' // reset để có thể chọn lại
-
-    if (files.length === 0) return
-
-    const invalidFiles = files.filter((file) => !file.type.startsWith('image/'))
-    if (invalidFiles.length > 0) {
-      notification.error({
-        message: 'File không hợp lệ',
-        description: 'Vui lòng chỉ chọn file ảnh (JPG, PNG, HEIC...).',
-      })
-      return
-    }
-
-    setPendingImages(files)
-    setTargetGuestIndex(guestIndex)
-    setShowImagePreview(true)
-  }
-
-  /**
-   * Bước 2: User confirm → compress tất cả ảnh → gọi OCR → xử lý kết quả
-   * Nếu OCR trả về nhiều khách → append vào form
-   * Nếu OCR trả về 1 khách → fill vào guest đang xử lý (merge với existing data)
-   */
-  const handleOcrConfirm = async (): Promise<void> => {
-    if (!pendingImages.length || targetGuestIndex === null) return
-
-    setShowImagePreview(false)
-    setOcrLoadingIndex(targetGuestIndex)
-
+  // Import Excel và điền dữ liệu vào form
+  const handleExcelUpload = async (file: File): Promise<void> => {
+    setExcelLoading(true)
     try {
-      // Compress tất cả ảnh song song
-      const compressedImages = await Promise.all(
-        pendingImages.map((file) => compressImageToBase64(file))
-      )
+      // Fetch booking detail (room_id, check_in)
+      const { data: booking } = await supabase
+        .from('bookings')
+        .select('room_id, check_in')
+        .eq('id', bookingId)
+        .single()
 
-      const ocrImages = compressedImages.map(({ base64, mimeType }) => ({
-        data: base64,
-        mime_type: mimeType,
-      }))
-
-      const results = await ocrMutation.mutateAsync(ocrImages)
-
-      if (results.length === 0) {
-        notification.warning({
-          message: 'Không đọc được thông tin',
-          description: 'Vui lòng thử lại với ảnh rõ hơn.',
-        })
+      if (!booking) {
+        message.error('Không tìm thấy thông tin booking.')
         return
       }
 
-      if (results.length === 1) {
-        for (const field of ocrFieldMap) {
-          const value = results[0][field]
-          if (value !== undefined && value !== null && value !== '') {
-            setValue(`guests.${targetGuestIndex}.${field}`, value as never, {
-              shouldValidate: true,
-            })
-          }
-        }
+      // Parse Excel file
+      const excelRows = await parseCheckinExcel(file)
 
-        notification.success({
-          message: 'Quét thành công',
-          description: `Đã điền thông tin cho Khách ${targetGuestIndex + 1}. Vui lòng kiểm tra lại.`,
-        })
-      } else {
-        results.forEach((guestData, i) => {
-          if (i === 0) {
-            for (const field of ocrFieldMap) {
-              const value = guestData[field]
-              if (value !== undefined && value !== null && value !== '') {
-                setValue(`guests.${targetGuestIndex}.${field}`, value as never, {
-                  shouldValidate: true,
-                })
-              }
-            }
-          } else {
-            const newGuest = createDefaultGuest(false)
-            const guestPatch: Partial<GuestCheckInPayload> = {}
-            for (const field of ocrFieldMap) {
-              const value = guestData[field]
-              if (value !== undefined && value !== null && value !== '') {
-                Object.assign(guestPatch, { [field]: value })
-              }
-            }
-            append({ ...newGuest, ...guestPatch })
-          }
-        })
-
-        notification.success({
-          message: `Quét thành công ${results.length} khách`,
-          description: 'Đã tạo thông tin cho từng khách. Vui lòng kiểm tra và bổ sung số điện thoại.',
-        })
+      if (excelRows.length === 0) {
+        message.warning('File Excel không chứa dữ liệu khách.')
+        return
       }
-    } catch {
-      // Lỗi đã được handle trong useOcrScan.onError
+
+      // Group Excel rows theo (room_number, check_in_date)
+      const grouped = groupByRoomAndDate(excelRows)
+
+      // Tìm group khớp với booking (room_id + check_in date)
+      const bookingCheckInDate = booking.check_in // YYYY-MM-DD
+      const matchingKey = `${booking.room_id}__${bookingCheckInDate}`
+      const matchingGuests = grouped.get(matchingKey)
+
+      if (!matchingGuests || matchingGuests.length === 0) {
+        // Nếu không tìm được, hiện danh sách tất cả groups và cho user chọn
+        const availableRooms = Array.from(grouped.keys())
+          .map((key) => {
+            const [room, date] = key.split('__')
+            return `Phòng ${room} (${date}): ${grouped.get(key)?.length ?? 0} khách`
+          })
+          .join('\n')
+
+        message.error(
+          `Không tìm thấy khách của phòng ${booking.room_id} ngày ${bookingCheckInDate} trong file.\n\nDữ liệu trong file:\n${availableRooms}`
+        )
+        return
+      }
+
+      // Chuyển đổi Excel rows sang GuestCheckInPayload
+      const newGuests = matchingGuests.map((row, idx) => excelRowToCheckInPayload(row, idx === 0))
+
+      // Thay thế danh sách khách hiện tại
+      reset({ guests: newGuests })
+
+      message.success(`Đã import ${matchingGuests.length} khách từ Excel cho phòng ${booking.room_id}. Vui lòng kiểm tra lại dữ liệu.`)
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Không đọc được file Excel'
+      message.error(errorMsg)
     } finally {
-      setOcrLoadingIndex(null)
-      setPendingImages([])
-      setTargetGuestIndex(null)
+      setExcelLoading(false)
     }
   }
 
@@ -319,9 +214,6 @@ export function CheckInModal({ isOpen, onClose, bookingId }: CheckInModalProps):
     onClose()
     setFormError(null)
     reset({ guests: [createDefaultGuest(true)] })
-    setPendingImages([])
-    setShowImagePreview(false)
-    setTargetGuestIndex(null)
   }
 
   const isSubmitting = mutation.isPending
@@ -367,38 +259,251 @@ export function CheckInModal({ isOpen, onClose, bookingId }: CheckInModalProps):
               key={field.id}
               title={`Khách ${index + 1}${guests?.[index]?.is_primary ? ' (Đại diện)' : ''}`}
               extra={
-                <Space>
-                  {/* Nút quét OCR cho từng khách */}
-                  <Tooltip title="Quét CCCD hoặc Passport để tự động điền thông tin">
-                    <Button
-                      icon={<ScanOutlined />}
-                      onClick={() => fileInputRefs.current[index]?.click()}
-                      disabled={isSubmitting || ocrLoadingIndex !== null}
-                      loading={ocrLoadingIndex === index}
-                    >
-                      {ocrLoadingIndex === index ? 'Đang quét...' : 'Quét CCCD/Passport'}
-                    </Button>
-                  </Tooltip>
+                fields.length > 1 && (
+                  <Button danger onClick={() => remove(index)} disabled={isSubmitting}>
+                    Xoá
+                  </Button>
+                )
+              }
+            >
+              {/* Checkbox khách đại diện */}
+                <Form.Item label="Khách đại diện">
+                  <Checkbox
+                    checked={Boolean(guests?.[index]?.is_primary)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        fields.forEach((_, i) => setValue(`guests.${i}.is_primary`, i === index))
+                      } else {
+                        setValue(`guests.${index}.is_primary`, false)
+                      }
+                    }}
+                    disabled={isSubmitting}
+                  >
+                    Đánh dấu là khách đại diện của đoàn
+                  </Checkbox>
+                </Form.Item>
 
-                  {/* Input file ẩn — multiple để chọn nhiều mặt CCCD cùng lúc */}
-                  <input
-                    ref={(el) => { fileInputRefs.current[index] = el }}
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    style={{ display: 'none' }}
-                    onChange={(e) => handleFileSelect(e, index)}
+                {/* Họ tên */}
+                <Form.Item
+                  label="Họ tên *"
+                  required
+                  validateStatus={!guests?.[index]?.full_name?.trim() ? 'error' : undefined}
+                  help={!guests?.[index]?.full_name?.trim() ? 'Họ tên là bắt buộc.' : undefined}
+                >
+                  <Input
+                    value={guests?.[index]?.full_name ?? ''}
+                    onChange={(e) => setValue(`guests.${index}.full_name`, e.target.value, { shouldValidate: true })}
+                    placeholder="Nhập họ tên khách (bắt buộc)"
+                    disabled={isSubmitting}
                   />
+                </Form.Item>
 
-                  {fields.length > 1 && (
+                {/* Loại giấy tờ */}
+                <Form.Item label="Loại giấy tờ">
+                  <Select
+                    value={guests?.[index]?.document_type}
+                    options={documentTypeOptions}
+                    onChange={(v) => setValue(`guests.${index}.document_type`, v)}
+                    disabled={isSubmitting}
+                  />
+                </Form.Item>
+
+                {/* Số giấy tờ */}
+                <Form.Item label="Số giấy tờ">
+                  <Input
+                    value={guests?.[index]?.document_number ?? ''}
+                    onChange={(e) => setValue(`guests.${index}.document_number`, e.target.value)}
+                    placeholder="Nhập số giấy tờ"
+                    disabled={isSubmitting}
+                  />
+                </Form.Item>
+
+                {/* Số điện thoại */}
+                <Form.Item label="Số điện thoại">
+                  <Input
+                    value={guests?.[index]?.phone ?? ''}
+                    onChange={(e) => setValue(`guests.${index}.phone`, e.target.value)}
+                    placeholder="Nhập số điện thoại"
+                    disabled={isSubmitting}
+                  />
+                </Form.Item>
+
+                {/* Thông tin bổ sung (collapse) */}
+                <Collapse
+                  items={[
+                    {
+                      key: `more-${field.id}`,
+                      label: '📋 Thông tin bổ sung (mở rộng)',
+                      children: (
+                        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                          <Form.Item label="Tên giấy tờ">
+                            <Input
+                              value={guests?.[index]?.document_name ?? ''}
+                              onChange={(e) => setValue(`guests.${index}.document_name`, e.target.value)}
+                              placeholder="Ví dụ: Căn cước công dân"
+                              disabled={isSubmitting}
+                            />
+                          </Form.Item>
+
+                          <Form.Item label="Ngày sinh">
+                            <Input
+                              value={guests?.[index]?.date_of_birth ?? ''}
+                              onChange={(e) => setValue(`guests.${index}.date_of_birth`, e.target.value)}
+                              placeholder="Ví dụ: 1990-12-31"
+                              disabled={isSubmitting}
+                            />
+                          </Form.Item>
+
+                          <Form.Item label="Giới tính">
+                            <Select
+                              allowClear
+                              value={guests?.[index]?.gender}
+                              options={genderOptions}
+                              onChange={(v) => setValue(`guests.${index}.gender`, v)}
+                              disabled={isSubmitting}
+                            />
+                          </Form.Item>
+
+                          <Form.Item label="Quốc tịch">
+                            <Input
+                              value={guests?.[index]?.nationality ?? ''}
+                              onChange={(e) => setValue(`guests.${index}.nationality`, e.target.value)}
+                              placeholder="Ví dụ: VNM"
+                              disabled={isSubmitting}
+                            />
+                          </Form.Item>
+
+                          <Form.Item label="Quốc gia">
+                            <Input
+                              value={guests?.[index]?.country ?? ''}
+                              onChange={(e) => setValue(`guests.${index}.country`, e.target.value)}
+                              placeholder="Ví dụ: VNM"
+                              disabled={isSubmitting}
+                            />
+                          </Form.Item>
+
+                          <Form.Item label="Loại cư trú">
+                            <Select
+                              allowClear
+                              value={guests?.[index]?.residency_type}
+                              options={residencyTypeOptions}
+                              onChange={(v) => setValue(`guests.${index}.residency_type`, v)}
+                              disabled={isSubmitting}
+                            />
+                          </Form.Item>
+
+                          <Form.Item label="Tỉnh/Thành phố">
+                            <Input
+                              value={guests?.[index]?.province ?? ''}
+                              onChange={(e) => setValue(`guests.${index}.province`, e.target.value)}
+                              placeholder="Ví dụ: Lâm Đồng"
+                              disabled={isSubmitting}
+                            />
+                          </Form.Item>
+
+                          <Form.Item label="Quận/Huyện">
+                            <Input
+                              value={guests?.[index]?.district ?? ''}
+                              onChange={(e) => setValue(`guests.${index}.district`, e.target.value)}
+                              placeholder="Ví dụ: Thành phố Đà Lạt"
+                              disabled={isSubmitting}
+                            />
+                          </Form.Item>
+
+                          <Form.Item label="Phường/Xã">
+                            <Input
+                              value={guests?.[index]?.ward ?? ''}
+                              onChange={(e) => setValue(`guests.${index}.ward`, e.target.value)}
+                              placeholder="Ví dụ: Phường 1"
+                              disabled={isSubmitting}
+                            />
+                          </Form.Item>
+
+                          <Form.Item label="Địa chỉ chi tiết">
+                            <Input.TextArea
+                              value={guests?.[index]?.address_detail ?? ''}
+                              onChange={(e) => setValue(`guests.${index}.address_detail`, e.target.value)}
+                              rows={2}
+                              placeholder="Nhập địa chỉ cụ thể"
+                              disabled={isSubmitting}
+                            />
+                          </Form.Item>
+                        </Space>
+                      ),
+                    },
+                  ]}
+                />
+            </Card>
+          ))}
+        </Space>
+      </Form>
+
+      {/* Modal import Excel */}
+      <Modal
+        open={isOpen}
+        title="Nhận phòng"
+        width={920}
+        destroyOnHidden
+        onCancel={handleClose}
+        footer={
+          <Space>
+            <Button onClick={handleClose} disabled={isSubmitting}>Huỷ</Button>
+            <Button type="primary" onClick={handleSubmit(onSubmit)} loading={isSubmitting}>
+              Xác nhận nhận phòng
+            </Button>
+          </Space>
+        }
+      >
+        <Form layout="vertical">
+          <Alert
+            type={primaryCount === 1 ? 'success' : 'error'}
+            showIcon
+            message={primaryCount === 1 ? '✓ Đã chọn khách đại diện' : '✗ Phải chọn chính xác 1 khách đại diện'}
+            description="Khách đại diện sẽ được ghi nhận trong hồ sơ DK14."
+            style={{ marginBottom: 16 }}
+          />
+
+          {formError && (
+            <Alert type="error" showIcon message={formError} style={{ marginBottom: 16 }} />
+          )}
+
+          <Form.Item label="Import khách từ file Excel">
+            <Upload
+              accept=".xlsx,.xls"
+              maxCount={1}
+              beforeUpload={(file) => {
+                handleExcelUpload(file)
+                return false
+              }}
+            >
+              <Button icon={<UploadOutlined />} loading={excelLoading}>
+                Chọn file khai báo lưu trú
+              </Button>
+            </Upload>
+            <div style={{ fontSize: 12, color: '#666', marginTop: 8 }}>
+              Chỉ upload file Excel từ khai báo lưu trú của Công an địa phương
+            </div>
+          </Form.Item>
+
+          <Space style={{ marginBottom: 16 }}>
+            <Button onClick={() => append(createDefaultGuest(false))} disabled={isSubmitting}>
+              + Thêm khách ở cùng phòng
+            </Button>
+          </Space>
+
+          <Space direction="vertical" size={16} style={{ width: '100%' }}>
+            {fields.map((field, index) => (
+              <Card
+                key={field.id}
+                title={`Khách ${index + 1}${guests?.[index]?.is_primary ? ' (Đại diện)' : ''}`}
+                extra={
+                  fields.length > 1 && (
                     <Button danger onClick={() => remove(index)} disabled={isSubmitting}>
                       Xoá
                     </Button>
-                  )}
-                </Space>
-              }
-            >
-              <Spin spinning={ocrLoadingIndex === index} tip="Đang nhận diện...">
+                  )
+                }
+              >
                 {/* Checkbox khách đại diện */}
                 <Form.Item label="Khách đại diện">
                   <Checkbox
@@ -566,59 +671,10 @@ export function CheckInModal({ isOpen, onClose, bookingId }: CheckInModalProps):
                     },
                   ]}
                 />
-              </Spin>
-            </Card>
-          ))}
-        </Space>
-      </Form>
-
-      {/* Modal preview ảnh trước khi OCR */}
-      <Modal
-        open={showImagePreview}
-        title={`Xác nhận quét ${pendingImages.length} ảnh`}
-        onCancel={() => {
-          setShowImagePreview(false)
-          setPendingImages([])
-          setTargetGuestIndex(null)
-        }}
-        footer={
-          <Space>
-            <Button onClick={() => { setShowImagePreview(false); setPendingImages([]); setTargetGuestIndex(null) }}>
-              Huỷ
-            </Button>
-            <Button type="primary" onClick={handleOcrConfirm}>
-              Quét thông tin
-            </Button>
-          </Space>
-        }
-      >
-        <Space direction="vertical" style={{ width: '100%' }}>
-          <Alert
-            type="info"
-            showIcon
-            message="Mẹo chụp CCCD"
-            description={
-              <ul style={{ margin: 0, paddingLeft: 16 }}>
-                <li>CCCD 2 mặt: chọn cả 2 ảnh → hệ thống gộp thành 1 khách</li>
-                <li>Nhiều CCCD trong 1 ảnh: chọn 1 ảnh → hệ thống tách từng người</li>
-              </ul>
-            }
-          />
-          <Space wrap>
-            {pendingImages.map((file, i) => (
-              <div key={i} style={{ textAlign: 'center' }}>
-                <img
-                  src={URL.createObjectURL(file)}
-                  alt={`Ảnh ${i + 1}`}
-                  style={{ width: 150, height: 100, objectFit: 'cover', borderRadius: 4, border: '1px solid #d9d9d9' }}
-                />
-                <div style={{ fontSize: 12, color: '#666', marginTop: 4 }}>
-                  {file.name.length > 20 ? `${file.name.slice(0, 17)}...` : file.name}
-                </div>
-              </div>
+              </Card>
             ))}
           </Space>
-        </Space>
+        </Form>
       </Modal>
     </Modal>
   )

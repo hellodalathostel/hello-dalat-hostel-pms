@@ -1,11 +1,8 @@
-// supabase/functions/ocr-id-scanner/index.ts
-// Nhận ảnh CCCD/Passport (base64), gọi Gemini Vision API, trả về JSON chuẩn customers schema
+// supabase/functions/checkin-processor/index.ts
+// v17 — thêm debug logging để tìm nguyên nhân 422
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-// ============================================================
-// CORS headers — bắt buộc cho Supabase Edge Functions
-// ============================================================
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -18,66 +15,47 @@ interface OcrRequestBody {
   booking_id?: string;
 }
 
-const OCR_PROMPT = `Bạn là hệ thống OCR trích xuất thông tin từ CCCD/hộ chiếu Việt Nam.
-Các ảnh có thể là:
-- Nhiều mặt của cùng 1 CCCD (mặt trước + mặt sau) -> trả về 1 object
-- Nhiều CCCD khác nhau -> trả về nhiều object
+const OCR_PROMPT = `Ban la he thong OCR trich xuat thong tin tu CCCD/ho chieu Viet Nam.
+Cac anh co the la:
+- Nhieu mat cua cung 1 CCCD (mat truoc + mat sau) -> tra ve 1 object
+- Nhieu CCCD khac nhau -> tra ve nhieu object
 
-Trả về JSON array, KHÔNG có markdown, KHÔNG có giải thích:
+Tra ve JSON array, KHONG co markdown, KHONG co giai thich:
 [
   {
     "full_name": "...",
-    "document_type": "CCCD" | "Hộ chiếu" | "Giấy tờ khác",
+    "document_type": "CCCD",
     "document_number": "...",
     "document_name": "...",
     "date_of_birth": "YYYY-MM-DD",
-    "gender": "Nam" | "Nữ",
+    "gender": "Nam",
     "nationality": "VNM",
     "country": "VNM",
-    "residency_type": "Thường trú" | "Tạm trú" | "Địa chỉ khác" | null,
+    "residency_type": null,
     "province": "...",
     "district": "...",
     "ward": "...",
     "address_detail": "..."
   }
 ]
-Nếu không đọc được trường nào -> để null. Luôn trả về array dù chỉ có 1 người.`;
+Neu khong doc duoc truong nao -> de null. Luon tra ve array du chi co 1 nguoi.`;
 
-// ============================================================
-// Validate input cơ bản
-// ============================================================
 function validateInput(body: unknown): OcrRequestBody | null {
   if (!body || typeof body !== "object") return null;
   const b = body as OcrRequestBody;
-
   if (!Array.isArray(b.images) || b.images.length === 0) return null;
-
   for (const img of b.images) {
-    if (!img || typeof img.data !== "string" || img.data.length === 0) {
-      return null;
-    }
-
-    if (typeof img.mime_type !== "string" || img.mime_type.length === 0) {
-      return null;
-    }
-
-    // Giới hạn kích thước base64 ~15MB (Gemini inline limit)
+    if (!img || typeof img.data !== "string" || img.data.length === 0) return null;
+    if (typeof img.mime_type !== "string" || img.mime_type.length === 0) return null;
     if (img.data.length > 20_000_000) return null;
   }
-
   return {
     images: b.images,
     booking_id: typeof b.booking_id === "string" ? b.booking_id : undefined,
   };
 }
 
-// ============================================================
-// Gọi Gemini Vision API (gemini-2.0-flash)
-// ============================================================
-async function callGeminiVision(
-  body: OcrRequestBody,
-  apiKey: string
-): Promise<string> {
+async function callGeminiVision(body: OcrRequestBody, apiKey: string): Promise<string> {
   const url =
     `https://generativelanguage.googleapis.com/v1beta/models/` +
     `gemini-2.5-flash:generateContent?key=${apiKey}`;
@@ -87,16 +65,12 @@ async function callGeminiVision(
   }));
 
   const payload = {
-    contents: [
-      {
-        parts: [
-          ...imageParts,
-          {
-            text: OCR_PROMPT,
-          },
-        ],
-      },
-    ],
+    contents: [{
+      parts: [
+        ...imageParts,
+        { text: OCR_PROMPT },
+      ],
+    }],
     generationConfig: {
       temperature: 0.1,
       maxOutputTokens: 1024,
@@ -117,31 +91,99 @@ async function callGeminiVision(
 
   const data = await response.json();
 
-  // Trích xuất text từ response Gemini
-  const text =
-    data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+  // DEBUG: log Gemini response structure (khong log image data / PII)
+  console.log("[checkin-processor] Gemini response:", JSON.stringify({
+    candidates_count: data?.candidates?.length,
+    finish_reason: data?.candidates?.[0]?.finishReason,
+    parts_count: data?.candidates?.[0]?.content?.parts?.length,
+    text_preview: (data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "").substring(0, 500),
+    prompt_feedback: data?.promptFeedback,
+    usage: data?.usageMetadata,
+  }));
+
+  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
   if (!text) {
-    throw new Error("Gemini trả về response rỗng");
+    const blockReason = data?.promptFeedback?.blockReason;
+    const finishReason = data?.candidates?.[0]?.finishReason;
+    throw new Error(`Gemini response rong. blockReason=${blockReason}, finishReason=${finishReason}`);
   }
   return text;
 }
 
-// ============================================================
-// Parse và validate JSON output từ Gemini
-// ============================================================
 function parseGeminiOutput(raw: string): Array<Record<string, unknown>> {
-  const cleaned = raw.replace(/```json|```/g, "").trim();
-  const parsed = JSON.parse(cleaned);
+  // Bước 1: Strip markdown fences nếu có
+  const cleaned = raw
+    .replace(/```json\s*/gi, "")
+    .replace(/```\s*/g, "")
+    .trim();
 
-  if (Array.isArray(parsed)) return parsed;
-  return [parsed];
+  // Bước 2: Tìm block JSON cân bằng ngoặc (ưu tiên array, fallback object)
+  const extractBalanced = (input: string, openChar: "[" | "{", closeChar: "]" | "}") => {
+    const start = input.indexOf(openChar);
+    if (start < 0) return null;
+
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+
+    for (let i = start; i < input.length; i++) {
+      const ch = input[i];
+
+      if (inString) {
+        if (escaped) {
+          escaped = false;
+          continue;
+        }
+        if (ch === "\\") {
+          escaped = true;
+          continue;
+        }
+        if (ch === '"') {
+          inString = false;
+        }
+        continue;
+      }
+
+      if (ch === '"') {
+        inString = true;
+        continue;
+      }
+
+      if (ch === openChar) {
+        depth++;
+      } else if (ch === closeChar) {
+        depth--;
+        if (depth === 0) {
+          return input.slice(start, i + 1);
+        }
+      }
+    }
+
+    return null;
+  };
+
+  const jsonStr =
+    extractBalanced(cleaned, "[", "]") ??
+    extractBalanced(cleaned, "{", "}") ??
+    cleaned;
+
+  // DEBUG: log truoc khi parse
+  console.log("[checkin-processor] parseGeminiOutput preview:", jsonStr.substring(0, 300));
+
+  try {
+    const parsed = JSON.parse(jsonStr);
+    return Array.isArray(parsed) ? parsed : [parsed];
+  } catch {
+    // Fallback cho lỗi JSON phổ biến: trailing commas
+    const normalized = jsonStr
+      .replace(/,\s*([}\]])/g, "$1")
+      .trim();
+    const parsed = JSON.parse(normalized);
+    return Array.isArray(parsed) ? parsed : [parsed];
+  }
 }
 
-// ============================================================
-// Main handler
-// ============================================================
 Deno.serve(async (req: Request) => {
-  // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: CORS_HEADERS, status: 204 });
   }
@@ -153,7 +195,6 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  // ── Auth check ──────────────────────────────────────────
   const authHeader = req.headers.get("Authorization");
   if (!authHeader) {
     return new Response(JSON.stringify({ error: "Missing authorization" }), {
@@ -162,27 +203,20 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  // Verify JWT với Supabase
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
   const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     global: { headers: { Authorization: authHeader } },
   });
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
       headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
     });
   }
-  // ────────────────────────────────────────────────────────
 
-  // Parse và validate request body
   let body: unknown;
   try {
     body = await req.json();
@@ -196,69 +230,52 @@ Deno.serve(async (req: Request) => {
   const input = validateInput(body);
   if (!input) {
     return new Response(
-      JSON.stringify({
-        error: "Thiếu trường 'images[]' hợp lệ hoặc ảnh quá lớn (>15MB)",
-      }),
-      {
-        status: 400,
-        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
-      }
+      JSON.stringify({ error: "Thieu truong 'images[]' hop le hoac anh qua lon (>15MB)" }),
+      { status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
     );
   }
 
-  // Lấy Gemini API key từ Supabase Secrets
   const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
   if (!geminiApiKey) {
-    console.error("[ocr-id-scanner] GEMINI_API_KEY chưa được set");
+    console.error("[checkin-processor] GEMINI_API_KEY chua duoc set");
     return new Response(
       JSON.stringify({ error: "Server configuration error" }),
-      {
-        status: 500,
-        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
-      }
+      { status: 500, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
     );
   }
 
-  // Gọi Gemini Vision
   let rawOutput: string;
   try {
     rawOutput = await callGeminiVision(input, geminiApiKey);
   } catch (err) {
-    console.error("[ocr-id-scanner] Gemini call failed:", err);
+    console.error("[checkin-processor] Gemini call failed:", (err as Error).message);
     return new Response(
       JSON.stringify({
-        error: "Không thể kết nối AI. Vui lòng thử lại.",
+        error: "Khong the ket noi AI. Vui long thu lai.",
         detail: (err as Error).message,
       }),
-      {
-        status: 502,
-        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
-      }
+      { status: 502, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
     );
   }
 
-  // Parse JSON output
   let result: Array<Record<string, unknown>>;
   try {
     result = parseGeminiOutput(rawOutput);
   } catch (err) {
-    console.error("[ocr-id-scanner] Parse failed. Raw output:", rawOutput);
+    // Log day du de debug — raw output khong chua PII vi la JSON schema
+    console.error("[checkin-processor] Parse failed:", (err as Error).message);
+    console.error("[checkin-processor] Raw output (500 chars):", rawOutput.substring(0, 500));
     return new Response(
       JSON.stringify({
-        error: "Không đọc được thông tin từ ảnh. Vui lòng chụp lại rõ hơn.",
+        error: "Khong doc duoc thong tin tu anh. Vui long chup lai ro hon.",
         detail: (err as Error).message,
+        raw_preview: rawOutput.substring(0, 200),
       }),
-      {
-        status: 422,
-        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
-      }
+      { status: 422, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
     );
   }
 
-  // Thành công — KHÔNG log PII (số CCCD/Passport)
-  console.log(
-    `[ocr-id-scanner] OK — user=${user.id} guests=${result.length}`
-  );
+  console.log(`[checkin-processor] OK — user=${user.id} guests=${result.length}`);
 
   return new Response(JSON.stringify(result), {
     status: 200,

@@ -57,7 +57,7 @@ export function CheckOutModal({ isOpen, onClose, bookingId }: CheckOutModalProps
 
   const mutation = useMutation({
     mutationFn: processCheckOutTxn,
-    onSuccess: async (result) => {
+    onSuccess: async () => {
       notification.success({
         message: 'Trả phòng thành công',
         description: 'Phòng đã được cập nhật và sẵn sàng cho khách mới.',

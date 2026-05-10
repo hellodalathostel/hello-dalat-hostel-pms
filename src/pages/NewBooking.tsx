@@ -25,6 +25,7 @@ import type { NewBookingFormValues } from '@/lib/schemas'
 import { useCreateBooking } from '@/hooks/useCreateBooking'
 import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
 import { ROOM_OPTIONS, ROOM_CAPACITY_BY_ID } from '@/shared/constants/rooms'
+import BookingImportPDF, { type BookingParsedData } from '@/components/BookingImportPDF'
 
 const sourceOptions: Array<{ label: NewBookingFormValues['source']; value: NewBookingFormValues['source'] }> = [
   { label: 'Booking.com', value: 'Booking.com' },
@@ -79,6 +80,7 @@ export default function NewBooking(): JSX.Element {
     control,
     handleSubmit,
     reset,
+    setValue,
     formState: { errors },
   } = useForm<NewBookingFormValues>({
     resolver: zodResolver(newBookingSchema),
@@ -90,10 +92,53 @@ export default function NewBooking(): JSX.Element {
     reset(defaultValues)
   }, [defaultValues, reset])
 
-  const { fields, append, remove } = useFieldArray({
+  const { fields, append, remove, replace } = useFieldArray({
     control,
     name: 'bookings',
   })
+
+  const applyImportedBooking = (data: BookingParsedData) => {
+    const checkIn = dayjs(data.checkIn)
+    const checkOut = dayjs(data.checkOut)
+    const validRooms = data.rooms.filter((room) => ROOM_OPTIONS.some((opt) => opt.value === room.roomId))
+    const importRooms = validRooms.length > 0 ? validRooms : data.rooms
+    const totalGuests = data.adults + data.children
+
+    const mappedBookings = importRooms.map((room) => {
+      const perRoomGuests = Math.max(1, Math.ceil(totalGuests / importRooms.length))
+      const roomCapacity = ROOM_CAPACITY_BY_ID[room.roomId] ?? perRoomGuests
+      const noteParts = [
+        room.mealPlan ? `Meal: ${room.mealPlan}` : '',
+        room.ratePlan ? `Rate: ${room.ratePlan}` : '',
+        data.children > 0
+          ? `Tre em: ${data.children}${data.childrenAges.length > 0 ? ` (tuoi: ${data.childrenAges.join(', ')})` : ''}`
+          : '',
+      ].filter(Boolean)
+
+      return {
+        room_id: room.roomId,
+        check_in: checkIn,
+        check_out: checkOut,
+        price: room.totalRoomPrice > 0 ? room.totalRoomPrice : Math.round(data.totalPrice / importRooms.length),
+        guest_name: data.guestName,
+        guests_count: Math.min(perRoomGuests, roomCapacity),
+        note: noteParts.join(' | '),
+        surcharge: 0,
+      }
+    })
+
+    setValue('source', 'Booking.com', { shouldDirty: true })
+    setValue('customer_name', data.guestName, { shouldDirty: true })
+    replace(mappedBookings)
+
+    // Luồng submit của trang NewBooking đã dùng create_group_booking_txn cho cả 1 phòng và nhiều phòng.
+    if (data.isGroup) {
+      message.success('Đã import booking nhóm. Khi bấm lưu sẽ dùng luồng Group Booking (RPC).')
+      return
+    }
+
+    message.success('Đã import dữ liệu booking từ PDF.')
+  }
 
   const handleAddBooking = () => {
     append({
@@ -204,6 +249,10 @@ export default function NewBooking(): JSX.Element {
           </Col>
 
           <Col xs={24} xl={14}>
+            <div style={{ marginBottom: 16 }}>
+              <BookingImportPDF onImport={applyImportedBooking} />
+            </div>
+
             <Card
               title="Thông tin đặt phòng"
               extra={

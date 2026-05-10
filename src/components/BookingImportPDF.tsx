@@ -22,6 +22,7 @@ import {
 import type { UploadProps } from 'antd'
 import dayjs from 'dayjs'
 import customParseFormat from 'dayjs/plugin/customParseFormat'
+import pdfWorkerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 
 dayjs.extend(customParseFormat)
 
@@ -31,7 +32,7 @@ const { Text } = Typography
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export interface BookingRoom {
-  roomNumber: string
+  roomId: string
   mealPlan: string | null
   ratePlan: string | null
   pricePerNight: number   // VND/đêm
@@ -75,16 +76,22 @@ function parseBookingText(text: string): BookingParsedData | null {
 
   // Required
   const bookingNumber  = get(/Booking number:\s*(\d+)/)
-  const checkInRaw     = get(/Check-in:\s*\w+\s+(\d+\s+\w+\s+\d{4})/)
-  const checkOutRaw    = get(/Check-out:\s*\w+\s+(\d+\s+\w+\s+\d{4})/)
+  const checkInRaw     = get(/Check[- ]?in:\s*(?:\w{3}\s+)?(\d{1,2}\s+\w+\s+\d{4})/i)
+  const checkOutRaw    = get(/Check[- ]?out:\s*(?:\w{3}\s+)?(\d{1,2}\s+\w+\s+\d{4})/i)
   const totalPriceRaw  = get(/Total price:\s*VND\s*([\d,\s]+)/)
 
   if (!bookingNumber || !checkInRaw || !checkOutRaw || !totalPriceRaw) return null
 
-  const parseDate = (raw: string) => dayjs(raw, 'D MMMM YYYY').format('YYYY-MM-DD')
+  const parseDate = (raw: string) => {
+    const cleaned = raw.replace(/^[A-Za-z]{3}\s+/, '')
+    const parsed = dayjs(cleaned, ['D MMMM YYYY', 'D MMM YYYY'], 'en', true)
+    return parsed.isValid() ? parsed.format('YYYY-MM-DD') : ''
+  }
   const checkIn    = parseDate(checkInRaw)
   const checkOut   = parseDate(checkOutRaw)
   const totalPrice = parseVND(totalPriceRaw)
+
+  if (!checkIn || !checkOut) return null
 
   // Guest block: "Guest information:\n{name}\n{country}"
   const guestBlock  = text.match(/Guest information:\s*\n([^\n]+)\n([^\n]+)?/)
@@ -96,7 +103,11 @@ function parseBookingText(text: string): BookingParsedData | null {
   const adults       = parseInt(guestLine?.match(/(\d+)\s*adult/)?.[1] ?? '1', 10)
   const childMatches = [...(guestLine?.matchAll(/(\d+)\s*child(?:ren)?\s*(?:\(([^)]+)\))?/gi) ?? [])]
   const children     = childMatches.reduce((s, m) => s + parseInt(m[1], 10), 0)
-  const childrenAges = childMatches.flatMap(m => m[2] ? [m[2].trim()] : [])
+  const childrenAges = childMatches.flatMap((m) => {
+    if (!m[2]) return []
+    const ages = [...m[2].matchAll(/\d+/g)].map((x) => x[0])
+    return ages.length > 0 ? ages : [m[2].trim()]
+  })
 
   // Metadata
   const language     = get(/Preferred language:\s*([^\n]+)/)
@@ -114,7 +125,7 @@ function parseBookingText(text: string): BookingParsedData | null {
   // Per-room blocks
   // Pattern: room number (standalone 3-digit line) ... "Total unit/room price VND xxx"
   const roomBlockRx =
-    /^([1-3]\d{2})\n([\s\S]*?)Total unit\/room price VND\s*([\d,]+)/gm
+    /(?:^|\n)([1-3]\d{2})\n([\s\S]*?)(?:\nTotal unit\/room price VND\s*([\d,]+))/gm
 
   const rooms: BookingRoom[] = []
   let m: RegExpExecArray | null
@@ -131,21 +142,33 @@ function parseBookingText(text: string): BookingParsedData | null {
 
     const ratePlan = block.match(/Standard Rate[^\n]+/)?.[0]?.trim() ?? null
 
-    rooms.push({ roomNumber: m[1], mealPlan, ratePlan, pricePerNight, totalRoomPrice })
+    rooms.push({ roomId: m[1], mealPlan, ratePlan, pricePerNight, totalRoomPrice })
   }
 
-  // Fallback nếu regex không match (PDF text layout khác)
+  // Fallback nếu regex block không match (PDF text layout khác): gom tất cả mã phòng tìm được.
   if (rooms.length === 0) {
-    const roomNum      = text.match(/\b([1-3]\d{2})\b/)?.[1] ?? '???'
-    const perNightM    = text.match(/\d+\s*x\s*VND\s*([\d,]+)/)
-    const mealPlan     = text.includes('Breakfast included') ? 'Breakfast included'
+    const roomIds = [...new Set((text.match(/\b[1-3]\d{2}\b/g) ?? []))]
+    const perNightM = text.match(/\d+\s*x\s*VND\s*([\d,]+)/)
+    const mealPlan = text.includes('Breakfast included') ? 'Breakfast included'
       : text.includes('Room only') ? 'Room only' : null
-    const ratePlan     = get(/Standard Rate[^\n]+/)
+    const ratePlan = get(/Standard Rate[^\n]+/)
+    const fallbackRoomCount = roomCount > 0 ? roomCount : 1
+    const selectedRoomIds = roomIds.length > 0 ? roomIds.slice(0, fallbackRoomCount) : ['']
+    const splitRoomPrice = Math.round(totalPrice / selectedRoomIds.length)
 
-    rooms.push({
-      roomNumber: roomNum, mealPlan, ratePlan,
-      pricePerNight: perNightM ? parseVND(perNightM[1]) : 0,
-      totalRoomPrice: totalPrice,
+    selectedRoomIds.forEach((roomId, idx) => {
+      const isLast = idx === selectedRoomIds.length - 1
+      const allocated = isLast
+        ? totalPrice - splitRoomPrice * idx
+        : splitRoomPrice
+
+      rooms.push({
+        roomId,
+        mealPlan,
+        ratePlan,
+        pricePerNight: perNightM ? parseVND(perNightM[1]) : Math.round(allocated / Math.max(nights, 1)),
+        totalRoomPrice: allocated,
+      })
     })
   }
 
@@ -163,8 +186,8 @@ function parseBookingText(text: string): BookingParsedData | null {
 
 async function extractTextFromPDF(file: File): Promise<string> {
   const pdfjsLib = await import('pdfjs-dist')
-  pdfjsLib.GlobalWorkerOptions.workerSrc =
-    `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`
+  // Load worker from local bundled asset to avoid runtime fetch issues from CDN.
+  pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerSrc
 
   const buf = await file.arrayBuffer()
   const pdf = await pdfjsLib.getDocument({ data: buf }).promise
@@ -174,7 +197,8 @@ async function extractTextFromPDF(file: File): Promise<string> {
     const page    = await pdf.getPage(i)
     const content = await page.getTextContent()
     // '\n' giữ structure dòng — quan trọng cho per-room regex
-    out += content.items.map((x: any) => ('str' in x ? x.str : '')).join('\n') + '\n'
+    const lines = content.items.map((x) => ('str' in x ? x.str : ''))
+    out += lines.join('\n') + '\n'
   }
 
   return out
@@ -193,9 +217,11 @@ function RoomTable({ rooms, nights }: { rooms: BookingRoom[]; nights: number }) 
       style={{ marginTop: 4 }}
       columns={[
         {
-          title: 'Phòng', dataIndex: 'roomNumber', width: 70,
+          title: 'Phòng', dataIndex: 'roomId', width: 90,
           render: (v: string) =>
-            <Tag color="purple" style={{ fontSize: 13, fontWeight: 600 }}>{v}</Tag>,
+            v
+              ? <Tag color="purple" style={{ fontSize: 13, fontWeight: 600 }}>{v}</Tag>
+              : <Text type="secondary">N/A</Text>,
         },
         {
           title: 'Bữa ăn', dataIndex: 'mealPlan',
