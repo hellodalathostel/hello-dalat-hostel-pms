@@ -7,7 +7,7 @@ import { supabase } from '@/api/supabase'
 import { processCheckInTxn } from '@/api/checkInOutApi'
 import { parseCheckinExcel, groupByRoomAndDate } from '@/utils/parseCheckinExcel'
 import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
-import type { DocumentType, Gender, GuestCheckInPayload, ResidencyType } from '@/lib/schemas/checkInOut'
+import type { DocumentType, Gender, GuestCheckInPayload, ResidencyType } from '@/lib/schemas'
 import type { ExcelGuestRow } from '@/types/checkin'
 
 interface CheckInModalProps {

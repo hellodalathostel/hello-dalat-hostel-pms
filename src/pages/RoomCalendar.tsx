@@ -4,9 +4,9 @@ import { LockOutlined, ReloadOutlined } from '@ant-design/icons'
 import { Button, DatePicker, Flex, Modal, Spin, Typography } from 'antd'
 import { useQueryClient } from '@tanstack/react-query'
 import { CalendarTimeline } from '@/components/calendar/CalendarTimeline'
-import { BookingDetailDrawer } from '@/components/BookingDetailDrawer'
+import BookingDetailDrawer from '@/components/booking/BookingDetailDrawer'
 import { EditBookingModal } from '@/components/EditBookingModal'
-import { BlockRoomModal } from '@/components/BlockRoomModal'
+import { BlockRoomModal } from '@/components/booking/BlockRoomModal'
 import { useRoomCalendar } from '@/hooks/useRoomCalendar'
 import { useDeleteBlock } from '@/hooks/useRoomBlocks'
 import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
@@ -158,8 +158,8 @@ export default function RoomCalendar(): React.JSX.Element {
         open={blockModalOpen}
         onClose={() => setBlockModalOpen(false)}
         onSuccess={() => setBlockModalOpen(false)}
-        prefillRoomId={blockPrefill.roomId}
-        prefillDate={blockPrefill.date}
+        initialRoomId={blockPrefill.roomId}
+        initialDate={blockPrefill.date}
       />
     </div>
   )
