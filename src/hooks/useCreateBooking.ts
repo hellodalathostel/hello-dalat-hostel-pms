@@ -35,7 +35,7 @@ async function createBookingMutationFn(values: NewBookingFormValues): Promise<un
         customer_note: values.customer_note ?? '',
         customer_cccd: values.customer_cccd ?? '',
         source: values.source,
-        channel_fee_rate: 0,
+        channel_fee_rate: values.channel_fee_rate,
       },
       p_bookings: values.bookings.map((booking) => ({
         room_id: booking.room_id,

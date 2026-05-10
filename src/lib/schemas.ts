@@ -25,6 +25,10 @@ export const newBookingSchema = z.object({
   source: z.enum(['Booking.com', 'Facebook', 'Gọi điện/Zalo', 'Khách quen', 'Walk-in', 'Other'], {
     message: 'Vui lòng chọn nguồn khách',
   }),
+  channel_fee_rate: z
+    .number({ message: 'Vui lòng nhập phí kênh' })
+    .min(0, 'Phí kênh phải lớn hơn hoặc bằng 0')
+    .max(1, 'Phí kênh không được vượt quá 1 (100%)'),
   bookings: z
     .array(
       z

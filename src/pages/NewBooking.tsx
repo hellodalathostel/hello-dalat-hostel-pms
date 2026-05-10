@@ -25,7 +25,7 @@ import type { NewBookingFormValues } from '@/lib/schemas'
 import { useCreateBooking } from '@/hooks/useCreateBooking'
 import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
 import { ROOM_OPTIONS, ROOM_CAPACITY_BY_ID } from '@/shared/constants/rooms'
-import BookingImportPDF, { type BookingParsedData } from '@/components/booking/BookingImportPDF'
+import BookingImportPDF, { type ParsedBookingData } from '@/components/booking/BookingImportPDF'
 
 const sourceOptions: Array<{ label: NewBookingFormValues['source']; value: NewBookingFormValues['source'] }> = [
   { label: 'Booking.com', value: 'Booking.com' },
@@ -35,6 +35,15 @@ const sourceOptions: Array<{ label: NewBookingFormValues['source']; value: NewBo
   { label: 'Walk-in', value: 'Walk-in' },
   { label: 'Other', value: 'Other' },
 ]
+
+const DEFAULT_FEE_RATES: Record<NewBookingFormValues['source'], number> = {
+  'Booking.com': 0.17,
+  Facebook: 0,
+  'Gọi điện/Zalo': 0,
+  'Khách quen': 0,
+  'Walk-in': 0,
+  Other: 0,
+}
 
 function getDefaultValues(prefillRoomId?: string, prefillCheckIn?: string): NewBookingFormValues {
   const parsedCheckIn = prefillCheckIn ? dayjs(prefillCheckIn).startOf('day') : dayjs().startOf('day')
@@ -46,6 +55,7 @@ function getDefaultValues(prefillRoomId?: string, prefillCheckIn?: string): NewB
     customer_note: '',
     customer_cccd: '',
     source: 'Walk-in',
+    channel_fee_rate: DEFAULT_FEE_RATES['Walk-in'],
     bookings: [
       {
         room_id: prefillRoomId ?? '',
@@ -81,6 +91,7 @@ export default function NewBooking(): JSX.Element {
     handleSubmit,
     reset,
     setValue,
+    watch,
     formState: { errors },
   } = useForm<NewBookingFormValues>({
     resolver: zodResolver(newBookingSchema),
@@ -92,50 +103,47 @@ export default function NewBooking(): JSX.Element {
     reset(defaultValues)
   }, [defaultValues, reset])
 
+  const selectedSource = watch('source')
+
+  useEffect(() => {
+    setValue('channel_fee_rate', DEFAULT_FEE_RATES[selectedSource] ?? 0, {
+      shouldDirty: true,
+      shouldValidate: true,
+    })
+  }, [selectedSource, setValue])
+
   const { fields, append, remove, replace } = useFieldArray({
     control,
     name: 'bookings',
   })
 
-  const applyImportedBooking = (data: BookingParsedData) => {
+  const applyImportedBooking = (data: ParsedBookingData) => {
+    if (!data.checkIn || !data.checkOut || !data.guestName) {
+      message.error('Dữ liệu PDF không đủ (thiếu ngày hoặc tên khách)')
+      return
+    }
+
     const checkIn = dayjs(data.checkIn)
     const checkOut = dayjs(data.checkOut)
-    const validRooms = data.rooms.filter((room) => ROOM_OPTIONS.some((opt) => opt.value === room.roomId))
-    const importRooms = validRooms.length > 0 ? validRooms : data.rooms
-    const totalGuests = data.adults + data.children
+    const noteParts: string[] = []
 
-    const mappedBookings = importRooms.map((room) => {
-      const perRoomGuests = Math.max(1, Math.ceil(totalGuests / importRooms.length))
-      const roomCapacity = ROOM_CAPACITY_BY_ID[room.roomId] ?? perRoomGuests
-      const noteParts = [
-        room.mealPlan ? `Meal: ${room.mealPlan}` : '',
-        room.ratePlan ? `Rate: ${room.ratePlan}` : '',
-        data.children > 0
-          ? `Tre em: ${data.children}${data.childrenAges.length > 0 ? ` (tuoi: ${data.childrenAges.join(', ')})` : ''}`
-          : '',
-      ].filter(Boolean)
+    if (data.mealPlan) noteParts.push(`Meal: ${data.mealPlan}`)
+    if (data.roomNumber) noteParts.push(`Phòng: ${data.roomNumber}`)
 
-      return {
-        room_id: room.roomId,
-        check_in: checkIn,
-        check_out: checkOut,
-        price: room.totalRoomPrice > 0 ? room.totalRoomPrice : Math.round(data.totalPrice / importRooms.length),
-        guest_name: data.guestName,
-        guests_count: Math.min(perRoomGuests, roomCapacity),
-        note: noteParts.join(' | '),
-        surcharge: 0,
-      }
-    })
+    const mappedBooking = {
+      room_id: data.roomNumber ?? '',
+      check_in: checkIn,
+      check_out: checkOut,
+      price: data.grandTotal ?? 0,
+      guest_name: data.guestName,
+      guests_count: Math.max(1, data.numGuests ?? 1),
+      note: noteParts.join(' | '),
+      surcharge: 0,
+    }
 
     setValue('source', 'Booking.com', { shouldDirty: true })
     setValue('customer_name', data.guestName, { shouldDirty: true })
-    replace(mappedBookings)
-
-    // Luồng submit của trang NewBooking đã dùng create_group_booking_txn cho cả 1 phòng và nhiều phòng.
-    if (data.isGroup) {
-      message.success('Đã import booking nhóm. Khi bấm lưu sẽ dùng luồng Group Booking (RPC).')
-      return
-    }
+    replace([mappedBooking])
 
     message.success('Đã import dữ liệu booking từ PDF.')
   }
@@ -154,8 +162,13 @@ export default function NewBooking(): JSX.Element {
   }
 
   const onSubmit = async (values: NewBookingFormValues) => {
+    const feeRate = values.channel_fee_rate ?? DEFAULT_FEE_RATES[values.source] ?? 0
+
     try {
-      await createBookingMutation.mutateAsync(values)
+      await createBookingMutation.mutateAsync({
+        ...values,
+        channel_fee_rate: feeRate,
+      })
       message.success('Tạo booking thành công')
       reset(getDefaultValues())
       navigate('/dashboard')
@@ -228,6 +241,36 @@ export default function NewBooking(): JSX.Element {
                     help={fieldState.error?.message}
                   >
                     <Select {...field} options={sourceOptions} />
+                  </Form.Item>
+                )}
+              />
+
+              <Controller
+                control={control}
+                name="channel_fee_rate"
+                render={({ field, fieldState }) => (
+                  <Form.Item
+                    label="Phí kênh"
+                    validateStatus={fieldState.error ? 'error' : ''}
+                    help={fieldState.error?.message}
+                  >
+                    <InputNumber
+                      value={field.value}
+                      onChange={(value) => field.onChange(value ?? 0)}
+                      min={0}
+                      max={1}
+                      step={0.01}
+                      precision={3}
+                      style={{ width: '100%' }}
+                      formatter={(value) => {
+                        if (value === undefined || value === null) {
+                          return ''
+                        }
+
+                        return `${(Number(value) * 100).toFixed(1)}%`
+                      }}
+                      parser={(value) => Number(String(value ?? '').replace(/[^\d.-]/g, '')) / 100}
+                    />
                   </Form.Item>
                 )}
               />

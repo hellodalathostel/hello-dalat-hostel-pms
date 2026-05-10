@@ -5,7 +5,7 @@ import { Button, Col, Flex, Row, Spin, Typography } from 'antd'
 import { ReloadOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { CheckInModal } from '@/components/checkin/CheckInModal'
-import { CheckOutModal } from '@/components/checkout/CheckOutModal'
+import { CheckoutModal, type CheckoutTarget } from '@/components/CheckoutModal'
 import { RoomCard } from '@/components/dashboard/RoomCard'
 import { PaymentModal } from '@/components/payment/PaymentModal'
 import { StatsBar } from '@/components/dashboard/StatsBar'
@@ -29,8 +29,8 @@ export default function Dashboard(): React.JSX.Element {
   const { data: rooms = [], isLoading, isFetching, error } = useDashboard()
   const [selectedRoom, setSelectedRoom] = useState<DashboardRoom | null>(null)
   const [isCheckInVisible, setIsCheckInVisible] = useState(false)
-  const [isCheckOutVisible, setIsCheckOutVisible] = useState(false)
   const [isPaymentVisible, setIsPaymentVisible] = useState(false)
+  const [checkoutTarget, setCheckoutTarget] = useState<CheckoutTarget | null>(null)
 
   const stats = useMemo<DashboardStats>(() => {
     return rooms.reduce<DashboardStats>((accumulator, room) => {
@@ -47,13 +47,13 @@ export default function Dashboard(): React.JSX.Element {
 
   const handleCloseCheckInModal = useCallback(() => {
     setIsCheckInVisible(false)
-    if (!isCheckOutVisible && !isPaymentVisible) {
+    if (!checkoutTarget && !isPaymentVisible) {
       setSelectedRoom(null)
     }
-  }, [isCheckOutVisible, isPaymentVisible])
+  }, [checkoutTarget, isPaymentVisible])
 
   const handleCloseCheckOutModal = useCallback(() => {
-    setIsCheckOutVisible(false)
+    setCheckoutTarget(null)
     if (!isCheckInVisible && !isPaymentVisible) {
       setSelectedRoom(null)
     }
@@ -61,10 +61,10 @@ export default function Dashboard(): React.JSX.Element {
 
   const handleClosePaymentModal = useCallback(() => {
     setIsPaymentVisible(false)
-    if (!isCheckInVisible && !isCheckOutVisible) {
+    if (!isCheckInVisible && !checkoutTarget) {
       setSelectedRoom(null)
     }
-  }, [isCheckInVisible, isCheckOutVisible])
+  }, [isCheckInVisible, checkoutTarget])
 
   const handlePaymentClick = useCallback((room: DashboardRoom) => {
     setSelectedRoom(room)
@@ -87,16 +87,26 @@ export default function Dashboard(): React.JSX.Element {
     }
 
     if (room.status === 'checked-in') {
-      if (!room.booking_id) {
+      if (!room.booking_id || !room.group_id) {
         notification.error({
           message: 'Thiếu dữ liệu booking',
-          description: 'Không thể mở check-out vì thiếu booking_id.',
+          description: 'Không thể mở check-out vì thiếu booking_id hoặc group_id.',
         })
         return
       }
 
       setSelectedRoom(room)
-      setIsCheckOutVisible(true)
+      setCheckoutTarget({
+        bookingId: room.booking_id,
+        groupId: room.group_id,
+        bookingIds: [room.booking_id],
+        roomNumber: room.room_name || room.room_id,
+        guestName: room.guest_name || 'Khach',
+        checkIn: room.check_in || dayjs().format('YYYY-MM-DD'),
+        checkOut: room.check_out || dayjs().format('YYYY-MM-DD'),
+        grandTotal: room.grand_total ?? 0,
+        paid: room.paid ?? 0,
+      })
       return
     }
 
@@ -149,6 +159,8 @@ export default function Dashboard(): React.JSX.Element {
                 room={room}
                 onClick={() => handleRoomClick(room)}
                 onPaymentClick={handlePaymentClick}
+                onCheckinClick={handleRoomClick}
+                onCheckoutClick={handleRoomClick}
               />
             </Col>
           ))}
@@ -163,13 +175,7 @@ export default function Dashboard(): React.JSX.Element {
         />
       ) : null}
 
-      {selectedRoom ? (
-        <CheckOutModal
-          isOpen={isCheckOutVisible}
-          bookingId={selectedRoom.booking_id ?? ''}
-          onClose={handleCloseCheckOutModal}
-        />
-      ) : null}
+      <CheckoutModal target={checkoutTarget} onClose={handleCloseCheckOutModal} />
 
       {selectedRoom ? (
         <PaymentModal

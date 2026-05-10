@@ -1,6 +1,5 @@
 import { useState, type JSX } from 'react'
 import dayjs, { type Dayjs } from 'dayjs'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Button,
   DatePicker,
@@ -15,10 +14,10 @@ import {
 } from 'antd'
 import { UploadOutlined } from '@ant-design/icons'
 import { supabase } from '@/api/supabase'
-import { parseCheckinExcel } from '@/utils/parseCheckinExcel'
-import { normalizeError } from '@/shared/utils/normalizeError'
 import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
 import type { ExcelGuestRow } from '@/types/checkin'
+import { useCheckIn, type CheckinGuestPayload } from '@/hooks/useCheckIn'
+import { groupByRoomAndDate, parseCheckinExcel } from '@/utils/parseCheckinExcel'
 
 interface CheckInModalProps {
   isOpen: boolean
@@ -28,136 +27,100 @@ interface CheckInModalProps {
 
 interface ManualGuestFormValues {
   full_name: string
+  document_type: 'cccd' | 'passport' | 'other'
   document_number: string
   nationality: string
   date_of_birth?: Dayjs
   gender?: 'Nam' | 'Nữ'
 }
 
-interface CheckInGuestPayload {
-  full_name: string
-  document_number: string
-  nationality: string
-  date_of_birth: string | null
-  gender: 'Nam' | 'Nữ' | null
-}
-
-interface BookingContext {
-  room_id: string
-  check_in: string
-  check_out: string
-  price: number
-}
-
-function toGuestPayloadFromExcel(row: ExcelGuestRow): CheckInGuestPayload {
+function toGuestPayloadFromExcel(row: ExcelGuestRow): CheckinGuestPayload {
   return {
     full_name: row.full_name,
+    document_type: row.id_type,
     document_number: row.id_number,
     nationality: row.nationality,
-    date_of_birth: row.date_of_birth || null,
-    gender: row.gender === 'male' ? 'Nam' : row.gender === 'female' ? 'Nữ' : null,
+    date_of_birth: row.date_of_birth || undefined,
+    gender: row.gender === 'male' ? 'Nam' : row.gender === 'female' ? 'Nữ' : undefined,
+    address_detail: row.address || undefined,
   }
 }
 
-// [Fix 4] — Chuyển CheckInModal sang flow không OCR, submit bằng RPC create_group_booking_txn.
+function normalizeRoomCode(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, '').replace(/^ph[oò]ng/i, '')
+}
+
+// [Fix 4] — Chuyển CheckInModal sang flow RPC checkin_booking_txn.
 export function CheckInModal({ isOpen, onClose, bookingId }: CheckInModalProps): JSX.Element {
   const [activeTab, setActiveTab] = useState<'excel' | 'manual'>('excel')
   const [excelRows, setExcelRows] = useState<ExcelGuestRow[]>([])
   const [isParsingExcel, setIsParsingExcel] = useState(false)
   const [manualForm] = Form.useForm<ManualGuestFormValues>()
-  const queryClient = useQueryClient()
   const { message } = useAppFeedback()
-
-  // [Fix 4] — Lấy booking hiện tại để dựng payload RPC, không dùng Edge Function.
-  const getBookingContext = async (): Promise<BookingContext> => {
-    const { data, error } = await supabase
-      .from('bookings')
-      .select('room_id, check_in, check_out, price')
-      .eq('id', bookingId)
-      .single()
-
-    if (error || !data) {
-      throw new Error('Không tìm thấy booking để check-in')
-    }
-
-    return {
-      room_id: data.room_id,
-      check_in: data.check_in,
-      check_out: data.check_out,
-      price: data.price ?? 0,
-    }
-  }
-
-  const checkInMutation = useMutation({
-    mutationKey: ['check-in', bookingId],
-    mutationFn: async (guests: CheckInGuestPayload[]) => {
-      try {
-        const booking = await getBookingContext()
-        const primaryGuest = guests[0]
-
-        if (!primaryGuest) {
-          throw new Error('Danh sách khách check-in trống')
-        }
-
-        const { error } = await supabase.rpc('create_group_booking_txn', {
-          p_group: {
-            customer_name: primaryGuest.full_name,
-            customer_phone: '',
-            customer_note: JSON.stringify({
-              checkin_source: activeTab,
-              guests,
-            }),
-            customer_cccd: primaryGuest.document_number,
-            source: 'Walk-in',
-            channel_fee_rate: 0,
-          },
-          p_bookings: [
-            {
-              room_id: booking.room_id,
-              check_in: booking.check_in,
-              check_out: booking.check_out,
-              price: booking.price,
-              guest_name: primaryGuest.full_name,
-              guests_count: guests.length,
-              note: 'Check-in tại quầy',
-              status: 'checked-in',
-            },
-          ],
-          p_services: null,
-          p_discounts: null,
-        })
-
-        if (error) {
-          throw error
-        }
-      } catch (error) {
-        throw normalizeError(error)
-      }
-    },
-    onSuccess: async () => {
-      message.success('Check-in thành công')
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['dashboard', 'today'] }),
-        queryClient.invalidateQueries({ queryKey: ['room-calendar'] }),
-      ])
-      handleClose()
-    },
-    onError: () => {
-      // [Fix 4] — Mọi mutation lỗi đều hiển thị toast AntD theo quy định.
-      message.error('Check-in thất bại')
-    },
-  })
+  const { mutate: checkin, isPending } = useCheckIn()
 
   const handleExcelUpload = async (file: File): Promise<boolean> => {
     setIsParsingExcel(true)
     try {
-      const rows = await parseCheckinExcel(file)
-      setExcelRows(rows)
+      const { data: booking, error: bookingError } = await supabase
+        .from('bookings')
+        .select('room_id, check_in')
+        .eq('id', bookingId)
+        .single()
 
+      if (bookingError || !booking) {
+        message.error('Không tải được thông tin booking hiện tại để lọc dữ liệu Excel')
+        return false
+      }
+
+      const rows = await parseCheckinExcel(file)
       if (rows.length === 0) {
+        setExcelRows([])
         message.warning('File Excel không có dữ liệu khách')
+        return false
+      }
+
+      const bookingCheckInDate = dayjs(booking.check_in).format('YYYY-MM-DD')
+      const groupedRows = groupByRoomAndDate(rows)
+      const exactKey = `${booking.room_id}__${bookingCheckInDate}`
+
+      let matchedRows = groupedRows.get(exactKey) ?? []
+
+      if (matchedRows.length === 0) {
+        const normalizedBookingRoom = normalizeRoomCode(booking.room_id)
+        for (const [groupKey, guests] of groupedRows.entries()) {
+          const [roomNumber, checkInDate] = groupKey.split('__')
+          if (
+            normalizeRoomCode(roomNumber) === normalizedBookingRoom &&
+            checkInDate === bookingCheckInDate
+          ) {
+            matchedRows = guests
+            break
+          }
+        }
+      }
+
+      setExcelRows(matchedRows)
+
+      if (matchedRows.length > 0) {
+        message.success(
+          `Đã lọc ${matchedRows.length}/${rows.length} khách cho phòng ${booking.room_id} ngày ${dayjs(booking.check_in).format('DD/MM/YYYY')}`,
+        )
       } else {
-        message.success(`Đã đọc ${rows.length} khách từ file Excel`)
+        const availableGroups = [...groupedRows.entries()]
+          .map(([groupKey, guests]) => {
+            const [roomNumber, checkInDate] = groupKey.split('__')
+            const displayDate = checkInDate
+              ? dayjs(checkInDate).format('DD/MM/YYYY')
+              : 'không rõ ngày'
+
+            return `Phòng ${roomNumber} (${displayDate}) - ${guests.length} khách`
+          })
+          .join('; ')
+
+        message.error(
+          `Không tìm thấy khách cho booking hiện tại (phòng ${booking.room_id}, ngày ${dayjs(booking.check_in).format('DD/MM/YYYY')}). Dữ liệu trong file: ${availableGroups || 'không có nhóm hợp lệ'}`,
+        )
       }
     } catch {
       message.error('Không đọc được file Excel')
@@ -174,24 +137,37 @@ export function CheckInModal({ isOpen, onClose, bookingId }: CheckInModalProps):
       return
     }
 
-    checkInMutation.mutate(excelRows.map(toGuestPayloadFromExcel))
+    handleConfirm(excelRows.map(toGuestPayloadFromExcel))
   }
 
   const submitManualCheckIn = async () => {
     try {
       const values = await manualForm.validateFields()
-      checkInMutation.mutate([
+      handleConfirm([
         {
           full_name: values.full_name,
+          document_type: values.document_type,
           document_number: values.document_number,
           nationality: values.nationality,
-          date_of_birth: values.date_of_birth ? dayjs(values.date_of_birth).format('YYYY-MM-DD') : null,
-          gender: values.gender ?? null,
+          date_of_birth: values.date_of_birth ? dayjs(values.date_of_birth).format('YYYY-MM-DD') : undefined,
+          gender: values.gender ?? undefined,
         },
       ])
     } catch {
       message.error('Vui lòng kiểm tra lại thông tin nhập tay')
     }
+  }
+
+  const handleConfirm = (guests: CheckinGuestPayload[]) => {
+    if (guests.length === 0) {
+      message.error('Danh sách khách check-in trống')
+      return
+    }
+
+    checkin(
+      { booking_id: bookingId, guests },
+      { onSuccess: () => handleClose() },
+    )
   }
 
   const handleClose = () => {
@@ -210,12 +186,12 @@ export function CheckInModal({ isOpen, onClose, bookingId }: CheckInModalProps):
       destroyOnHidden
       footer={
         <Space>
-          <Button onClick={handleClose} disabled={checkInMutation.isPending}>
+          <Button onClick={handleClose} disabled={isPending}>
             Huỷ
           </Button>
           <Button
             type="primary"
-            loading={checkInMutation.isPending}
+            loading={isPending}
             onClick={activeTab === 'excel' ? submitExcelCheckIn : () => void submitManualCheckIn()}
           >
             Xác nhận Check-in
@@ -285,6 +261,22 @@ export function CheckInModal({ isOpen, onClose, bookingId }: CheckInModalProps):
                   rules={[{ required: true, message: 'Vui lòng nhập họ tên' }]}
                 >
                   <Input placeholder="Nhập họ tên khách" />
+                </Form.Item>
+
+                <Form.Item
+                  label="Loại giấy tờ"
+                  name="document_type"
+                  initialValue="cccd"
+                  rules={[{ required: true, message: 'Vui lòng chọn loại giấy tờ' }]}
+                >
+                  <Select
+                    options={[
+                      { label: 'CCCD', value: 'cccd' },
+                      { label: 'Passport', value: 'passport' },
+                      { label: 'Giấy tờ khác', value: 'other' },
+                    ]}
+                    placeholder="Chọn loại giấy tờ"
+                  />
                 </Form.Item>
 
                 <Form.Item

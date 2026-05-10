@@ -30,7 +30,7 @@ export function parseDate(raw: string): string {
 
 // Parse datetime dd/mm/yyyy hh:mm:ss -> YYYY-MM-DD
 export function parseDateTime(raw: string): string {
-  const d = dayjs(raw.trim(), 'DD/MM/YYYY HH:mm:ss', true);
+  const d = dayjs(raw.trim(), ['DD/MM/YYYY HH:mm:ss', 'DD/MM/YYYY', 'YYYY-MM-DD'], true);
   return d.isValid() ? d.format('YYYY-MM-DD') : '';
 }
 
