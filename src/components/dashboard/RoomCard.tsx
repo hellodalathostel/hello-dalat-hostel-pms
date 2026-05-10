@@ -1,5 +1,5 @@
-import { DollarOutlined } from '@ant-design/icons'
-import { Alert, Button, Card, Descriptions, Flex, Tag, Typography } from 'antd'
+import { DollarOutlined, InfoCircleOutlined, LoginOutlined, LogoutOutlined } from '@ant-design/icons'
+import { Alert, Button, Card, Descriptions, Flex, Space, Tag, Typography } from 'antd'
 import dayjs from 'dayjs'
 import { getRoomStatus } from '@/hooks/useDashboard'
 import type { DashboardRoom, RoomStatus } from '@/types/dashboard'
@@ -8,6 +8,9 @@ interface RoomCardProps {
   room: DashboardRoom
   onClick?: () => void
   onPaymentClick?: (room: DashboardRoom) => void
+  onCheckinClick?: (room: DashboardRoom) => void
+  onCheckoutClick?: (room: DashboardRoom) => void
+  onDetailsClick?: (room: DashboardRoom) => void
 }
 
 const statusColorMap: Record<RoomStatus, string> = {
@@ -42,10 +45,90 @@ function formatRoomType(type: string): string {
   return type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
+function renderActionButtons(
+  roomStatus: RoomStatus,
+  room: DashboardRoom,
+  onCheckinClick?: (room: DashboardRoom) => void,
+  onCheckoutClick?: (room: DashboardRoom) => void,
+  onDetailsClick?: (room: DashboardRoom) => void,
+): React.JSX.Element | null {
+  const stopAndCall = (event: React.MouseEvent, fn?: (r: DashboardRoom) => void) => {
+    event.stopPropagation()
+    fn?.(room)
+  }
+
+  if (roomStatus === 'vacant') {
+    return (
+      <Button
+        type="primary"
+        size="small"
+        icon={<LoginOutlined />}
+        onClick={(event) => stopAndCall(event, onCheckinClick)}
+      >
+        Check-in
+      </Button>
+    )
+  }
+
+  if (roomStatus === 'arriving') {
+    return (
+      <Space size={4}>
+        <Button
+          size="small"
+          icon={<InfoCircleOutlined />}
+          onClick={(event) => stopAndCall(event, onDetailsClick)}
+        >
+          Details
+        </Button>
+        <Button
+          type="primary"
+          size="small"
+          icon={<LoginOutlined />}
+          onClick={(event) => stopAndCall(event, onCheckinClick)}
+        >
+          Check-in
+        </Button>
+      </Space>
+    )
+  }
+
+  if (roomStatus === 'occupied') {
+    return (
+      <Space size={4}>
+        <Button
+          size="small"
+          icon={<InfoCircleOutlined />}
+          onClick={(event) => stopAndCall(event, onDetailsClick)}
+        >
+          Details
+        </Button>
+        <Button
+          danger
+          size="small"
+          icon={<LogoutOutlined />}
+          onClick={(event) => stopAndCall(event, onCheckoutClick)}
+        >
+          Check-out
+        </Button>
+      </Space>
+    )
+  }
+
+  return null
+}
+
 // Card hiển thị thông tin chi tiết cho từng phòng trên dashboard.
-export function RoomCard({ room, onClick, onPaymentClick }: RoomCardProps): React.JSX.Element {
+export function RoomCard({
+  room,
+  onClick,
+  onPaymentClick,
+  onCheckinClick,
+  onCheckoutClick,
+  onDetailsClick,
+}: RoomCardProps): React.JSX.Element {
   const roomStatus = getRoomStatus(room)
   const isDebtWarning = roomStatus === 'occupied' && (room.balance_due ?? 0) > 0
+  const actionButtons = renderActionButtons(roomStatus, room, onCheckinClick, onCheckoutClick, onDetailsClick)
 
   return (
     <Card
@@ -93,6 +176,12 @@ export function RoomCard({ room, onClick, onPaymentClick }: RoomCardProps): Reac
         <Descriptions.Item label="Trả phòng">{formatDateTime(room.check_out)}</Descriptions.Item>
         <Descriptions.Item label="Tổng tiền">{formatCurrency(room.grand_total)}</Descriptions.Item>
       </Descriptions>
+
+      {actionButtons ? (
+        <Flex justify="flex-end" style={{ marginTop: 12 }}>
+          {actionButtons}
+        </Flex>
+      ) : null}
     </Card>
   )
 }

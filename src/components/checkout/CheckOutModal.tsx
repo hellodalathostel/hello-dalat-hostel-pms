@@ -67,8 +67,8 @@ export function CheckOutModal({ isOpen, onClose, bookingId }: CheckOutModalProps
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['dashboard_today'] }),
         queryClient.invalidateQueries({ queryKey: ['room_calendar'] }),
-        // Invalidate group detail nếu màn hình đó đang mở
-        queryClient.invalidateQueries({ queryKey: ['group_detail', result.group_id] }),
+        // Invalidate booking detail để drawer tự refresh dữ liệu
+        queryClient.invalidateQueries({ queryKey: ['booking-detail'] }),
       ])
     },
     onError: (error) => {

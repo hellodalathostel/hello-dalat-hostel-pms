@@ -14,9 +14,11 @@ import {
   Timeline,
   Typography,
 } from 'antd'
+import { LoginOutlined, LogoutOutlined } from '@ant-design/icons'
 import { useBookingDetail, type BookingRow } from '@/hooks/useBookingDetail'
+import { CheckInModal } from '@/components/checkin/CheckInModal'
+import { CheckOutModal } from '@/components/checkout/CheckOutModal'
 import { PaymentModal } from './PaymentModal'
-
 type BookingDetailDrawerProps = {
   groupId: string | null
   open: boolean
@@ -59,6 +61,8 @@ export function BookingDetailDrawer(props: BookingDetailDrawerProps) {
   const screens = Grid.useBreakpoint()
   const { data, isLoading, isError, error } = useBookingDetail(groupId)
   const [paymentOpen, setPaymentOpen] = useState(false)
+  const [checkinBookingId, setCheckinBookingId] = useState<string | null>(null)
+  const [checkoutBookingId, setCheckoutBookingId] = useState<string | null>(null)
   const group = data
 
   const balanceColor = (group?.balance_due ?? 0) > 0 ? '#ff4d4f' : '#52c41a'
@@ -168,7 +172,26 @@ export function BookingDetailDrawer(props: BookingDetailDrawerProps) {
                         ) : null}
 
                         {booking.status === 'booked' ? (
-                          <Button onClick={() => onEditBooking(booking)}>Sua</Button>
+                          <Space size={8}>
+                            <Button
+                              type='primary'
+                              icon={<LoginOutlined />}
+                              onClick={() => setCheckinBookingId(booking.id)}
+                            >
+                              Check-in
+                            </Button>
+                            <Button onClick={() => onEditBooking(booking)}>Sua</Button>
+                          </Space>
+                        ) : null}
+
+                        {booking.status === 'checked-in' ? (
+                          <Button
+                            danger
+                            icon={<LogoutOutlined />}
+                            onClick={() => setCheckoutBookingId(booking.id)}
+                          >
+                            Check-out
+                          </Button>
                         ) : null}
                       </Card>
                     )
@@ -210,6 +233,22 @@ export function BookingDetailDrawer(props: BookingDetailDrawerProps) {
         onClose={() => setPaymentOpen(false)}
         onSuccess={() => setPaymentOpen(false)}
       />
+
+      {checkinBookingId ? (
+        <CheckInModal
+          isOpen={Boolean(checkinBookingId)}
+          onClose={() => setCheckinBookingId(null)}
+          bookingId={checkinBookingId}
+        />
+      ) : null}
+
+      {checkoutBookingId ? (
+        <CheckOutModal
+          isOpen={Boolean(checkoutBookingId)}
+          onClose={() => setCheckoutBookingId(null)}
+          bookingId={checkoutBookingId}
+        />
+      ) : null}
     </Drawer>
   )
 }

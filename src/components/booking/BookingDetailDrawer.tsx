@@ -19,6 +19,8 @@ import {
   CalendarOutlined,
   CreditCardOutlined,
   EditOutlined,
+  LoginOutlined,
+  LogoutOutlined,
   PhoneOutlined,
   UserOutlined,
 } from '@ant-design/icons'
@@ -26,6 +28,8 @@ import { useBookingDetail } from '@/hooks/useBookingDetail'
 import type { BookingDetailItem } from '@/hooks/useBookingDetail'
 // BookingDetailItem được export từ useBookingDetail
 import { EditBookingModal } from '@/components/EditBookingModal'
+import { CheckInModal } from '@/components/checkin/CheckInModal'
+import { CheckOutModal } from '@/components/checkout/CheckOutModal'
 
 // Map trạng thái sang màu Ant Design Tag
 const STATUS_COLOR: Record<string, string> = {
@@ -51,12 +55,15 @@ interface Props {
   groupId: string | null
   open: boolean
   onClose: () => void
+  onEditBooking?: (booking: BookingDetailItem) => void
 }
 
 // Drawer chi tiết group booking: thông tin khách, danh sách phòng, thanh toán.
-export default function BookingDetailDrawer({ groupId, open, onClose }: Props) {
+export default function BookingDetailDrawer({ groupId, open, onClose, onEditBooking }: Props) {
   const { data, isLoading } = useBookingDetail(groupId)
   const [editingBooking, setEditingBooking] = useState<BookingDetailItem | null>(null)
+  const [checkinBookingId, setCheckinBookingId] = useState<string | null>(null)
+  const [checkoutBookingId, setCheckoutBookingId] = useState<string | null>(null)
 
   // Tổng grand_total tất cả bookings chưa cancelled
   const totalGrandTotal = (data?.bookings ?? [])
@@ -179,8 +186,17 @@ export default function BookingDetailDrawer({ groupId, open, onClose }: Props) {
                   <BookingRoomCard
                     key={booking.id}
                     booking={{ ...booking, services: [], discounts: [] }}
-                    groupId={data.id}
-                    onEdit={() => setEditingBooking({ ...booking, services: [], discounts: [] })}
+                    onEdit={() => {
+                      const bookingItem = { ...booking, services: [], discounts: [] }
+                      if (onEditBooking) {
+                        onEditBooking(bookingItem)
+                        return
+                      }
+
+                      setEditingBooking(bookingItem)
+                    }}
+                    onCheckin={() => setCheckinBookingId(booking.id)}
+                    onCheckout={() => setCheckoutBookingId(booking.id)}
                   />
                 ))}
               </Space>
@@ -216,6 +232,22 @@ export default function BookingDetailDrawer({ groupId, open, onClose }: Props) {
           onSuccess={() => setEditingBooking(null)}
         />
       )}
+
+      {checkinBookingId && (
+        <CheckInModal
+          isOpen={Boolean(checkinBookingId)}
+          onClose={() => setCheckinBookingId(null)}
+          bookingId={checkinBookingId}
+        />
+      )}
+
+      {checkoutBookingId && (
+        <CheckOutModal
+          isOpen={Boolean(checkoutBookingId)}
+          onClose={() => setCheckoutBookingId(null)}
+          bookingId={checkoutBookingId}
+        />
+      )}
     </>
   )
 }
@@ -224,10 +256,13 @@ export default function BookingDetailDrawer({ groupId, open, onClose }: Props) {
 function BookingRoomCard({
   booking,
   onEdit,
+  onCheckin,
+  onCheckout,
 }: {
   booking: BookingDetailItem
-  groupId: string
   onEdit: () => void
+  onCheckin: () => void
+  onCheckout: () => void
 }) {
   const nights = booking.nights ?? dayjs(booking.check_out).diff(dayjs(booking.check_in), 'day')
 
@@ -264,7 +299,42 @@ function BookingRoomCard({
             <div style={{ textAlign: 'right' }}>
               <Typography.Text strong>{formatVND(booking.grand_total)}</Typography.Text>
             </div>
-            {booking.status !== 'checked-out' && booking.status !== 'cancelled' && (
+
+            {booking.status === 'booked' && (
+              <>
+                <Button
+                  size="small"
+                  icon={<LoginOutlined />}
+                  type="primary"
+                  onClick={onCheckin}
+                >
+                  Check-in
+                </Button>
+                <Button
+                  size="small"
+                  icon={<EditOutlined />}
+                  onClick={onEdit}
+                >
+                  Sửa
+                </Button>
+              </>
+            )}
+
+            {booking.status === 'checked-in' && (
+              <Button
+                size="small"
+                icon={<LogoutOutlined />}
+                danger
+                onClick={onCheckout}
+              >
+                Check-out
+              </Button>
+            )}
+
+            {booking.status !== 'checked-out' &&
+              booking.status !== 'cancelled' &&
+              booking.status !== 'booked' &&
+              booking.status !== 'checked-in' && (
               <Button
                 size="small"
                 icon={<EditOutlined />}
