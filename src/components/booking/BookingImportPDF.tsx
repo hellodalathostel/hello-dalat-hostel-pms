@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Button, Upload, Typography, Space, message, Descriptions, Tag } from 'antd';
+import { App, Button, Upload, Typography, Space, Descriptions, Tag } from 'antd';
 import type { UploadProps } from 'antd';
 import { UploadOutlined, ReloadOutlined } from '@ant-design/icons';
 import * as pdfjsLib from 'pdfjs-dist';
@@ -7,6 +7,11 @@ import dayjs from 'dayjs';
 import customParseFormat from 'dayjs/plugin/customParseFormat';
 
 dayjs.extend(customParseFormat);
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.mjs',
+  import.meta.url,
+).toString();
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -154,6 +159,7 @@ const formatDate = (iso?: string) =>
 // ─── Component ────────────────────────────────────────────────────────────────
 
 const BookingImportPDF: React.FC<BookingImportPDFProps> = ({ onParsed, onImport }) => {
+  const { message } = App.useApp();
   const [parsed, setParsed] = useState<ParsedBookingData | null>(null);
   const [loading, setLoading] = useState(false);
 

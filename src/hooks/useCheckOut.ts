@@ -11,8 +11,6 @@ export interface CheckoutPayload {
   note?: string
 }
 
-type CheckoutMutationInput = CheckoutPayload | string
-
 type CheckoutRpcResponse = {
   ok?: boolean
   success?: boolean
@@ -56,19 +54,7 @@ export function useCheckout() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async (input: CheckoutMutationInput) => {
-      if (typeof input === 'string') {
-        const { error } = await supabase.rpc('checkout_booking_txn', {
-          p_booking_id: input,
-        })
-
-        if (error) {
-          throw normalizeError(error)
-        }
-
-        return
-      }
-
+    mutationFn: async (input: CheckoutPayload) => {
       await checkoutGroup(input)
     },
     onSuccess: async () => {
