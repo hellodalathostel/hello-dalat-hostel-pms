@@ -75,18 +75,48 @@ const extractTextFromPDF = async (file: File): Promise<string> => {
 
 const parseBookingComPDF = (text: string): ParsedBookingData => {
   const data: ParsedBookingData = { rawText: text };
+  const nationalityRegex = /\b(France|Germany|United Kingdom|USA|Australia|Japan|Korea|Vietnam|Singapore|Thailand|China|Netherlands|Belgium|Switzerland|Canada|Italy|Spain|Poland|Czech|Russia|Israel|India)\b/i;
 
   // Booking number
   const bookingNumMatch = text.match(/Booking\s+number[:\s]+(\d{6,12})/i);
   if (bookingNumMatch) data.bookingNumber = bookingNumMatch[1];
 
-  // Guest name — xuất hiện sau "Guest information:" trước nationality
-  const guestMatch = text.match(/Guest\s+information[:\s]+([A-ZÀ-Ö][a-zA-ZÀ-öÙ-ü\s\-']+?)(?:\s{2,}|\n)/);
-  if (guestMatch) data.guestName = guestMatch[1].trim();
+  // Guest name — ưu tiên block sau "Guest information:" (PDF thực tế thường xuống dòng)
+  const guestInfoBlockMatch = text.match(
+    /Guest\s+information[:\s]+([\s\S]{0,180}?)(?:Preferred\s+language|Total\s+guests|Total\s+units\/rooms|Check[- ]?in|Check[- ]?out|Length\s+of\s+stay)/i,
+  );
 
-  // Nationality (vd: "France")
-  const nationalityMatch = text.match(/\b(France|Germany|United Kingdom|USA|Australia|Japan|Korea|Vietnam|Singapore|Thailand|China|Netherlands|Belgium|Switzerland|Canada|Italy|Spain|Poland|Czech|Russia|Israel|India)\b/i);
-  if (nationalityMatch) data.nationality = nationalityMatch[1];
+  if (guestInfoBlockMatch) {
+    const block = guestInfoBlockMatch[1].trim();
+    const lines = block
+      .split(/\n+/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    if (lines.length > 0) {
+      const firstLine = lines[0];
+      const secondLine = lines[1];
+
+      if (secondLine && nationalityRegex.test(secondLine)) {
+        data.guestName = firstLine;
+        data.nationality = secondLine;
+      } else {
+        const nationalityInBlock = block.match(nationalityRegex);
+        if (nationalityInBlock?.index !== undefined) {
+          data.guestName = block.slice(0, nationalityInBlock.index).trim();
+          data.nationality = nationalityInBlock[1];
+        } else {
+          data.guestName = firstLine;
+        }
+      }
+    }
+  }
+
+  // Nationality (fallback)
+  if (!data.nationality) {
+    const nationalityMatch = text.match(nationalityRegex);
+    if (nationalityMatch) data.nationality = nationalityMatch[1];
+  }
 
   // Preferred language
   const langMatch = text.match(/Preferred\s+language[:\s]+(\w+)/i);
