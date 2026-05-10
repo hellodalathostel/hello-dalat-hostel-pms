@@ -25,7 +25,7 @@ import type { NewBookingFormValues } from '@/lib/schemas'
 import { useCreateBooking } from '@/hooks/useCreateBooking'
 import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
 import { ROOM_OPTIONS, ROOM_CAPACITY_BY_ID } from '@/shared/constants/rooms'
-import BookingImportPDF, { type BookingParsedData } from '@/components/BookingImportPDF'
+import BookingImportPDF, { type BookingParsedData } from '@/components/booking/BookingImportPDF'
 
 const sourceOptions: Array<{ label: NewBookingFormValues['source']; value: NewBookingFormValues['source'] }> = [
   { label: 'Booking.com', value: 'Booking.com' },
