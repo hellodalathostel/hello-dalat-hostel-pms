@@ -12,7 +12,7 @@ interface RecordPaymentPayload extends PaymentFormValues {
 // Ghi nhận thanh toán thông qua RPC transaction tại database.
 export function useRecordPayment() {
   const queryClient = useQueryClient()
-  const { message, notification } = useAppFeedback()
+  const { message } = useAppFeedback()
 
   return useMutation({
     mutationKey: ['record-payment'],
@@ -36,10 +36,8 @@ export function useRecordPayment() {
       }
     },
     onSuccess: async () => {
+      // [Fix 3] — Đồng bộ invalidate theo convention query key mới.
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['dashboard_today'] }),
-        queryClient.invalidateQueries({ queryKey: ['room_calendar'] }),
-        // Đồng bộ thêm với query key hiện tại trong codebase.
         queryClient.invalidateQueries({ queryKey: ['dashboard', 'today'] }),
         queryClient.invalidateQueries({ queryKey: ['room-calendar'] }),
         queryClient.invalidateQueries({ queryKey: ['booking-detail'] }),
@@ -48,11 +46,9 @@ export function useRecordPayment() {
       message.success('Ghi nhận thanh toán thành công')
     },
     onError: (error) => {
-      const normalizedError = normalizeError(error)
-      notification.error({
-        message: 'Không thể ghi nhận thanh toán',
-        description: normalizedError.message,
-      })
+      void error
+      // [Fix 3] — Theo yêu cầu nghiệp vụ, hiển thị toast lỗi ngắn gọn khi ghi nhận thất bại.
+      message.error('Ghi nhận thanh toán thất bại')
     },
   })
 }
