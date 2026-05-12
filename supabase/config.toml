@@ -56,3 +56,9 @@ entrypoint = "./functions/dk13-reminder/index.ts"
 
 [functions.daily-revenue-summary]
 verify_jwt = false
+
+[functions.daily-room-report]
+enabled = true
+verify_jwt = false
+import_map = "./functions/daily-room-report/deno.json"
+entrypoint = "./functions/daily-room-report/index.ts"
