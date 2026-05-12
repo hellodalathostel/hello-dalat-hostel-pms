@@ -26,7 +26,7 @@ async function invalidateOperationalQueries(queryClient: ReturnType<typeof useQu
   await queryClient.invalidateQueries({ queryKey: ['room-calendar'] })
 }
 
-// Tạo block phòng mới trên bảng room_blocks.
+// Tạo block phòng mới qua RPC transaction.
 export function useCreateBlock() {
   const queryClient = useQueryClient()
   const { notification } = useAppFeedback()
@@ -35,17 +35,19 @@ export function useCreateBlock() {
     mutationKey: ['create-room-block'],
     mutationFn: async (payload: CreateBlockPayload) => {
       try {
-        const { error } = await supabase.from('room_blocks').insert({
-          room_id: payload.roomId,
-          start_date: payload.startDate.format('YYYY-MM-DD'),
-          end_date: payload.endDate.format('YYYY-MM-DD'),
-          reason: payload.reason,
-          note: payload.note ?? '',
+        const { data, error } = await supabase.rpc('create_room_block_txn', {
+          p_room_id: payload.roomId,
+          p_start_date: payload.startDate.format('YYYY-MM-DD'),
+          p_end_date: payload.endDate.format('YYYY-MM-DD'),
+          p_reason: payload.reason,
+          p_note: payload.note ?? '',
         })
 
-        if (error) {
-          throw error
+        if (error || !data?.success) {
+          throw new Error(data?.error || error?.message || 'Tạo block thất bại')
         }
+
+        return data
       } catch (error) {
         throw normalizeError(error)
       }
@@ -56,14 +58,14 @@ export function useCreateBlock() {
     onError: (error) => {
       const normalizedError = normalizeError(error)
       notification.error({
-        message: 'Khong the block phong',
+        message: 'Không thể block phòng',
         description: normalizedError.message,
       })
     },
   })
 }
 
-// Gỡ block phòng bằng cách xóa record tương ứng.
+// Gỡ block phòng qua RPC transaction.
 export function useDeleteBlock() {
   const queryClient = useQueryClient()
   const { message, notification } = useAppFeedback()
@@ -72,11 +74,15 @@ export function useDeleteBlock() {
     mutationKey: ['delete-room-block'],
     mutationFn: async (blockId: string) => {
       try {
-        const { error } = await supabase.from('room_blocks').delete().eq('id', blockId)
+        const { data, error } = await supabase.rpc('delete_room_block_txn', {
+          p_block_id: blockId,
+        })
 
-        if (error) {
-          throw error
+        if (error || !data?.success) {
+          throw new Error(data?.error || error?.message || 'Xóa block thất bại')
         }
+
+        return data
       } catch (error) {
         throw normalizeError(error)
       }
@@ -88,7 +94,7 @@ export function useDeleteBlock() {
     onError: (error) => {
       const normalizedError = normalizeError(error)
       notification.error({
-        message: 'Khong the mi block',
+        message: 'Không thể mở block',
         description: normalizedError.message,
       })
     },

@@ -150,7 +150,7 @@ export function CheckInModal({ isOpen, onClose, bookingId }: CheckInModalProps):
       handleConfirm([
         {
           full_name: values.full_name,
-          document_type: values.document_type as any, // Đã validate là một trong options
+          document_type: values.document_type,
           document_number: values.document_number,
           nationality: values.nationality,
           date_of_birth: values.date_of_birth ? dayjs(values.date_of_birth).format('YYYY-MM-DD') : undefined,

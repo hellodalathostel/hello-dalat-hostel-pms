@@ -23,7 +23,9 @@ export function useCheckIn() {
 
 	return useMutation({
 		mutationFn: async ({ booking_id, guests }: CheckinPayload) => {
-			console.log('checkin payload:', JSON.stringify({ p_booking_id: booking_id, p_guests: guests }, null, 2))
+			if (import.meta.env.DEV) {
+				console.log('checkin payload:', JSON.stringify({ p_booking_id: booking_id, p_guests: guests }, null, 2))
+			}
 			
 			const { data, error } = await supabase.rpc('checkin_booking_txn', {
 				p_booking_id: booking_id,

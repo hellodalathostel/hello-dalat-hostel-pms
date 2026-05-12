@@ -17,7 +17,7 @@ import {
 import { useRevenue, aggregateByMonth, type MonthSummary } from '@/hooks/useRevenue'
 
 function formatVND(amount: number): string {
-  return `${new Intl.NumberFormat('vi-VN').format(amount)} d`
+  return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount)
 }
 
 function formatShortVND(amount: number): string {

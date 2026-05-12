@@ -15,6 +15,12 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
+// Interface cho PDF text item từ pdfjs
+interface PDFTextItem {
+  str: string
+  [key: string]: unknown
+}
+
 export interface ParsedBookingData {
   bookingNumber?: string;
   guestName?: string;
@@ -66,7 +72,7 @@ const extractTextFromPDF = async (file: File): Promise<string> => {
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);
     const content = await page.getTextContent();
-    text += content.items.map((item: any) => item.str).join(' ') + '\n';
+    text += content.items.map((item: PDFTextItem) => item.str).join(' ') + '\n';
   }
   return text;
 };
@@ -180,7 +186,7 @@ const parseBookingComPDF = (text: string): ParsedBookingData => {
 
 const formatVND = (amount?: number) =>
   amount !== undefined
-    ? amount.toLocaleString('vi-VN') + ' ₫'
+    ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount)
     : '—';
 
 const formatDate = (iso?: string) =>

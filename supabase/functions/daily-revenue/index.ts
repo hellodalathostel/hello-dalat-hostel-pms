@@ -49,7 +49,7 @@ Deno.serve(async () => {
     );
   }
 
-  const formatted = total.toLocaleString("vi-VN");
+  const formatted = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(total);
   const msg = total > 0
     ? `💰 <b>Doanh thu ${todayVN}</b>\n${formatted} đ\n📋 Đã ghi vào Sổ doanh thu`
     : `📋 <b>${todayVN}</b>\nKhông có doanh thu hôm nay`;
