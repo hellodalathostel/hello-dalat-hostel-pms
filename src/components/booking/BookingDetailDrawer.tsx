@@ -29,7 +29,7 @@ import type { BookingDetailItem } from '@/hooks/useBookingDetail'
 // BookingDetailItem được export từ useBookingDetail
 import { EditBookingModal } from '@/components/EditBookingModal'
 import { CheckInModal } from '@/components/checkin/CheckInModal'
-import { CheckoutModal, type CheckoutTarget } from '@/components/CheckoutModal'
+import { CheckoutModal } from '@/components/checkout/CheckoutModal'
 
 // Map trạng thái sang màu Ant Design Tag
 const STATUS_COLOR: Record<string, string> = {
@@ -63,7 +63,7 @@ export default function BookingDetailDrawer({ groupId, open, onClose, onEditBook
   const { data, isLoading } = useBookingDetail(groupId)
   const [editingBooking, setEditingBooking] = useState<BookingDetailItem | null>(null)
   const [checkinBookingId, setCheckinBookingId] = useState<string | null>(null)
-  const [checkoutTarget, setCheckoutTarget] = useState<CheckoutTarget | null>(null)
+  const [checkoutBookingId, setCheckoutBookingId] = useState<string | null>(null)
 
   // Tổng grand_total tất cả bookings chưa cancelled
   const totalGrandTotal = (data?.bookings ?? [])
@@ -197,25 +197,7 @@ export default function BookingDetailDrawer({ groupId, open, onClose, onEditBook
                     }}
                     onCheckin={() => setCheckinBookingId(booking.id)}
                     onCheckout={() => {
-                      if (!data) {
-                        return
-                      }
-
-                      const groupBookingIds = data.bookings
-                        .filter((item) => item.status === 'checked-in')
-                        .map((item) => item.id)
-
-                      setCheckoutTarget({
-                        bookingId: booking.id,
-                        groupId: data.id,
-                        bookingIds: groupBookingIds.length > 0 ? groupBookingIds : [booking.id],
-                        roomNumber: booking.room_id,
-                        guestName: booking.guest_name ?? data.customer_name,
-                        checkIn: booking.check_in,
-                        checkOut: booking.check_out,
-                        grandTotal: totalGrandTotal,
-                        paid: data.paid,
-                      })
+                      setCheckoutBookingId(booking.id)
                     }}
                   />
                 ))}
@@ -261,7 +243,11 @@ export default function BookingDetailDrawer({ groupId, open, onClose, onEditBook
         />
       )}
 
-      <CheckoutModal target={checkoutTarget} onClose={() => setCheckoutTarget(null)} />
+      <CheckoutModal
+        bookingId={checkoutBookingId}
+        open={Boolean(checkoutBookingId)}
+        onClose={() => setCheckoutBookingId(null)}
+      />
     </>
   )
 }
@@ -341,7 +327,7 @@ function BookingRoomCard({
                 danger
                 onClick={onCheckout}
               >
-                Check-out
+                Checkout
               </Button>
             )}
 
