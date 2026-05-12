@@ -8,6 +8,7 @@ import LoginPage from '@/pages/LoginPage'
 import NewBooking from '@/pages/NewBooking'
 import RevenueDashboard from '@/pages/RevenueDashboard'
 import RoomCalendar from '@/pages/RoomCalendar'
+import { ICalFeedPanel } from '@/pages/Settings/ICalFeedPanel'
 import SettingsPage from '@/pages/Settings/SettingsPage'
 
 export const appRouter = createBrowserRouter([
@@ -58,11 +59,14 @@ export const appRouter = createBrowserRouter([
       {
         path: 'settings',
         element: <SettingsPage />,
-        // [Fix 2] — Gỡ route iCal đã drop, tránh route mồ côi gây cảnh báo.
         children: [
           {
             index: true,
-            element: <Navigate to="/dashboard" replace />,
+            element: <Navigate to="ical" replace />,
+          },
+          {
+            path: 'ical',
+            element: <ICalFeedPanel />,
           },
         ],
       },
