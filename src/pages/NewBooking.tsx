@@ -2,7 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useFieldArray, useForm, Controller } from 'react-hook-form'
 import dayjs from 'dayjs'
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { JSX } from 'react'
 import {
   Button,
@@ -26,6 +26,10 @@ import { useCreateBooking } from '@/hooks/useCreateBooking'
 import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
 import { ROOM_OPTIONS, ROOM_CAPACITY_BY_ID } from '@/shared/constants/rooms'
 import BookingImportPDF, { type ParsedBookingData } from '@/components/booking/BookingImportPDF'
+import { ServiceSection } from '@/features/bookings/components/ServiceSection'
+import { DiscountSection } from '@/features/bookings/components/DiscountSection'
+import { DepositSection } from '@/features/bookings/components/DepositSection'
+import type { DepositInput, DiscountLineItem, ServiceLineItem } from '@/features/bookings/types/booking'
 
 const sourceOptions: Array<{ label: NewBookingFormValues['source']; value: NewBookingFormValues['source'] }> = [
   { label: 'Booking.com', value: 'Booking.com' },
@@ -80,6 +84,9 @@ export default function NewBooking(): JSX.Element {
 
   const prefilledRoomId = searchParams.get('roomId') ?? undefined
   const prefilledCheckIn = searchParams.get('checkIn') ?? undefined
+  const [services, setServices] = useState<ServiceLineItem[]>([])
+  const [discounts, setDiscounts] = useState<DiscountLineItem[]>([])
+  const [deposit, setDeposit] = useState<DepositInput | null>(null)
 
   const defaultValues = useMemo(
     () => getDefaultValues(prefilledRoomId, prefilledCheckIn),
@@ -104,6 +111,7 @@ export default function NewBooking(): JSX.Element {
   }, [defaultValues, reset])
 
   const selectedSource = watch('source')
+  const bookingValues = watch('bookings')
 
   useEffect(() => {
     setValue('channel_fee_rate', DEFAULT_FEE_RATES[selectedSource] ?? 0, {
@@ -116,6 +124,14 @@ export default function NewBooking(): JSX.Element {
     control,
     name: 'bookings',
   })
+
+  const bookingLabels = useMemo(
+    () =>
+      (bookingValues ?? []).map((booking, index) =>
+        booking.room_id ? `Phòng ${booking.room_id}` : `Booking #${index + 1}`,
+      ),
+    [bookingValues],
+  )
 
   const applyImportedBooking = (data: ParsedBookingData) => {
     if (!data.checkIn || !data.checkOut || !data.guestName) {
@@ -166,11 +182,19 @@ export default function NewBooking(): JSX.Element {
 
     try {
       await createBookingMutation.mutateAsync({
-        ...values,
-        channel_fee_rate: feeRate,
+        values: {
+          ...values,
+          channel_fee_rate: feeRate,
+        },
+        services,
+        discounts,
+        deposit,
       })
       message.success('Tạo booking thành công')
       reset(getDefaultValues())
+      setServices([])
+      setDiscounts([])
+      setDeposit(null)
       navigate('/dashboard')
     } catch {
       // Lỗi đã được hook mutation xử lý bằng notification.
@@ -510,6 +534,30 @@ export default function NewBooking(): JSX.Element {
                   <Typography.Text type="danger">{errors.bookings.message}</Typography.Text>
                 ) : null}
               </Space>
+
+              <Divider />
+
+              <Form.Item label="Dịch vụ" style={{ marginBottom: 16 }}>
+                <ServiceSection
+                  bookingCount={fields.length}
+                  bookingLabels={bookingLabels}
+                  value={services}
+                  onChange={setServices}
+                />
+              </Form.Item>
+
+              <Form.Item label="Giảm giá" style={{ marginBottom: 16 }}>
+                <DiscountSection
+                  bookingCount={fields.length}
+                  bookingLabels={bookingLabels}
+                  value={discounts}
+                  onChange={setDiscounts}
+                />
+              </Form.Item>
+
+              <Form.Item label="Đặt cọc" style={{ marginBottom: 0 }}>
+                <DepositSection value={deposit} onChange={setDeposit} />
+              </Form.Item>
 
               <Divider />
 

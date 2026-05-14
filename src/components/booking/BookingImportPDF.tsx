@@ -15,12 +15,6 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-// Interface cho PDF text item từ pdfjs
-interface PDFTextItem {
-  str: string
-  [key: string]: unknown
-}
-
 export interface ParsedBookingData {
   bookingNumber?: string;
   guestName?: string;
@@ -72,7 +66,10 @@ const extractTextFromPDF = async (file: File): Promise<string> => {
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);
     const content = await page.getTextContent();
-    text += content.items.map((item: PDFTextItem) => item.str).join(' ') + '\n';
+    text += content.items
+      .map((item) => ('str' in item ? item.str : ''))
+      .join(' ')
+      + '\n';
   }
   return text;
 };

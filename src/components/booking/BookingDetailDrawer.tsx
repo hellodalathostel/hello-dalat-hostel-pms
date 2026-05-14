@@ -19,8 +19,6 @@ import {
   CalendarOutlined,
   CreditCardOutlined,
   EditOutlined,
-  LoginOutlined,
-  LogoutOutlined,
   PhoneOutlined,
   UserOutlined,
 } from '@ant-design/icons'
@@ -30,6 +28,7 @@ import type { BookingDetailItem } from '@/hooks/useBookingDetail'
 import { EditBookingModal } from '@/components/EditBookingModal'
 import { CheckInModal } from '@/components/checkin/CheckInModal'
 import { CheckoutModal } from '@/components/checkout/CheckoutModal'
+import { BookingActionButtons } from '@/components/BookingActionButtons'
 
 // Map trạng thái sang màu Ant Design Tag
 const STATUS_COLOR: Record<string, string> = {
@@ -195,10 +194,6 @@ export default function BookingDetailDrawer({ groupId, open, onClose, onEditBook
 
                       setEditingBooking(bookingItem)
                     }}
-                    onCheckin={() => setCheckinBookingId(booking.id)}
-                    onCheckout={() => {
-                      setCheckoutBookingId(booking.id)
-                    }}
                   />
                 ))}
               </Space>
@@ -256,13 +251,9 @@ export default function BookingDetailDrawer({ groupId, open, onClose, onEditBook
 function BookingRoomCard({
   booking,
   onEdit,
-  onCheckin,
-  onCheckout,
 }: {
   booking: BookingDetailItem
   onEdit: () => void
-  onCheckin: () => void
-  onCheckout: () => void
 }) {
   const nights = booking.nights ?? dayjs(booking.check_out).diff(dayjs(booking.check_in), 'day')
 
@@ -302,14 +293,12 @@ function BookingRoomCard({
 
             {booking.status === 'booked' && (
               <>
-                <Button
+                <BookingActionButtons
+                  bookingId={booking.id}
+                  status={booking.status}
                   size="small"
-                  icon={<LoginOutlined />}
-                  type="primary"
-                  onClick={onCheckin}
-                >
-                  Check-in
-                </Button>
+                  showDetails={false}
+                />
                 <Button
                   size="small"
                   icon={<EditOutlined />}
@@ -321,14 +310,12 @@ function BookingRoomCard({
             )}
 
             {booking.status === 'checked-in' && (
-              <Button
+              <BookingActionButtons
+                bookingId={booking.id}
+                status={booking.status}
                 size="small"
-                icon={<LogoutOutlined />}
-                danger
-                onClick={onCheckout}
-              >
-                Checkout
-              </Button>
+                showDetails={false}
+              />
             )}
 
             {booking.status !== 'checked-out' &&

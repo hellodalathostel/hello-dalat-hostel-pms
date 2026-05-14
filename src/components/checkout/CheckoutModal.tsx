@@ -284,7 +284,7 @@ export function CheckoutModal({ bookingId, open, onClose }: Props) {
                 { type: 'number', min: 1, message: 'Phải lớn hơn 0' },
               ]}
             >
-              <InputNumber
+              <InputNumber<number>
                 style={{ width: '100%' }}
                 min={0}
                 step={10000}

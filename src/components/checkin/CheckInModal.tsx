@@ -15,7 +15,7 @@ import {
 import { UploadOutlined } from '@ant-design/icons'
 import { supabase } from '@/api/supabase'
 import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
-import type { ExcelGuestRow, CheckinGuestPayload } from '@/types/checkin'
+import type { ExcelGuestRow, CheckinGuestPayload, DocumentType } from '@/types/checkin'
 import {
   DOCUMENT_TYPE_OPTIONS,
   mapExcelIdTypeToDatabaseFormat,
@@ -31,7 +31,7 @@ interface CheckInModalProps {
 
 interface ManualGuestFormValues {
   full_name: string
-  document_type: string
+  document_type: DocumentType
   document_number: string
   nationality: string
   date_of_birth?: Dayjs

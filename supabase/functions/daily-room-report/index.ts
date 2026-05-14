@@ -1,4 +1,8 @@
-import "@supabase/functions-js/edge-runtime.d.ts";
+// @ts-nocheck: Edge Function chạy trên Deno runtime, TS server của web app không có Deno libs.
+/// <reference lib="deno.ns" />
+
+// deno-lint-ignore no-import-prefix
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 const TELEGRAM_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
 const CHAT_ID = Deno.env.get("TELEGRAM_CHAT_ID")!;
@@ -9,12 +13,11 @@ interface BookingRow {
   check_out: string;
   guests_count: number;
   guest_name: string | null;
-  groups: { source: string | null } | null;
-  rooms: { name: string | null } | null;
+  groups: Array<{ source: string | null }> | null;
+  rooms: Array<{ name: string | null }> | null;
 }
 
 Deno.serve(async () => {
-  const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2");
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
@@ -73,10 +76,10 @@ Deno.serve(async () => {
 
   // Format mỗi dòng booking
   const fmt = (b: BookingRow) => {
-    const room = b.rooms?.name ?? b.room_id;
+    const room = b.rooms?.[0]?.name ?? b.room_id;
     const name = b.guest_name ?? "Chưa đặt tên";
     const guests = b.guests_count ?? 1;
-    const source = b.groups?.source ?? "";
+    const source = b.groups?.[0]?.source ?? "";
     return `  • ${room} — ${name} (${guests} khách)${source ? ` [${source}]` : ""}`;
   };
 
