@@ -3,8 +3,8 @@
 
 import { useState, useCallback } from 'react'
 import { message } from 'antd'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { supabase } from '@/lib/supabaseClient'
+import { useQuery, useMutation } from '@tanstack/react-query'
+import { supabase } from '@/api/supabase'
 import {
   renderDocumentHtml,
   renderDocumentZalo,
@@ -43,14 +43,14 @@ interface BookingRow {
   rate_per_night: number
   room_total: number
   status: string
-  rooms: { name: string; room_number: string } | null
+  rooms: { name: string; room_number: string }[] | null
   booking_guests: {
     is_primary: boolean
     guests: {
       full_name: string
       phone?: string
       email?: string
-    } | null
+    }[] | null
   }[]
 }
 
@@ -136,6 +136,7 @@ async function fetchGroupDocumentData(groupId: string): Promise<DocumentData> {
 
   // Build BookingLines
   const bookingLines: BookingLine[] = bookingRows.map((b) => {
+    const room = b.rooms?.[0] ?? null
     const nights = Math.max(
       1,
       Math.round(
@@ -145,8 +146,8 @@ async function fetchGroupDocumentData(groupId: string): Promise<DocumentData> {
     )
     return {
       id: b.id,
-      room_name: b.rooms?.name ?? 'N/A',
-      room_number: b.rooms?.room_number ?? '',
+      room_name: room?.name ?? 'N/A',
+      room_number: room?.room_number ?? '',
       check_in: b.check_in,
       check_out: b.check_out,
       nights,
@@ -162,10 +163,11 @@ async function fetchGroupDocumentData(groupId: string): Promise<DocumentData> {
 
   for (const b of bookingRows) {
     const primary = b.booking_guests?.find((bg) => bg.is_primary)
-    if (primary?.guests) {
-      guestName = primary.guests.full_name
-      guestPhone = primary.guests.phone ?? undefined
-      guestEmail = primary.guests.email ?? undefined
+    const guest = primary?.guests?.[0]
+    if (guest) {
+      guestName = guest.full_name
+      guestPhone = guest.phone ?? undefined
+      guestEmail = guest.email ?? undefined
       break
     }
   }
@@ -479,4 +481,4 @@ export function useDocumentGenerator({ groupId, prefetch = false }: UseDocumentG
     /** Preview Zalo text mà không log */
     previewZalo,
   }
-    }
+}

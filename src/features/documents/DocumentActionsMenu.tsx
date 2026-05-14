@@ -103,7 +103,11 @@ export function DocumentActionsMenu({ groupId, remaining = 0 }: Props) {
   }
 
   // Xây dropdown menu items
-  const buildSubItems = (kind: DocKind, label: string, icon: React.ReactNode): MenuProps['items'][number] => ({
+  const buildSubItems = (
+    kind: DocKind,
+    label: string,
+    icon: React.ReactNode
+  ): NonNullable<MenuProps['items']>[number] => ({
     key: kind,
     icon,
     label,
