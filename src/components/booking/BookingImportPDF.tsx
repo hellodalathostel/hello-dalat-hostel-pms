@@ -3,6 +3,7 @@ import { App, Button, Upload, Typography, Space, Descriptions, Tag } from 'antd'
 import type { UploadProps } from 'antd';
 import { UploadOutlined, ReloadOutlined } from '@ant-design/icons';
 import * as pdfjsLib from 'pdfjs-dist';
+import type { TextItem } from 'pdfjs-dist/types/src/display/api';
 import dayjs from 'dayjs';
 import customParseFormat from 'dayjs/plugin/customParseFormat';
 
@@ -67,7 +68,8 @@ const extractTextFromPDF = async (file: File): Promise<string> => {
     const page = await pdf.getPage(i);
     const content = await page.getTextContent();
     text += content.items
-      .map((item) => ('str' in item ? item.str : ''))
+      .filter((item): item is TextItem => 'str' in item)
+      .map((item) => item.str)
       .join(' ')
       + '\n';
   }

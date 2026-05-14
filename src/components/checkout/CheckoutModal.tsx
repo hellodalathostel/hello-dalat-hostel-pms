@@ -59,6 +59,7 @@ export function CheckoutModal({ bookingId, open, onClose }: Props) {
   }, [form, open])
 
   const stepIndex = step === 'folio' ? 0 : step === 'payment' ? 1 : 2
+  const minPaymentAmount: number = 0
 
   const serviceColumns = useMemo(() => [
     { title: 'Dịch vụ', dataIndex: 'name', key: 'name' },
@@ -284,9 +285,9 @@ export function CheckoutModal({ bookingId, open, onClose }: Props) {
                 { type: 'number', min: 1, message: 'Phải lớn hơn 0' },
               ]}
             >
-              <InputNumber<number>
+              <InputNumber
                 style={{ width: '100%' }}
-                min={0}
+                min={minPaymentAmount}
                 step={10000}
                 formatter={(value) => (value ? `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : '')}
                 parser={(value) => Number((value ?? '').toString().replace(/,/g, ''))}

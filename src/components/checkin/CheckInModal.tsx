@@ -147,6 +147,12 @@ export function CheckInModal({ isOpen, onClose, bookingId }: CheckInModalProps):
   const submitManualCheckIn = async () => {
     try {
       const values = await manualForm.validateFields()
+
+      if (!values.document_type || !values.document_number || !values.full_name || !values.nationality) {
+        message.error('Vui lòng nhập đầy đủ thông tin bắt buộc')
+        return
+      }
+
       handleConfirm([
         {
           full_name: values.full_name,
