@@ -150,7 +150,7 @@ export default function NewBooking(): JSX.Element {
       room_id: data.roomNumber ?? '',
       check_in: checkIn,
       check_out: checkOut,
-      price: data.grandTotal ?? 0,
+      price: checkOut.diff(checkIn, 'day') > 0 ? Math.round((data.grandTotal ?? 0) / checkOut.diff(checkIn, 'day')) : (data.grandTotal ?? 0),
       guest_name: data.guestName,
       guests_count: Math.max(1, data.numGuests ?? 1),
       note: noteParts.join(' | '),
