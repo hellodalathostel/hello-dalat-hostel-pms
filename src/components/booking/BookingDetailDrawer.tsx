@@ -29,6 +29,7 @@ import { EditBookingModal } from '@/components/EditBookingModal'
 import { CheckInModal } from '@/components/checkin/CheckInModal'
 import { CheckoutModal } from '@/components/checkout/CheckoutModal'
 import { BookingActionButtons } from '@/components/BookingActionButtons'
+import { DocumentActionsMenu } from '@/features/documents/DocumentActionsMenu'
 
 // Map trạng thái sang màu Ant Design Tag
 const STATUS_COLOR: Record<string, string> = {
@@ -106,6 +107,11 @@ export default function BookingDetailDrawer({ groupId, open, onClose, onEditBook
         width={680}
         open={open}
         onClose={onClose}
+        extra={
+          data && groupId ? (
+            <DocumentActionsMenu groupId={groupId} remaining={Math.max(0, balanceDue)} />
+          ) : null
+        }
         destroyOnClose
       >
         {isLoading && <Skeleton active paragraph={{ rows: 8 }} />}
