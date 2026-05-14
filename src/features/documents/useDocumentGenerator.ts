@@ -23,7 +23,7 @@ const HOSTEL_INFO = {
   hostel_address: '33/18/2 Phan Đình Phùng, P.1, Đà Lạt',
   hostel_bank: 'Vietcombank',           // TODO: cập nhật đúng nếu khác
   hostel_account: '9969975935',                    // TODO: điền số tài khoản thực
-  hostel_account_name: 'Nguyen Thanh Hieu,
+  hostel_account_name: 'Nguyen Thanh Hieu',
 } as const
 
 // ─── Types từ Supabase ────────────────────────────────────────────────────────
