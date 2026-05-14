@@ -56,17 +56,17 @@ interface BookingRow {
 
 interface PaymentRow {
   id: string
-  paid_at: string
+  date: string  // DATE type từ payment_history
   method: string
   amount: number
   note: string | null
 }
 
 interface BookingServiceRow {
-  service_name: string
-  quantity: number
-  unit_price: number
-  total_price: number
+  id: string
+  name: string
+  qty: number
+  price: number
 }
 
 interface BookingDiscountRow {
@@ -99,10 +99,10 @@ async function fetchGroupDocumentData(groupId: string): Promise<DocumentData> {
       .neq('status', 'cancelled'),
 
     supabase
-      .from('payments')
-      .select('id, paid_at, method, amount, note')
+      .from('payment_history')
+      .select('id, date, method, amount, note')
       .eq('group_id', groupId)
-      .order('paid_at', { ascending: true }),
+      .order('date', { ascending: true }),
   ])
 
   if (groupRes.error) throw groupRes.error
@@ -119,7 +119,7 @@ async function fetchGroupDocumentData(groupId: string): Promise<DocumentData> {
     bookingIds.length > 0
       ? supabase
           .from('booking_services')
-          .select('service_name, quantity, unit_price, total_price')
+          .select('id, name, qty, price')
           .in('booking_id', bookingIds)
       : Promise.resolve({ data: [], error: null }),
 
@@ -173,16 +173,16 @@ async function fetchGroupDocumentData(groupId: string): Promise<DocumentData> {
   // ServiceLines — gom theo tên (cộng dồn nếu trùng)
   const serviceMap = new Map<string, ServiceLine>()
   for (const s of (servicesRes.data ?? []) as BookingServiceRow[]) {
-    const existing = serviceMap.get(s.service_name)
+    const existing = serviceMap.get(s.name)
     if (existing) {
-      existing.quantity += s.quantity
-      existing.total += s.total_price
+      existing.quantity += s.qty
+      existing.total += s.qty * s.price
     } else {
-      serviceMap.set(s.service_name, {
-        name: s.service_name,
-        quantity: s.quantity,
-        unit_price: s.unit_price,
-        total: s.total_price,
+      serviceMap.set(s.name, {
+        name: s.name,
+        quantity: s.qty,
+        unit_price: s.price,
+        total: s.qty * s.price,
       })
     }
   }
@@ -197,7 +197,7 @@ async function fetchGroupDocumentData(groupId: string): Promise<DocumentData> {
 
   // PaymentLines
   const paymentLines: PaymentLine[] = paymentRows.map((p) => ({
-    paid_at: p.paid_at,
+    paid_at: p.date,  // DATE → ISO string
     method: p.method,
     amount: p.amount,
     note: p.note ?? undefined,
