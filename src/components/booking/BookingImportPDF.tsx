@@ -158,7 +158,7 @@ const parseBookingComPDF = (text: string): ParsedBookingData => {
   }
 
   // Room number — 3 chữ số, chỉ trong range 101–303
-  const roomMatch = text.match(/\b(1[0-9]{2}|2[0-9]{2}|3[0-2][0-9])\b/);
+  const roomMatch = text.match(/(?:^|\n)\s*([123]0[123])\s*(?:\n|$)/m);
   if (roomMatch) data.roomNumber = roomMatch[1];
 
   // Meal plan
