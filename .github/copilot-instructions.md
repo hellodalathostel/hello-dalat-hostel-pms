@@ -12,32 +12,18 @@
 - Nhận instruction từ Claude → apply chính xác, không rewrite hay "cải tiến" tự phát
 - Không tự quyết định architecture, schema, hay thay đổi RPC logic
 - Không tạo Edge Function mới nếu chưa kiểm tra danh sách 8 functions hiện có
-- Nếu instruction không rõ ràng (ví dụ: thiếu thông tin, mâu thuẫn, hoặc không khả thi) → dừng và hỏi lại Claude để làm rõ — không đoán
+- Nếu instruction thiếu tham số bắt buộc, có chi tiết mâu thuẫn, hoặc không thể implement do thiếu context → dừng và hỏi lại Claude để làm rõ, không đoán
 
 **Thứ tự ưu tiên khi có xung đột:**
 1. Instruction từ Claude
 2. Nếu instruction chưa rõ: hỏi lại Claude trước khi code
 3. Các rule trong file này (áp dụng sau khi instruction đã rõ)
 
-**Coding Rules (ưu tiên theo nhóm):**
-1. Chất lượng code
-- Comment tiếng Việt
-- TypeScript strict — không dùng `any`
-
-2. Async và xử lý lỗi
-- Mọi async action: loading state + try/catch + toast
-- Nếu RPC call fail: log chi tiết lỗi và thông báo user bằng message cụ thể
-
-3. Database & Supabase
-- **KHÔNG INSERT/UPDATE trực tiếp vào `bookings`, `payment_history`, `booking_guests`** — phải qua RPC
-- Luôn import Supabase client từ `@/lib/supabase` — không khởi tạo mới
-- Không hardcode Supabase URL/key — đọc từ `import.meta.env`
-- Không bypass RLS bằng `service_role` key trong frontend
-
-4. Format dữ liệu
-- Format tiền: `new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount)`
-- Format ngày: `dayjs(date).format('DD/MM/YYYY')`
-- Date ISO string: `dayjs(date).toISOString()`
+**Coding Rules (ưu tiên theo nhóm, ngắn gọn):**
+1. Chất lượng code: Comment tiếng Việt; TypeScript strict, không dùng `any`.
+2. Async và lỗi: Mọi async action phải có loading state + try/catch + toast; RPC fail phải log chi tiết và báo user bằng message cụ thể.
+3. Database & Supabase: Không INSERT/UPDATE trực tiếp vào `bookings`, `payment_history`, `booking_guests` (bắt buộc qua RPC); luôn import client từ `@/lib/supabase`; không hardcode URL/key (đọc từ `import.meta.env`); không bypass RLS bằng `service_role` key ở frontend.
+4. Format dữ liệu: Tiền dùng `new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount)`; ngày hiển thị dùng `dayjs(date).format('DD/MM/YYYY')`; ISO dùng `dayjs(date).toISOString()`.
 
 ---
 
