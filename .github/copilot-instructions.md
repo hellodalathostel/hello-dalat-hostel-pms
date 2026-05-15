@@ -12,7 +12,32 @@
 - Nhận instruction từ Claude → apply chính xác, không rewrite hay "cải tiến" tự phát
 - Không tự quyết định architecture, schema, hay thay đổi RPC logic
 - Không tạo Edge Function mới nếu chưa kiểm tra danh sách 8 functions hiện có
-- Nếu instruction không rõ → dừng, hỏi lại — không đoán
+- Nếu instruction không rõ ràng (ví dụ: thiếu thông tin, mâu thuẫn, hoặc không khả thi) → dừng và hỏi lại Claude để làm rõ — không đoán
+
+**Thứ tự ưu tiên khi có xung đột:**
+1. Instruction từ Claude
+2. Nếu instruction chưa rõ: hỏi lại Claude trước khi code
+3. Các rule trong file này (áp dụng sau khi instruction đã rõ)
+
+**Coding Rules (ưu tiên theo nhóm):**
+1. Chất lượng code
+- Comment tiếng Việt
+- TypeScript strict — không dùng `any`
+
+2. Async và xử lý lỗi
+- Mọi async action: loading state + try/catch + toast
+- Nếu RPC call fail: log chi tiết lỗi và thông báo user bằng message cụ thể
+
+3. Database & Supabase
+- **KHÔNG INSERT/UPDATE trực tiếp vào `bookings`, `payment_history`, `booking_guests`** — phải qua RPC
+- Luôn import Supabase client từ `@/lib/supabase` — không khởi tạo mới
+- Không hardcode Supabase URL/key — đọc từ `import.meta.env`
+- Không bypass RLS bằng `service_role` key trong frontend
+
+4. Format dữ liệu
+- Format tiền: `new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount)`
+- Format ngày: `dayjs(date).format('DD/MM/YYYY')`
+- Date ISO string: `dayjs(date).toISOString()`
 
 ---
 
@@ -41,19 +66,6 @@
 | Testing | Vitest + React Testing Library + MSW |
 
 ---
-
-## Coding Rules
-
-- Comment tiếng Việt
-- TypeScript strict — không dùng `any`
-- Mọi async action: loading state + try/catch + toast
-- **KHÔNG INSERT/UPDATE trực tiếp vào `bookings`, `payment_history`, `booking_guests`** — phải qua RPC
-- Format tiền: `new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount)`
-- Format ngày: `dayjs(date).format('DD/MM/YYYY')`
-- Date ISO string: `dayjs(date).toISOString()`
-- Luôn import Supabase client từ `@/lib/supabase` — không khởi tạo mới
-- Không hardcode Supabase URL/key — đọc từ `import.meta.env`
-- Không bypass RLS bằng `service_role` key trong frontend
 
 ### TanStack Query pattern
 ```typescript
@@ -524,7 +536,5 @@ interface DK14Row {
 
 - ❌ Không tự thay đổi schema database khi chưa có instruction từ Claude
 - ❌ Không INSERT/UPDATE trực tiếp vào `bookings`, `payment_history`, `booking_guests`
-- ❌ Không tạo Edge Function mới khi chưa kiểm tra 8 functions hiện có
 - ❌ Không dùng `any` trong TypeScript
 - ❌ Không hardcode Supabase URL/key
-- ❌ Không bypass RLS bằng service_role key trong frontend code
