@@ -11,8 +11,6 @@ import {
   type DocKind,
   type DocumentData,
   type BookingLine,
-  type ServiceLine,
-  type DiscountLine,
   type PaymentLine,
 } from './documentTemplates'
 
@@ -21,8 +19,8 @@ const HOSTEL_INFO = {
   hostel_name: 'Hello Dalat Hostel',
   hostel_phone: '0969 975 935',
   hostel_address: '33/18/2 Phan Đình Phùng, P.1, Đà Lạt',
-  hostel_bank: 'Vietcombank',           // TODO: cập nhật đúng nếu khác
-  hostel_account: '9969975935',                    // TODO: điền số tài khoản thực
+  hostel_bank: 'Vietcombank',
+  hostel_account: '9969975935',
   hostel_account_name: 'Nguyen Thanh Hieu',
 } as const
 
@@ -30,136 +28,100 @@ const HOSTEL_INFO = {
 
 interface GroupRow {
   id: string
+  customer_name: string
+  customer_phone: string | null
+  customer_note: string | null
+  source: string | null
+  channel_fee_rate: number
+  ota_booking_number: string | null
+  paid: number
   created_at: string
-  grand_total: number
   net_revenue: number
+  status: string
+}
+
+interface RoomRow {
+  id: string
+  name: string
+}
+
+interface BookingGuestRow {
+  is_primary: boolean
+  guests: {
+    full_name: string
+    phone?: string | null
+    email?: string | null
+  }[] | null
 }
 
 interface BookingRow {
   id: string
-  room_id: string
   check_in: string
   check_out: string
-  rate_per_night: number
-  room_total: number
-  status: string
-  rooms: { name: string; room_number: string }[] | null
-  booking_guests: {
-    is_primary: boolean
-    guests: {
-      full_name: string
-      phone?: string
-      email?: string
-    }[] | null
-  }[]
-}
-
-interface PaymentRow {
-  id: string
-  date: string  // DATE type từ payment_history
-  method: string
-  amount: number
-  note: string | null
-}
-
-interface BookingServiceRow {
-  id: string
-  name: string
-  qty: number
+  nights: number | null
   price: number
-}
-
-interface BookingDiscountRow {
-  description: string
-  amount: number
+  grand_total: number | null
+  status: string
+  guest_name: string | null
+  guests_count: number
+  rooms: RoomRow[] | null
+  booking_guests: BookingGuestRow[] | null
 }
 
 // ─── Fetch group data ─────────────────────────────────────────────────────────
 
 async function fetchGroupDocumentData(groupId: string): Promise<DocumentData> {
-  // Query song song: group + bookings + payments
-  const [groupRes, bookingsRes, paymentsRes] = await Promise.all([
+  const [groupRes, bookingsRes] = await Promise.all([
     supabase
-      .from('booking_groups')
-      .select('id, created_at, grand_total, net_revenue')
+      .from('groups')
+      .select('id, customer_name, customer_phone, customer_note, source, channel_fee_rate, ota_booking_number, paid, created_at, net_revenue, status')
       .eq('id', groupId)
       .single(),
 
     supabase
       .from('bookings')
       .select(`
-        id, room_id, check_in, check_out, rate_per_night, room_total, status,
-        rooms ( name, room_number ),
+        id, check_in, check_out, nights, price, grand_total, status,
+        guest_name, guests_count,
+        rooms ( id, name ),
         booking_guests (
           is_primary,
           guests ( full_name, phone, email )
         )
       `)
       .eq('group_id', groupId)
+      .eq('is_deleted', false)
       .neq('status', 'cancelled'),
-
-    supabase
-      .from('payment_history')
-      .select('id, date, method, amount, note')
-      .eq('group_id', groupId)
-      .order('date', { ascending: true }),
   ])
 
   if (groupRes.error) throw groupRes.error
   if (bookingsRes.error) throw bookingsRes.error
-  if (paymentsRes.error) throw paymentsRes.error
 
   const group = groupRes.data as GroupRow
   const bookingRows = (bookingsRes.data ?? []) as BookingRow[]
-  const paymentRows = (paymentsRes.data ?? []) as PaymentRow[]
 
-  // Gom services + discounts từ tất cả bookings (query song song)
-  const bookingIds = bookingRows.map((b) => b.id)
-  const [servicesRes, discountsRes] = await Promise.all([
-    bookingIds.length > 0
-      ? supabase
-          .from('booking_services')
-          .select('id, name, qty, price')
-          .in('booking_id', bookingIds)
-      : Promise.resolve({ data: [], error: null }),
-
-    bookingIds.length > 0
-      ? supabase
-          .from('booking_discounts')
-          .select('description, amount')
-          .in('booking_id', bookingIds)
-      : Promise.resolve({ data: [], error: null }),
-  ])
-
-  if (servicesRes.error) throw servicesRes.error
-  if (discountsRes.error) throw discountsRes.error
-
-  // Build BookingLines
   const bookingLines: BookingLine[] = bookingRows.map((b) => {
     const room = b.rooms?.[0] ?? null
-    const nights = Math.max(
-      1,
-      Math.round(
-        (new Date(b.check_out).getTime() - new Date(b.check_in).getTime()) /
-          (1000 * 60 * 60 * 24)
-      )
-    )
+    const nights = Math.max(1, b.nights ?? 1)
     return {
       id: b.id,
       room_name: room?.name ?? 'N/A',
-      room_number: room?.room_number ?? '',
+      room_number: room?.id ?? '',
       check_in: b.check_in,
       check_out: b.check_out,
       nights,
-      rate_per_night: b.rate_per_night,
-      room_total: b.room_total,
+      rate_per_night: b.price ?? 0,
+      room_total: b.grand_total ?? 0,
     }
   })
 
-  // Tìm khách chính (is_primary = true từ booking đầu tiên)
-  let guestName = 'Quý khách'
+  let guestName = group.customer_name || 'Quý khách'
   let guestPhone: string | undefined
   let guestEmail: string | undefined
+
+  if (group.customer_phone) {
+    guestPhone = group.customer_phone
+  }
 
   for (const b of bookingRows) {
     const primary = b.booking_guests?.find((bg) => bg.is_primary)
@@ -171,41 +133,8 @@ async function fetchGroupDocumentData(groupId: string): Promise<DocumentData> {
       break
     }
   }
-
-  // ServiceLines — gom theo tên (cộng dồn nếu trùng)
-  const serviceMap = new Map<string, ServiceLine>()
-  for (const s of (servicesRes.data ?? []) as BookingServiceRow[]) {
-    const existing = serviceMap.get(s.name)
-    if (existing) {
-      existing.quantity += s.qty
-      existing.total += s.qty * s.price
-    } else {
-      serviceMap.set(s.name, {
-        name: s.name,
-        quantity: s.qty,
-        unit_price: s.price,
-        total: s.qty * s.price,
-      })
-    }
-  }
-
-  // DiscountLines
-  const discountLines: DiscountLine[] = (discountsRes.data ?? []).map(
-    (d: BookingDiscountRow) => ({
-      description: d.description,
-      amount: d.amount,
-    })
-  )
-
-  // PaymentLines
-  const paymentLines: PaymentLine[] = paymentRows.map((p) => ({
-    paid_at: p.date,  // DATE → ISO string
-    method: p.method,
-    amount: p.amount,
-    note: p.note ?? undefined,
-  }))
-
-  const totalPaid = paymentRows.reduce((sum, p) => sum + p.amount, 0)
+  const grandTotal = bookingRows.reduce((sum, booking) => sum + (booking.grand_total ?? 0), 0)
+  const totalPaid = group.paid ?? 0
 
   return {
     group_id: group.id,
@@ -215,12 +144,12 @@ async function fetchGroupDocumentData(groupId: string): Promise<DocumentData> {
     guest_phone: guestPhone,
     guest_email: guestEmail,
     bookings: bookingLines,
-    services: Array.from(serviceMap.values()),
-    discounts: discountLines,
-    grand_total: group.grand_total,
+    services: [],
+    discounts: [],
+    grand_total: grandTotal,
     total_paid: totalPaid,
-    remaining: Math.max(0, group.grand_total - totalPaid),
-    payments: paymentLines,
+    remaining: Math.max(0, grandTotal - totalPaid),
+    payments: [],
     ...HOSTEL_INFO,
   }
 }
@@ -255,20 +184,49 @@ async function callCreateDocumentLog(params: CreateDocumentLogParams): Promise<s
 
 // ─── Print HTML vào cửa sổ in ─────────────────────────────────────────────────
 
-function printHtmlDocument(html: string, title: string): void {
-  const win = window.open('', '_blank', 'width=800,height=900')
-  if (!win) {
-    message.error('Trình duyệt chặn popup. Vui lòng cho phép popup và thử lại.')
-    return
-  }
-  win.document.write(html)
-  win.document.close()
-  win.document.title = title
-  // Delay nhỏ để render xong trước khi print
-  setTimeout(() => {
-    win.focus()
-    win.print()
-  }, 500)
+function printHtmlDocument(win: Window, html: string, title: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    let settled = false
+
+    const finish = (printed: boolean) => {
+      if (settled) return
+      settled = true
+      window.clearInterval(closeWatcher)
+      window.clearTimeout(fallbackTimer)
+      win.removeEventListener('afterprint', handleAfterPrint)
+      resolve(printed)
+    }
+
+    const handleAfterPrint = () => {
+      finish(true)
+    }
+
+    const closeWatcher = window.setInterval(() => {
+      if (win.closed) {
+        finish(false)
+      }
+    }, 400)
+
+    const fallbackTimer = window.setTimeout(() => {
+      finish(false)
+    }, 120_000)
+
+    win.addEventListener('afterprint', handleAfterPrint, { once: true })
+    win.document.open()
+    win.document.write(html)
+    win.document.close()
+    win.document.title = title
+
+    setTimeout(() => {
+      if (win.closed) {
+        finish(false)
+        return
+      }
+
+      win.focus()
+      win.print()
+    }, 250)
+  })
 }
 
 // ─── Hook chính ───────────────────────────────────────────────────────────────
@@ -323,6 +281,17 @@ export function useDocumentGenerator({ groupId, prefetch = false }: UseDocumentG
       if (!groupId) return
       setIsGenerating(true)
 
+      const printWindow = window.open('', '_blank', 'width=800,height=900')
+      if (!printWindow) {
+        setIsGenerating(false)
+        message.error('Trình duyệt chặn popup. Vui lòng cho phép popup và thử lại.')
+        return
+      }
+
+      printWindow.document.write('<p style="font-family: Arial, sans-serif; padding: 24px;">Đang chuẩn bị tài liệu in...</p>')
+      printWindow.document.close()
+      printWindow.document.title = `${options.kind}_${groupId.slice(-6)}`
+
       try {
         // Fetch data (dùng cache nếu có)
         let data = docData
@@ -342,30 +311,35 @@ export function useDocumentGenerator({ groupId, prefetch = false }: UseDocumentG
         const html = renderDocumentHtml(options.kind, finalData)
         const title = `${options.kind}_${data.group_code ?? groupId.slice(-6)}`
 
-        printHtmlDocument(html, title)
+        const printed = await printHtmlDocument(printWindow, html, title)
 
-        // Ghi log — không block UI
-        await logDocument({
-          groupId,
-          docKind: options.kind,
-          docFormat: 'pdf',
-          contentSnapshot: {
-            kind: options.kind,
-            guest_name: data.guest_name,
-            grand_total: data.grand_total,
-            remaining: data.remaining,
-            booking_count: data.bookings.length,
-          },
-          recipientName: data.guest_name,
-          recipientPhone: data.guest_phone,
-          note: `In từ PMS`,
-        }).catch((err) => {
-          // Log fail không block workflow
-          console.error('[document_log] Failed to log:', err)
-        })
+        if (printed) {
+          // Ghi log sau khi user đã hoàn tất hộp thoại in
+          await logDocument({
+            groupId,
+            docKind: options.kind,
+            docFormat: 'pdf',
+            contentSnapshot: {
+              kind: options.kind,
+              guest_name: data.guest_name,
+              grand_total: data.grand_total,
+              remaining: data.remaining,
+              booking_count: data.bookings.length,
+            },
+            recipientName: data.guest_name,
+            recipientPhone: data.guest_phone,
+            note: 'In từ PMS',
+          }).catch((err) => {
+            // Log fail không block workflow
+            console.error('[document_log] Failed to log:', err)
+          })
+        }
       } catch (err) {
         console.error('[generateAndPrint]', err)
         message.error('Không thể tạo tài liệu. Vui lòng thử lại.')
+        if (!printWindow.closed) {
+          printWindow.close()
+        }
       } finally {
         setIsGenerating(false)
       }
