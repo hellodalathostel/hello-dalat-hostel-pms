@@ -5,13 +5,13 @@
 | Role | Tool | Nhiệm vụ |
 |---|---|---|
 | Lead Developer | Claude (claude.ai) | Architecture, schema, code review, quyết định kỹ thuật |
-| Code Writer | GitHub Copilot Agent (VSCode) | Implement theo chỉ dẫn Claude — không tự plan |
+| Code Writer | GitHub Copilot Agent (VSCode) | Implement theo chỉ dẫn Claude |
 | Product Owner | Hiếu | Quyết định cuối cùng |
 
 **Quy tắc bắt buộc:**
 - Nhận instruction từ Claude → apply chính xác, không rewrite hay "cải tiến" tự phát
 - Không tự quyết định architecture, schema, hay thay đổi RPC logic
-- Không tạo Edge Function mới nếu chưa xác nhận đủ 2 bước: (1) đã rà soát danh sách 8 functions hiện có, (2) các functions đó không đáp ứng được yêu cầu mới
+- Không tạo Edge Function mới nếu chưa xác nhận đủ 2 bước: (1) đã rà soát danh sách 8 functions hiện có, (2) Claude xác nhận không function nào trong danh sách thực hiện được yêu cầu cụ thể
 - Nếu instruction thiếu tham số bắt buộc, có chi tiết mâu thuẫn, hoặc không thể implement do thiếu context → dừng và hỏi lại Claude để làm rõ, không đoán
 
 **Thứ tự ưu tiên khi có xung đột:**
@@ -20,6 +20,7 @@
 3. Chỉ khi instruction của Claude đã rõ: áp dụng các rule trong file này để implement.
 
 **Coding Rules (ưu tiên theo nhóm, ngắn gọn):**
+Tóm tắt nhanh: ưu tiên đúng kiểu dữ liệu, chuẩn hóa xử lý lỗi async/RPC, và tuân thủ đầy đủ quy tắc truy cập dữ liệu qua Supabase RPC.
 1. Chất lượng code
   - Comment tiếng Việt.
   - TypeScript strict, không dùng `any`.
