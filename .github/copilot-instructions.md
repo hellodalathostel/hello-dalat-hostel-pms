@@ -400,6 +400,10 @@ supabase.rpc('get_suggested_price', {
 })
 // Returns: number (VND)
 
+// Lấy role của user đang đăng nhập
+supabase.rpc('current_user_role')
+// Returns: 'owner' | 'staff'
+
 // Ghi document log (confirmation, invoice, v.v.)
 supabase.rpc('create_document_log', {
   p_group_id:        UUID,
@@ -539,3 +543,8 @@ interface DK14Row {
 - ❌ Không INSERT/UPDATE trực tiếp vào `bookings`, `payment_history`, `booking_guests`
 - ❌ Không dùng `any` trong TypeScript
 - ❌ Không hardcode Supabase URL/key
+- ❌ Không dùng các legacy functions sau (vẫn tồn tại trong DB nhưng đã có RPC mới thay thế):
+  - `process_checkin` → dùng `checkin_booking_txn`
+  - `process_checkout` → dùng `checkout_group_txn`
+  - `checkout_booking` → dùng `process_check_out_txn` hoặc `checkout_group_txn`
+  - `checkout_booking_txn` → dùng `checkout_group_txn`
