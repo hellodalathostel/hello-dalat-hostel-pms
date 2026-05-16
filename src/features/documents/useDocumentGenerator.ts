@@ -1,458 +1,312 @@
 // src/features/documents/useDocumentGenerator.ts
-// Hook tổng: fetch data → build DocumentData → render → print/copy → log
+// Hook chính điều phối toàn bộ flow tạo document:
+//   1. Query data từ Supabase (bookings + groups + rooms + services + discounts + payments)
+//   2. Build DocumentData object
+//   3. Gọi template function tương ứng
+//   4. Trigger print (PDF) hoặc copy text (Zalo)
+//   5. Log vào document_logs qua RPC create_document_log
 
-import { useState, useCallback } from 'react'
-import { message } from 'antd'
-import { useQuery, useMutation } from '@tanstack/react-query'
-import { supabase } from '@/api/supabase'
+import { useState } from 'react';
+import { message } from 'antd';
+import { supabase } from '@/api/supabase';
+import type { DocumentData, DepositRequestOptions } from './documentTemplates';
 import {
-  renderDocumentHtml,
-  renderDocumentZalo,
-  type DocKind,
-  type DocumentData,
-  type BookingLine,
-  type PaymentLine,
-} from './documentTemplates'
+  renderBookingConfirmation,
+  renderDepositRequest,
+  renderDepositConfirmation,
+  renderInvoice,
+  renderArrivalNotice,
+} from './documentTemplates';
 
-// ─── Thông tin hostel cố định ─────────────────────────────────────────────────
-const HOSTEL_INFO = {
-  hostel_name: 'Hello Dalat Hostel',
-  hostel_phone: '0969 975 935',
-  hostel_address: '33/18/2 Phan Đình Phùng, P.1, Đà Lạt',
-  hostel_bank: 'Vietcombank',
-  hostel_account: '9969975935',
-  hostel_account_name: 'Nguyen Thanh Hieu',
-} as const
+// ─── Types ────────────────────────────────────────────────────────────────────
 
-// ─── Types từ Supabase ────────────────────────────────────────────────────────
+export type DocKind =
+  | 'booking_confirmation'
+  | 'deposit_request'
+  | 'deposit_confirmation'
+  | 'invoice'
+  | 'arrival_notice';
 
-interface GroupRow {
-  id: string
-  customer_name: string
-  customer_phone: string | null
-  customer_note: string | null
-  source: string | null
-  channel_fee_rate: number
-  ota_booking_number: string | null
-  paid: number
-  created_at: string
-  net_revenue: number
-  status: string
+export type DocFormat = 'pdf' | 'zalo_text';
+
+export interface GenerateOptions {
+  bookingId: string;
+  groupId: string;
+  docKind: DocKind;
+  docFormat: DocFormat;
+  /** Chỉ cần khi docKind === 'deposit_request' */
+  depositOptions?: DepositRequestOptions;
 }
 
-interface RoomRow {
-  id: string
-  name: string
-}
+// ─── Query helpers ─────────────────────────────────────────────────────────────
 
-interface BookingGuestRow {
-  is_primary: boolean
-  guests: {
-    full_name: string
-    phone?: string | null
-    email?: string | null
-  }[] | null
-}
+/** Query toàn bộ data cần thiết cho 1 booking */
+async function fetchDocumentData(
+  bookingId: string,
+  groupId: string
+): Promise<DocumentData> {
+  // Booking + room (JOIN thủ công vì không có foreign key tới rooms table)
+  const { data: booking, error: bErr } = await supabase
+    .from('bookings')
+    .select(`
+      id, group_id, room_id, check_in, check_out, nights,
+      price, surcharge, grand_total, tax_rate, tax_amount,
+      has_early_check_in, has_late_check_out,
+      guest_name, guests_count, status, note
+    `)
+    .eq('id', bookingId)
+    .single();
 
-interface BookingRow {
-  id: string
-  check_in: string
-  check_out: string
-  nights: number | null
-  price: number
-  grand_total: number | null
-  status: string
-  guest_name: string | null
-  guests_count: number
-  rooms: RoomRow[] | null
-  booking_guests: BookingGuestRow[] | null
-}
+  if (bErr || !booking) throw new Error('Không tìm thấy booking: ' + bErr?.message);
 
-// ─── Fetch group data ─────────────────────────────────────────────────────────
+  // Group (khách + tài chính tổng)
+  const { data: group, error: gErr } = await supabase
+    .from('groups')
+    .select('id, customer_name, customer_phone, source, ota_booking_number, paid, deposit_method')
+    .eq('id', groupId)
+    .single();
 
-async function fetchGroupDocumentData(groupId: string): Promise<DocumentData> {
-  const [groupRes, bookingsRes] = await Promise.all([
-    supabase
-      .from('groups')
-      .select('id, customer_name, customer_phone, customer_note, source, channel_fee_rate, ota_booking_number, paid, created_at, net_revenue, status')
-      .eq('id', groupId)
-      .single(),
+  if (gErr || !group) throw new Error('Không tìm thấy group: ' + gErr?.message);
 
-    supabase
-      .from('bookings')
-      .select(`
-        id, check_in, check_out, nights, price, grand_total, status,
-        guest_name, guests_count,
-        rooms ( id, name ),
-        booking_guests (
-          is_primary,
-          guests ( full_name, phone, email )
-        )
-      `)
-      .eq('group_id', groupId)
-      .eq('is_deleted', false)
-      .neq('status', 'cancelled'),
-  ])
+  // Room info
+  const { data: room, error: rErr } = await supabase
+    .from('rooms')
+    .select('id, name, type')
+    .eq('id', booking.room_id)
+    .single();
 
-  if (groupRes.error) throw groupRes.error
-  if (bookingsRes.error) throw bookingsRes.error
+  if (rErr || !room) throw new Error('Không tìm thấy phòng: ' + rErr?.message);
 
-  const group = groupRes.data as GroupRow
-  const bookingRows = (bookingsRes.data ?? []) as BookingRow[]
+  // Services
+  const { data: services = [] } = await supabase
+    .from('booking_services')
+    .select('name, price, qty')
+    .eq('booking_id', bookingId);
 
-  const bookingLines: BookingLine[] = bookingRows.map((b) => {
-    const room = b.rooms?.[0] ?? null
-    const nights = Math.max(1, b.nights ?? 1)
-    return {
-      id: b.id,
-      room_name: room?.name ?? 'N/A',
-      room_number: room?.id ?? '',
-      check_in: b.check_in,
-      check_out: b.check_out,
-      nights,
-      rate_per_night: b.price ?? 0,
-      room_total: b.grand_total ?? 0,
-    }
-  })
+  // Discounts
+  const { data: discounts = [] } = await supabase
+    .from('booking_discounts')
+    .select('description, amount')
+    .eq('booking_id', bookingId);
 
-  let guestName = group.customer_name || 'Quý khách'
-  let guestPhone: string | undefined
-  let guestEmail: string | undefined
-
-  if (group.customer_phone) {
-    guestPhone = group.customer_phone
-  }
-
-  for (const b of bookingRows) {
-    const primary = b.booking_guests?.find((bg) => bg.is_primary)
-    const guest = primary?.guests?.[0]
-    if (guest) {
-      guestName = guest.full_name
-      guestPhone = guest.phone ?? undefined
-      guestEmail = guest.email ?? undefined
-      break
-    }
-  }
-  const grandTotal = bookingRows.reduce((sum, booking) => sum + (booking.grand_total ?? 0), 0)
-  const totalPaid = group.paid ?? 0
+  // Payments của group
+  const { data: payments = [] } = await supabase
+    .from('payments')
+    .select('amount, method, created_at')
+    .eq('group_id', groupId)
+    .order('created_at', { ascending: true });
 
   return {
-    group_id: group.id,
-    group_code: group.id.slice(-6).toUpperCase(),
-    created_at: group.created_at,
-    guest_name: guestName,
-    guest_phone: guestPhone,
-    guest_email: guestEmail,
-    bookings: bookingLines,
-    services: [],
-    discounts: [],
-    grand_total: grandTotal,
-    total_paid: totalPaid,
-    remaining: Math.max(0, grandTotal - totalPaid),
-    payments: [],
-    ...HOSTEL_INFO,
+    bookingId: booking.id,
+    groupId: group.id,
+    roomName: room.name,
+    roomType: room.type,
+    checkIn: booking.check_in,
+    checkOut: booking.check_out,
+    nights: booking.nights,
+    guestsCount: booking.guests_count,
+    hasEarlyCheckIn: booking.has_early_check_in ?? false,
+    hasLateCheckOut: booking.has_late_check_out ?? false,
+    guestName: group.customer_name ?? booking.guest_name,
+    guestPhone: group.customer_phone ?? '',
+    source: group.source,
+    otaBookingNumber: group.ota_booking_number ?? undefined,
+    pricePerNight: booking.price,
+    surcharge: booking.surcharge ?? 0,
+    grandTotal: booking.grand_total,
+    services: (services ?? []).map(s => ({
+      name: s.name,
+      price: s.price,
+      qty: Number(s.qty),
+    })),
+    discounts: (discounts ?? []).map(d => ({
+      description: d.description,
+      amount: d.amount,
+    })),
+    paid: group.paid ?? 0,
+    payments: (payments ?? []).map(p => ({
+      amount: p.amount,
+      method: p.method,
+      created_at: p.created_at,
+    })),
+    generatedAt: new Date().toISOString(),
+  };
+}
+
+// ─── Render HTML trong iframe ẩn → window.print() ─────────────────────────────
+
+function printHtml(html: string): void {
+  // Tạo iframe ẩn để print mà không rời trang
+  const iframe = document.createElement('iframe');
+  iframe.style.position = 'fixed';
+  iframe.style.right = '0';
+  iframe.style.bottom = '0';
+  iframe.style.width = '0';
+  iframe.style.height = '0';
+  iframe.style.border = 'none';
+  document.body.appendChild(iframe);
+
+  const doc = iframe.contentWindow?.document;
+  if (!doc) return;
+  doc.open();
+  doc.write(html);
+  doc.close();
+
+  // Đợi load xong mới print
+  iframe.onload = () => {
+    iframe.contentWindow?.focus();
+    iframe.contentWindow?.print();
+    // Xóa iframe sau khi print dialog đóng
+    setTimeout(() => document.body.removeChild(iframe), 1000);
+  };
+}
+
+// ─── Copy Zalo text vào clipboard ─────────────────────────────────────────────
+
+async function copyZaloText(text: string): Promise<void> {
+  await navigator.clipboard.writeText(text);
+}
+
+// ─── Ghi log vào document_logs ────────────────────────────────────────────────
+
+async function logDocument(
+  opts: GenerateOptions,
+  docData: DocumentData,
+  sentVia: string
+): Promise<void> {
+  // Map docFormat → format enum DB dùng
+  const dbFormat = opts.docFormat === 'pdf' ? 'pdf' : 'zalo_text';
+
+  // content_snapshot: lưu data tại thời điểm generate (bất biến kể cả sau khi booking sửa)
+  const snapshot = {
+    guestName: docData.guestName,
+    roomName: docData.roomName,
+    checkIn: docData.checkIn,
+    checkOut: docData.checkOut,
+    nights: docData.nights,
+    grandTotal: docData.grandTotal,
+    paid: docData.paid,
+    generatedAt: docData.generatedAt,
+  };
+
+  const { error } = await supabase.rpc('create_document_log', {
+    p_group_id: opts.groupId,
+    p_booking_id: opts.bookingId,
+    p_doc_type: opts.docKind,
+    p_doc_format: dbFormat,
+    p_content_snapshot: snapshot,
+    p_sent_via: sentVia,
+    p_recipient_name: docData.guestName,
+    p_recipient_phone: docData.guestPhone || null,
+    p_note: null,
+  });
+
+  // Log lỗi nhưng không throw — document đã được generate rồi
+  if (error) {
+    console.error('[useDocumentGenerator] Lỗi ghi log:', error.message);
   }
-}
-
-// ─── RPC: create_document_log ─────────────────────────────────────────────────
-
-interface CreateDocumentLogParams {
-  groupId: string
-  bookingId?: string
-  docKind: DocKind
-  docFormat: 'pdf' | 'zalo_text' | 'email_html'
-  contentSnapshot: Record<string, unknown>
-  recipientName?: string
-  recipientPhone?: string
-  note?: string
-}
-
-async function callCreateDocumentLog(params: CreateDocumentLogParams): Promise<string> {
-  const { data, error } = await supabase.rpc('create_document_log', {
-    p_group_id: params.groupId,
-    p_booking_id: params.bookingId ?? null,
-    p_doc_kind: params.docKind,
-    p_doc_format: params.docFormat,
-    p_content_snapshot: params.contentSnapshot,
-    p_recipient_name: params.recipientName ?? null,
-    p_recipient_phone: params.recipientPhone ?? null,
-    p_note: params.note ?? null,
-  })
-  if (error) throw error
-  return data as string
-}
-
-// ─── Print HTML vào cửa sổ in ─────────────────────────────────────────────────
-
-function printHtmlDocument(win: Window, html: string, title: string): Promise<boolean> {
-  return new Promise((resolve) => {
-    let settled = false
-
-    const finish = (printed: boolean) => {
-      if (settled) return
-      settled = true
-      window.clearInterval(closeWatcher)
-      window.clearTimeout(fallbackTimer)
-      win.removeEventListener('afterprint', handleAfterPrint)
-      resolve(printed)
-    }
-
-    const handleAfterPrint = () => {
-      finish(true)
-    }
-
-    const closeWatcher = window.setInterval(() => {
-      if (win.closed) {
-        finish(false)
-      }
-    }, 400)
-
-    const fallbackTimer = window.setTimeout(() => {
-      finish(false)
-    }, 120_000)
-
-    win.addEventListener('afterprint', handleAfterPrint, { once: true })
-    win.document.open()
-    win.document.write(html)
-    win.document.close()
-    win.document.title = title
-
-    setTimeout(() => {
-      if (win.closed) {
-        finish(false)
-        return
-      }
-
-      win.focus()
-      win.print()
-    }, 250)
-  })
 }
 
 // ─── Hook chính ───────────────────────────────────────────────────────────────
 
-export interface UseDocumentGeneratorOptions {
+export interface UseDocumentGeneratorReturn {
+  generating: boolean;
+  generate: (opts: GenerateOptions) => Promise<void>;
+}
+
+export function useDocumentGenerator(): UseDocumentGeneratorReturn {
+  const [generating, setGenerating] = useState(false);
+
+  const generate = async (opts: GenerateOptions): Promise<void> => {
+    setGenerating(true);
+    try {
+      // 1. Fetch data thật từ DB
+      const docData = await fetchDocumentData(opts.bookingId, opts.groupId);
+
+      // 2. Render template → { html, zaloText }
+      let result: { html: string; zaloText: string };
+
+      switch (opts.docKind) {
+        case 'booking_confirmation':
+          result = renderBookingConfirmation(docData);
+          break;
+        case 'deposit_request':
+          if (!opts.depositOptions) throw new Error('Thiếu depositOptions cho deposit_request');
+          result = renderDepositRequest(docData, opts.depositOptions);
+          break;
+        case 'deposit_confirmation':
+          result = renderDepositConfirmation(docData);
+          break;
+        case 'invoice':
+          result = renderInvoice(docData);
+          break;
+        case 'arrival_notice':
+          result = renderArrivalNotice(docData);
+          break;
+        default:
+          throw new Error('Loại document không hợp lệ');
+      }
+
+      // 3. Output theo format
+      if (opts.docFormat === 'pdf') {
+        printHtml(result.html);
+        message.success('Đang mở cửa sổ in PDF…');
+        await logDocument(opts, docData, 'print');
+      } else {
+        // zalo_text
+        await copyZaloText(result.zaloText);
+        message.success('Đã sao chép nội dung Zalo vào clipboard!');
+        await logDocument(opts, docData, 'zalo_clipboard');
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Lỗi không xác định';
+      message.error('Không thể tạo document: ' + msg);
+      console.error('[useDocumentGenerator]', err);
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  return { generating, generate };
+}
+
+// ─── Convenience hook cho 1 booking cụ thể ────────────────────────────────────
+// Dùng trong BookingRow / BookingListPanel để tránh truyền bookingId/groupId mỗi lần
+
+export interface UseBookingDocumentsReturn {
+  generating: boolean;
+  printConfirmation: () => Promise<void>;
+  copyConfirmationZalo: () => Promise<void>;
+  printDepositRequest: (depositOpts: DepositRequestOptions) => Promise<void>;
+  copyDepositRequestZalo: (depositOpts: DepositRequestOptions) => Promise<void>;
+  printDepositConfirmation: () => Promise<void>;
+  copyDepositConfirmationZalo: () => Promise<void>;
+  printInvoice: () => Promise<void>;
+  copyInvoiceZalo: () => Promise<void>;
+  printArrivalNotice: () => Promise<void>;
+  copyArrivalNoticeZalo: () => Promise<void>;
+}
+
+export function useBookingDocuments(
+  bookingId: string,
   groupId: string
-  /** Optional: prefetch data ngay khi mount (default: false — fetch khi generate) */
-  prefetch?: boolean
-}
+): UseBookingDocumentsReturn {
+  const { generating, generate } = useDocumentGenerator();
 
-export interface GenerateHtmlOptions {
-  kind: DocKind
-  depositAmount?: number     // override tính tự động cho deposit_request
-  depositDeadline?: string   // ISO date
-}
-
-export interface GenerateZaloOptions {
-  kind: DocKind
-  depositAmount?: number
-  depositDeadline?: string
-}
-
-export function useDocumentGenerator({ groupId, prefetch = false }: UseDocumentGeneratorOptions) {
-  const [isGenerating, setIsGenerating] = useState(false)
-  const [zaloText, setZaloText] = useState<string | null>(null)
-
-  // Query data (enabled=prefetch hoặc enabled sẽ được enable thủ công qua refetch)
-  const {
-    data: docData,
-    isLoading: isLoadingData,
-    error: dataError,
-    refetch: refetchData,
-  } = useQuery({
-    queryKey: ['document-data', groupId],
-    queryFn: () => fetchGroupDocumentData(groupId),
-    enabled: prefetch && !!groupId,
-    staleTime: 30_000, // 30s — data không đổi nhiều khi đang generate
-  })
-
-  // Mutation: ghi log sau khi print/copy
-  const { mutateAsync: logDocument } = useMutation({
-    mutationFn: callCreateDocumentLog,
-    // Không invalidate queries khác — document_logs là audit trail độc lập
-  })
-
-  /**
-   * Generate và mở cửa sổ in HTML
-   * Sau khi user đóng/print: ghi log tự động
-   */
-  const generateAndPrint = useCallback(
-    async (options: GenerateHtmlOptions): Promise<void> => {
-      if (!groupId) return
-      setIsGenerating(true)
-
-      const printWindow = window.open('', '_blank', 'width=800,height=900')
-      if (!printWindow) {
-        setIsGenerating(false)
-        message.error('Trình duyệt chặn popup. Vui lòng cho phép popup và thử lại.')
-        return
-      }
-
-      printWindow.document.write('<p style="font-family: Arial, sans-serif; padding: 24px;">Đang chuẩn bị tài liệu in...</p>')
-      printWindow.document.close()
-      printWindow.document.title = `${options.kind}_${groupId.slice(-6)}`
-
-      try {
-        // Fetch data (dùng cache nếu có)
-        let data = docData
-        if (!data) {
-          const result = await refetchData()
-          data = result.data
-        }
-        if (!data) throw new Error('Không thể tải dữ liệu đặt phòng')
-
-        // Override deposit fields nếu có
-        const finalData: DocumentData = {
-          ...data,
-          deposit_amount: options.depositAmount,
-          deposit_deadline: options.depositDeadline,
-        }
-
-        const html = renderDocumentHtml(options.kind, finalData)
-        const title = `${options.kind}_${data.group_code ?? groupId.slice(-6)}`
-
-        const printed = await printHtmlDocument(printWindow, html, title)
-
-        if (printed) {
-          // Ghi log sau khi user đã hoàn tất hộp thoại in
-          await logDocument({
-            groupId,
-            docKind: options.kind,
-            docFormat: 'pdf',
-            contentSnapshot: {
-              kind: options.kind,
-              guest_name: data.guest_name,
-              grand_total: data.grand_total,
-              remaining: data.remaining,
-              booking_count: data.bookings.length,
-            },
-            recipientName: data.guest_name,
-            recipientPhone: data.guest_phone,
-            note: 'In từ PMS',
-          }).catch((err) => {
-            // Log fail không block workflow
-            console.error('[document_log] Failed to log:', err)
-          })
-        }
-      } catch (err) {
-        console.error('[generateAndPrint]', err)
-        message.error('Không thể tạo tài liệu. Vui lòng thử lại.')
-        if (!printWindow.closed) {
-          printWindow.close()
-        }
-      } finally {
-        setIsGenerating(false)
-      }
-    },
-    [groupId, docData, refetchData, logDocument]
-  )
-
-  /**
-   * Generate Zalo text và copy vào clipboard
-   * Sau khi copy: ghi log tự động
-   */
-  const generateAndCopyZalo = useCallback(
-    async (options: GenerateZaloOptions): Promise<void> => {
-      if (!groupId) return
-      setIsGenerating(true)
-
-      try {
-        let data = docData
-        if (!data) {
-          const result = await refetchData()
-          data = result.data
-        }
-        if (!data) throw new Error('Không thể tải dữ liệu đặt phòng')
-
-        const finalData: DocumentData = {
-          ...data,
-          deposit_amount: options.depositAmount,
-          deposit_deadline: options.depositDeadline,
-        }
-
-        const text = renderDocumentZalo(options.kind, finalData)
-        setZaloText(text)
-
-        // Copy vào clipboard
-        try {
-          await navigator.clipboard.writeText(text)
-          message.success('Đã copy text Zalo. Paste vào Zalo để gửi!')
-        } catch {
-          // Fallback: hiển thị text để user copy thủ công
-          message.info('Không thể copy tự động. Vui lòng copy thủ công.')
-        }
-
-        // Ghi log
-        await logDocument({
-          groupId,
-          docKind: options.kind,
-          docFormat: 'zalo_text',
-          contentSnapshot: {
-            kind: options.kind,
-            guest_name: data.guest_name,
-            grand_total: data.grand_total,
-          },
-          recipientName: data.guest_name,
-          recipientPhone: data.guest_phone,
-          note: 'Gửi qua Zalo',
-        }).catch((err) => {
-          console.error('[document_log] Failed to log:', err)
-        })
-      } catch (err) {
-        console.error('[generateAndCopyZalo]', err)
-        message.error('Không thể tạo text Zalo. Vui lòng thử lại.')
-      } finally {
-        setIsGenerating(false)
-      }
-    },
-    [groupId, docData, refetchData, logDocument]
-  )
-
-  /** Preview Zalo text (không log) */
-  const previewZalo = useCallback(
-    async (options: GenerateZaloOptions): Promise<string | null> => {
-      try {
-        let data = docData
-        if (!data) {
-          const result = await refetchData()
-          data = result.data
-        }
-        if (!data) return null
-
-        const finalData: DocumentData = {
-          ...data,
-          deposit_amount: options.depositAmount,
-          deposit_deadline: options.depositDeadline,
-        }
-
-        return renderDocumentZalo(options.kind, finalData)
-      } catch {
-        return null
-      }
-    },
-    [docData, refetchData]
-  )
+  const run = (docKind: DocKind, docFormat: DocFormat, depositOptions?: DepositRequestOptions) =>
+    generate({ bookingId, groupId, docKind, docFormat, depositOptions });
 
   return {
-    /** Data đã fetch (nếu prefetch=true hoặc sau lần generate đầu) */
-    docData,
-    isLoadingData,
-    dataError,
-
-    /** Đang generate/in/copy */
-    isGenerating,
-
-    /** Zalo text vừa generate (để hiển thị preview) */
-    zaloText,
-    clearZaloText: () => setZaloText(null),
-
-    /** Mở cửa sổ in, sau đó log */
-    generateAndPrint,
-
-    /** Copy Zalo text vào clipboard, sau đó log */
-    generateAndCopyZalo,
-
-    /** Preview Zalo text mà không log */
-    previewZalo,
-  }
+    generating,
+    printConfirmation: () => run('booking_confirmation', 'pdf'),
+    copyConfirmationZalo: () => run('booking_confirmation', 'zalo_text'),
+    printDepositRequest: (o) => run('deposit_request', 'pdf', o),
+    copyDepositRequestZalo: (o) => run('deposit_request', 'zalo_text', o),
+    printDepositConfirmation: () => run('deposit_confirmation', 'pdf'),
+    copyDepositConfirmationZalo: () => run('deposit_confirmation', 'zalo_text'),
+    printInvoice: () => run('invoice', 'pdf'),
+    copyInvoiceZalo: () => run('invoice', 'zalo_text'),
+    printArrivalNotice: () => run('arrival_notice', 'pdf'),
+    copyArrivalNoticeZalo: () => run('arrival_notice', 'zalo_text'),
+  };
 }

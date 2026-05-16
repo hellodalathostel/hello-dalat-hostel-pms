@@ -1,874 +1,495 @@
 // src/features/documents/documentTemplates.ts
-// Template HTML và Zalo text cho 5 loại tài liệu hostel
-// Dùng trong useDocumentGenerator.ts
+// Templates tạo nội dung cho 5 loại document của Hello Dalat Hostel.
+// Mỗi template nhận DocumentData và trả về { html, zaloText }.
+// Template KHÔNG query DB — caller (useDocumentGenerator) cung cấp data đầy đủ.
 
-import dayjs from 'dayjs'
+import dayjs from 'dayjs';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export interface BookingLine {
-  id: string
-  room_name: string
-  room_number: string
-  check_in: string   // ISO date
-  check_out: string  // ISO date
-  nights: number
-  rate_per_night: number
-  room_total: number
+export interface BookingServiceItem {
+  name: string;
+  price: number;
+  qty: number;
 }
 
-export interface ServiceLine {
-  name: string
-  quantity: number
-  unit_price: number
-  total: number
+export interface BookingDiscountItem {
+  description: string;
+  amount: number;
 }
 
-export interface DiscountLine {
-  description: string
-  amount: number
+export interface PaymentItem {
+  amount: number;
+  method: string;
+  created_at: string;
 }
 
-export interface PaymentLine {
-  paid_at: string  // ISO datetime
-  method: string   // cash | transfer | card
-  amount: number
-  note?: string
-}
-
+/** Data object chuẩn hóa — useDocumentGenerator build từ DB rồi truyền vào đây */
 export interface DocumentData {
-  // Group-level
-  group_id: string
-  group_code?: string        // hiển thị ngắn: 6 ký tự cuối group_id
-  created_at: string         // ISO datetime
+  // Booking
+  bookingId: string;
+  groupId: string;
+  roomName: string;
+  roomType: string;
+  checkIn: string;       // 'YYYY-MM-DD'
+  checkOut: string;      // 'YYYY-MM-DD'
+  nights: number;
+  guestsCount: number;
+  hasEarlyCheckIn: boolean;
+  hasLateCheckOut: boolean;
 
-  // Guest chính (first booking's primary guest)
-  guest_name: string
-  guest_phone?: string
-  guest_email?: string
+  // Guest / Group
+  guestName: string;
+  guestPhone: string;
+  source: string;           // 'direct' | 'booking_com' | ...
+  otaBookingNumber?: string;
 
-  // Bookings
-  bookings: BookingLine[]
-  services: ServiceLine[]
-  discounts: DiscountLine[]
+  // Tài chính
+  pricePerNight: number;    // bookings.price
+  surcharge: number;        // bookings.surcharge (card_fee — trigger tính)
+  grandTotal: number;       // bookings.grand_total (trigger tính)
+  services: BookingServiceItem[];
+  discounts: BookingDiscountItem[];
+  paid: number;             // groups.paid (tổng đã trả)
+  payments: PaymentItem[];  // lịch sử thanh toán
 
-  // Tài chính (từ DB triggers)
-  grand_total: number
-  total_paid: number
-  remaining: number          // grand_total - total_paid
-
-  // Payments (cho invoice)
-  payments?: PaymentLine[]
-
-  // Deposit
-  deposit_amount?: number    // số tiền đặt cọc yêu cầu
-  deposit_deadline?: string  // ISO date
-
-  // Hostel
-  hostel_name: string
-  hostel_phone: string
-  hostel_address: string
-  hostel_bank?: string       // tên ngân hàng
-  hostel_account?: string    // số tài khoản
-  hostel_account_name?: string
+  // Meta
+  generatedAt: string;      // ISO string — caller set = new Date().toISOString()
 }
-
-export type DocKind =
-  | 'booking_confirmation'
-  | 'deposit_request'
-  | 'deposit_confirmation'
-  | 'invoice'
-  | 'arrival_notice'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-/** Format tiền VND: 1500000 → "1.500.000 đ" */
-function fmtVND(amount: number): string {
-  return amount.toLocaleString('vi-VN') + ' đ'
-}
+const HOSTEL_NAME = 'Hello Dalat Hostel';
+const HOSTEL_ADDRESS = '33/18/2 Phan Đình Phùng, P.1, Đà Lạt';
+const HOSTEL_PHONE = '0969 975 935';
+const HOSTEL_EMAIL = 'hellodalathostel@gmail.com';
 
-/** Format ngày: "2025-12-20" → "20/12/2025" */
-function fmtDate(iso: string): string {
-  return dayjs(iso).format('DD/MM/YYYY')
-}
+/** Format tiền VND */
+const fmtVND = (amount: number) =>
+  new Intl.NumberFormat('vi-VN').format(amount) + ' ₫';
 
-/** Format datetime: ISO → "20/12/2025 14:00" */
-function fmtDatetime(iso: string): string {
-  return dayjs(iso).format('DD/MM/YYYY HH:mm')
-}
+/** Format ngày hiển thị: DD/MM/YYYY */
+const fmtDate = (d: string) => dayjs(d).format('DD/MM/YYYY');
 
-/** Lấy 6 ký tự cuối của UUID làm booking code */
-function shortCode(id: string): string {
-  return id.slice(-6).toUpperCase()
-}
+/** Format ngày giờ: DD/MM/YYYY HH:mm */
+const fmtDateTime = (d: string) => dayjs(d).format('DD/MM/YYYY HH:mm');
 
-/** Tên method thanh toán tiếng Việt */
-function fmtMethod(method: string): string {
-  const map: Record<string, string> = {
-    cash: 'Tiền mặt',
-    transfer: 'Chuyển khoản',
-    card: 'Thẻ ngân hàng',
-  }
-  return map[method] ?? method
-}
+/** Số đêm + khoảng ngày */
+const nightsLabel = (d: DocumentData) =>
+  `${d.nights} đêm (${fmtDate(d.checkIn)} → ${fmtDate(d.checkOut)})`;
 
-// ─── Shared CSS (inject vào mỗi HTML template) ────────────────────────────────
+/** Tính tổng services */
+const servicesTotal = (services: BookingServiceItem[]) =>
+  services.reduce((sum, s) => sum + s.price * s.qty, 0);
 
-const BASE_CSS = `
+
+/** Số dư còn lại */
+const remaining = (d: DocumentData) => d.grandTotal - d.paid;
+
+// CSS chung cho tất cả HTML templates (inline cho print-safe)
+const BASE_STYLE = `
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: 'Segoe UI', Arial, sans-serif;
-      font-size: 13px;
-      color: #222;
-      background: #fff;
-      padding: 32px;
-      max-width: 720px;
-      margin: 0 auto;
-    }
-    .header {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      border-bottom: 2px solid #1a7f5a;
-      padding-bottom: 12px;
-      margin-bottom: 20px;
-    }
-    .hostel-name {
-      font-size: 18px;
-      font-weight: 700;
-      color: #1a7f5a;
-    }
-    .hostel-meta { font-size: 11px; color: #666; margin-top: 4px; }
-    .doc-title {
-      font-size: 16px;
-      font-weight: 700;
-      text-align: right;
-      color: #333;
-    }
-    .doc-code { font-size: 11px; color: #888; text-align: right; margin-top: 4px; }
-    .section { margin-bottom: 18px; }
-    .section-title {
-      font-size: 12px;
-      font-weight: 700;
-      text-transform: uppercase;
-      color: #1a7f5a;
-      letter-spacing: 0.5px;
-      margin-bottom: 8px;
-      border-bottom: 1px solid #e8f5f0;
-      padding-bottom: 4px;
-    }
-    .info-grid {
-      display: grid;
-      grid-template-columns: 140px 1fr;
-      gap: 4px 8px;
-    }
-    .info-label { color: #888; font-size: 12px; }
-    .info-value { font-weight: 500; }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 12px;
-    }
-    th {
-      background: #f0faf5;
-      color: #1a7f5a;
-      font-weight: 600;
-      padding: 7px 8px;
-      text-align: left;
-      border-bottom: 1px solid #c9e8d8;
-    }
-    td {
-      padding: 6px 8px;
-      border-bottom: 1px solid #f0f0f0;
-      vertical-align: top;
-    }
-    tr:last-child td { border-bottom: none; }
-    .text-right { text-align: right; }
-    .total-row td {
-      font-weight: 700;
-      background: #f0faf5;
-      border-top: 1px solid #c9e8d8;
-    }
-    .summary-box {
-      background: #f0faf5;
-      border: 1px solid #c9e8d8;
-      border-radius: 6px;
-      padding: 12px 16px;
-    }
-    .summary-row {
-      display: flex;
-      justify-content: space-between;
-      padding: 3px 0;
-      font-size: 13px;
-    }
-    .summary-row.grand {
-      font-weight: 700;
-      font-size: 15px;
-      border-top: 1px solid #c9e8d8;
-      margin-top: 6px;
-      padding-top: 8px;
-      color: #1a7f5a;
-    }
-    .summary-row.remaining {
-      color: #d4380d;
-      font-weight: 700;
-    }
-    .summary-row.paid {
-      color: #389e0d;
-    }
-    .highlight-box {
-      border: 2px solid #1a7f5a;
-      border-radius: 8px;
-      padding: 16px;
-      text-align: center;
-    }
-    .highlight-amount {
-      font-size: 24px;
-      font-weight: 700;
-      color: #1a7f5a;
-      margin: 8px 0;
-    }
-    .tag-paid {
-      display: inline-block;
-      background: #389e0d;
-      color: #fff;
-      border-radius: 4px;
-      padding: 2px 10px;
-      font-size: 12px;
-      font-weight: 700;
-    }
-    .footer {
-      margin-top: 32px;
-      padding-top: 12px;
-      border-top: 1px solid #eee;
-      font-size: 11px;
-      color: #aaa;
-      text-align: center;
-    }
-    .bank-box {
-      background: #fffbe6;
-      border: 1px solid #ffe58f;
-      border-radius: 6px;
-      padding: 12px 16px;
-      margin-top: 12px;
-    }
-    @media print {
-      body { padding: 0; }
-      @page { margin: 20mm; }
-    }
+    body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 13px; color: #222; background: #fff; padding: 24px; max-width: 640px; margin: 0 auto; }
+    .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #2d6a4f; padding-bottom: 12px; }
+    .header h1 { font-size: 20px; color: #2d6a4f; font-weight: 700; }
+    .header .sub { font-size: 12px; color: #555; margin-top: 4px; }
+    .doc-title { text-align: center; font-size: 16px; font-weight: 700; margin: 16px 0; text-transform: uppercase; letter-spacing: 1px; color: #1a1a1a; }
+    .doc-meta { text-align: right; font-size: 11px; color: #888; margin-bottom: 16px; }
+    .section { margin-bottom: 16px; }
+    .section-title { font-size: 12px; font-weight: 700; text-transform: uppercase; color: #2d6a4f; border-bottom: 1px solid #d4edda; padding-bottom: 4px; margin-bottom: 8px; }
+    table { width: 100%; border-collapse: collapse; }
+    td { padding: 5px 6px; vertical-align: top; }
+    td.label { width: 40%; color: #555; font-size: 12px; }
+    td.value { font-weight: 500; }
+    .line-table th, .line-table td { border: 1px solid #e0e0e0; padding: 6px 8px; }
+    .line-table th { background: #f5f5f5; font-size: 12px; font-weight: 600; }
+    .line-table tr:last-child td { font-weight: 600; }
+    .total-row td { background: #e8f5e9; font-size: 14px; font-weight: 700; color: #2d6a4f; }
+    .remaining-row td { background: #fff3cd; font-weight: 700; color: #856404; }
+    .paid-row td { background: #d1e7dd; font-weight: 700; color: #0a3622; }
+    .highlight { background: #fffde7; border: 1px solid #f9ca24; border-radius: 6px; padding: 10px 14px; margin-top: 12px; font-size: 13px; }
+    .footer { margin-top: 24px; padding-top: 12px; border-top: 1px solid #eee; font-size: 11px; color: #888; text-align: center; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+    .badge-green { background: #d1e7dd; color: #0a3622; }
+    .badge-yellow { background: #fff3cd; color: #856404; }
+    @media print { body { padding: 12px; } }
   </style>
-`
+`;
 
-// ─── HTML Templates ────────────────────────────────────────────────────────────
-
-/** 1. Xác nhận đặt phòng */
-function renderBookingConfirmationHtml(d: DocumentData): string {
-  const roomRows = d.bookings
-    .map(
-      (b) => `
-      <tr>
-        <td>${b.room_name} (${b.room_number})</td>
-        <td>${fmtDate(b.check_in)} → ${fmtDate(b.check_out)}</td>
-        <td class="text-right">${b.nights} đêm</td>
-        <td class="text-right">${fmtVND(b.rate_per_night)}</td>
-        <td class="text-right">${fmtVND(b.room_total)}</td>
-      </tr>`
-    )
-    .join('')
-
-  const serviceRows = d.services.length
-    ? d.services
-        .map(
-          (s) => `
-          <tr>
-            <td colspan="2">${s.name}</td>
-            <td class="text-right">${s.quantity}</td>
-            <td class="text-right">${fmtVND(s.unit_price)}</td>
-            <td class="text-right">${fmtVND(s.total)}</td>
-          </tr>`
-        )
-        .join('')
-    : ''
-
-  const discountRows = d.discounts
-    .map(
-      (disc) => `
-      <tr>
-        <td colspan="4" style="color:#d4380d">${disc.description}</td>
-        <td class="text-right" style="color:#d4380d">-${fmtVND(disc.amount)}</td>
-      </tr>`
-    )
-    .join('')
-
-  return `<!DOCTYPE html>
-<html lang="vi">
-<head><meta charset="UTF-8">${BASE_CSS}</head>
-<body>
+const htmlHeader = () => `
   <div class="header">
-    <div>
-      <div class="hostel-name">${d.hostel_name}</div>
-      <div class="hostel-meta">${d.hostel_address}</div>
-      <div class="hostel-meta">📞 ${d.hostel_phone}</div>
-    </div>
-    <div>
-      <div class="doc-title">XÁC NHẬN ĐẶT PHÒNG</div>
-      <div class="doc-code">#${d.group_code ?? shortCode(d.group_id)} · ${fmtDatetime(d.created_at)}</div>
-    </div>
+    <h1>${HOSTEL_NAME}</h1>
+    <div class="sub">${HOSTEL_ADDRESS} · ${HOSTEL_PHONE} · ${HOSTEL_EMAIL}</div>
   </div>
+`;
 
-  <div class="section">
-    <div class="section-title">Thông tin khách</div>
-    <div class="info-grid">
-      <span class="info-label">Họ tên:</span>
-      <span class="info-value">${d.guest_name}</span>
-      ${d.guest_phone ? `<span class="info-label">Điện thoại:</span><span class="info-value">${d.guest_phone}</span>` : ''}
-      ${d.guest_email ? `<span class="info-label">Email:</span><span class="info-value">${d.guest_email}</span>` : ''}
-    </div>
-  </div>
+// ─── Template 1: Booking Confirmation ─────────────────────────────────────────
 
-  <div class="section">
-    <div class="section-title">Chi tiết đặt phòng</div>
-    <table>
-      <thead>
-        <tr>
-          <th>Phòng</th>
-          <th>Thời gian</th>
-          <th class="text-right">Số đêm</th>
-          <th class="text-right">Giá/đêm</th>
-          <th class="text-right">Thành tiền</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${roomRows}
-        ${serviceRows}
-        ${discountRows}
-        <tr class="total-row">
-          <td colspan="4">Tổng cộng</td>
-          <td class="text-right">${fmtVND(d.grand_total)}</td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
+export function renderBookingConfirmation(d: DocumentData): { html: string; zaloText: string } {
+  const html = `<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><title>Xác nhận đặt phòng</title>${BASE_STYLE}</head><body>
+    ${htmlHeader()}
+    <div class="doc-title">Phiếu xác nhận đặt phòng</div>
+    <div class="doc-meta">Ngày tạo: ${fmtDateTime(d.generatedAt)}</div>
 
-  <div class="section">
-    <div class="summary-box">
-      <div class="summary-row grand">
-        <span>Tổng tiền phải thanh toán</span>
-        <span>${fmtVND(d.grand_total)}</span>
-      </div>
-      ${d.total_paid > 0 ? `<div class="summary-row paid"><span>Đã thanh toán</span><span>${fmtVND(d.total_paid)}</span></div>` : ''}
-      ${d.remaining > 0 ? `<div class="summary-row remaining"><span>Còn lại</span><span>${fmtVND(d.remaining)}</span></div>` : ''}
-    </div>
-  </div>
-
-  <div class="footer">
-    Cảm ơn bạn đã chọn ${d.hostel_name}! Mọi thắc mắc liên hệ ${d.hostel_phone}.
-  </div>
-</body>
-</html>`
-}
-
-/** 2. Yêu cầu đặt cọc */
-function renderDepositRequestHtml(d: DocumentData): string {
-  const depositAmt = d.deposit_amount ?? Math.round(d.grand_total * 0.3)
-  const deadline = d.deposit_deadline ? fmtDate(d.deposit_deadline) : 'trong vòng 24h'
-
-  return `<!DOCTYPE html>
-<html lang="vi">
-<head><meta charset="UTF-8">${BASE_CSS}</head>
-<body>
-  <div class="header">
-    <div>
-      <div class="hostel-name">${d.hostel_name}</div>
-      <div class="hostel-meta">${d.hostel_address}</div>
-      <div class="hostel-meta">📞 ${d.hostel_phone}</div>
-    </div>
-    <div>
-      <div class="doc-title">YÊU CẦU ĐẶT CỌC</div>
-      <div class="doc-code">#${d.group_code ?? shortCode(d.group_id)} · ${fmtDatetime(d.created_at)}</div>
-    </div>
-  </div>
-
-  <div class="section">
-    <div class="section-title">Thông tin đặt phòng</div>
-    <div class="info-grid">
-      <span class="info-label">Khách:</span>
-      <span class="info-value">${d.guest_name}</span>
-      ${d.guest_phone ? `<span class="info-label">Điện thoại:</span><span class="info-value">${d.guest_phone}</span>` : ''}
-      <span class="info-label">Check-in:</span>
-      <span class="info-value">${fmtDate(d.bookings[0]?.check_in ?? d.created_at)}</span>
-      <span class="info-label">Check-out:</span>
-      <span class="info-value">${fmtDate(d.bookings[d.bookings.length - 1]?.check_out ?? d.created_at)}</span>
-      <span class="info-label">Phòng:</span>
-      <span class="info-value">${d.bookings.map((b) => b.room_name).join(', ')}</span>
-      <span class="info-label">Tổng tiền phòng:</span>
-      <span class="info-value">${fmtVND(d.grand_total)}</span>
-    </div>
-  </div>
-
-  <div class="section">
-    <div class="section-title">Số tiền cọc</div>
-    <div class="highlight-box">
-      <div style="color:#666">Vui lòng chuyển khoản đặt cọc để giữ phòng</div>
-      <div class="highlight-amount">${fmtVND(depositAmt)}</div>
-      <div style="color:#888;font-size:12px">Hạn cuối: <strong>${deadline}</strong></div>
+    <div class="section">
+      <div class="section-title">Thông tin khách</div>
+      <table><tbody>
+        <tr><td class="label">Họ tên</td><td class="value">${d.guestName}</td></tr>
+        <tr><td class="label">Số điện thoại</td><td class="value">${d.guestPhone || '—'}</td></tr>
+        ${d.otaBookingNumber ? `<tr><td class="label">Mã booking OTA</td><td class="value">${d.otaBookingNumber}</td></tr>` : ''}
+      </tbody></table>
     </div>
 
-    ${(d.hostel_bank || d.hostel_account) ? `
-    <div class="bank-box">
-      <strong>Thông tin chuyển khoản:</strong><br/>
-      ${d.hostel_bank ? `Ngân hàng: <strong>${d.hostel_bank}</strong><br/>` : ''}
-      ${d.hostel_account ? `Số tài khoản: <strong>${d.hostel_account}</strong><br/>` : ''}
-      ${d.hostel_account_name ? `Chủ tài khoản: <strong>${d.hostel_account_name}</strong><br/>` : ''}
-      Nội dung CK: <strong>#${shortCode(d.group_id)} ${d.guest_name}</strong>
+    <div class="section">
+      <div class="section-title">Chi tiết đặt phòng</div>
+      <table><tbody>
+        <tr><td class="label">Phòng</td><td class="value">${d.roomName} (${d.roomType})</td></tr>
+        <tr><td class="label">Check-in</td><td class="value">${fmtDate(d.checkIn)} từ 14:00${d.hasEarlyCheckIn ? ' <span class="badge badge-yellow">Early check-in</span>' : ''}</td></tr>
+        <tr><td class="label">Check-out</td><td class="value">${fmtDate(d.checkOut)} trước 12:00${d.hasLateCheckOut ? ' <span class="badge badge-yellow">Late check-out</span>' : ''}</td></tr>
+        <tr><td class="label">Số đêm</td><td class="value">${d.nights} đêm</td></tr>
+        <tr><td class="label">Số khách</td><td class="value">${d.guestsCount} người</td></tr>
+        <tr><td class="label">Giá/đêm</td><td class="value">${fmtVND(d.pricePerNight)}</td></tr>
+      </tbody></table>
+    </div>
+
+    ${d.services.length > 0 ? `
+    <div class="section">
+      <div class="section-title">Dịch vụ kèm theo</div>
+      <table class="line-table"><thead><tr><th>Dịch vụ</th><th style="text-align:right">Đơn giá</th><th style="text-align:center">SL</th><th style="text-align:right">Thành tiền</th></tr></thead>
+      <tbody>${d.services.map(s => `<tr><td>${s.name}</td><td style="text-align:right">${fmtVND(s.price)}</td><td style="text-align:center">${s.qty}</td><td style="text-align:right">${fmtVND(s.price * s.qty)}</td></tr>`).join('')}</tbody>
+      </table>
     </div>` : ''}
-  </div>
 
-  <div class="footer">
-    Phòng chỉ được giữ sau khi nhận được tiền cọc. Liên hệ ${d.hostel_phone} nếu cần hỗ trợ.
-  </div>
-</body>
-</html>`
+    <div class="section">
+      <div class="section-title">Tổng thanh toán</div>
+      <table class="line-table"><tbody>
+        <tr><td>Tiền phòng (${d.nights} đêm × ${fmtVND(d.pricePerNight)})</td><td style="text-align:right">${fmtVND(d.nights * d.pricePerNight)}</td></tr>
+        ${d.services.length > 0 ? `<tr><td>Dịch vụ</td><td style="text-align:right">${fmtVND(servicesTotal(d.services))}</td></tr>` : ''}
+        ${d.surcharge > 0 ? `<tr><td>Phụ thu (card fee)</td><td style="text-align:right">${fmtVND(d.surcharge)}</td></tr>` : ''}
+        ${d.discounts.map(disc => `<tr><td>Giảm giá: ${disc.description}</td><td style="text-align:right">-${fmtVND(disc.amount)}</td></tr>`).join('')}
+        <tr class="total-row"><td>TỔNG CỘNG</td><td style="text-align:right">${fmtVND(d.grandTotal)}</td></tr>
+      </tbody></table>
+    </div>
+
+    <div class="highlight">
+      🏡 Chúng tôi rất vui được đón tiếp quý khách! Nếu cần hỗ trợ, vui lòng liên hệ ${HOSTEL_PHONE} (Zalo/Call).
+    </div>
+    <div class="footer">${HOSTEL_NAME} · ${HOSTEL_ADDRESS}</div>
+  </body></html>`;
+
+  const zaloText = `🏡 *XÁC NHẬN ĐẶT PHÒNG — ${HOSTEL_NAME}*
+
+Xin chào ${d.guestName},
+
+Chúng tôi xác nhận đã nhận đặt phòng của bạn:
+
+🛏 Phòng: ${d.roomName}
+📅 Check-in: ${fmtDate(d.checkIn)} (từ 14:00)${d.hasEarlyCheckIn ? ' — Early check-in' : ''}
+📅 Check-out: ${fmtDate(d.checkOut)} (trước 12:00)${d.hasLateCheckOut ? ' — Late check-out' : ''}
+🌙 Số đêm: ${d.nights}
+👥 Số khách: ${d.guestsCount}
+💰 Tổng tiền: ${fmtVND(d.grandTotal)}
+
+${d.otaBookingNumber ? `📋 Mã booking: ${d.otaBookingNumber}\n` : ''}
+Mọi thắc mắc, liên hệ: ${HOSTEL_PHONE}
+Hẹn gặp bạn tại Đà Lạt! 🌿`;
+
+  return { html, zaloText };
 }
 
-/** 3. Xác nhận đặt cọc thành công */
-function renderDepositConfirmationHtml(d: DocumentData): string {
-  const depositAmt = d.deposit_amount ?? d.total_paid
+// ─── Template 2: Deposit Request ──────────────────────────────────────────────
 
-  return `<!DOCTYPE html>
-<html lang="vi">
-<head><meta charset="UTF-8">${BASE_CSS}</head>
-<body>
-  <div class="header">
-    <div>
-      <div class="hostel-name">${d.hostel_name}</div>
-      <div class="hostel-meta">${d.hostel_address}</div>
-      <div class="hostel-meta">📞 ${d.hostel_phone}</div>
-    </div>
-    <div>
-      <div class="doc-title">XÁC NHẬN ĐẶT CỌC</div>
-      <div class="doc-code">#${d.group_code ?? shortCode(d.group_id)} · ${fmtDatetime(d.created_at)}</div>
-    </div>
-  </div>
-
-  <div class="section">
-    <div class="section-title">Đặt cọc thành công</div>
-    <div class="highlight-box">
-      <div><span class="tag-paid">✓ ĐÃ NHẬN</span></div>
-      <div class="highlight-amount">${fmtVND(depositAmt)}</div>
-      <div style="color:#666;font-size:12px">Khách: <strong>${d.guest_name}</strong></div>
-    </div>
-  </div>
-
-  <div class="section">
-    <div class="section-title">Thông tin đặt phòng</div>
-    <div class="info-grid">
-      <span class="info-label">Mã đặt phòng:</span>
-      <span class="info-value">#${d.group_code ?? shortCode(d.group_id)}</span>
-      <span class="info-label">Check-in:</span>
-      <span class="info-value">${fmtDate(d.bookings[0]?.check_in ?? d.created_at)}</span>
-      <span class="info-label">Check-out:</span>
-      <span class="info-value">${fmtDate(d.bookings[d.bookings.length - 1]?.check_out ?? d.created_at)}</span>
-      <span class="info-label">Phòng:</span>
-      <span class="info-value">${d.bookings.map((b) => `${b.room_name} (${b.room_number})`).join(', ')}</span>
-      <span class="info-label">Tổng tiền:</span>
-      <span class="info-value">${fmtVND(d.grand_total)}</span>
-      <span class="info-label">Đã cọc:</span>
-      <span class="info-value" style="color:#389e0d">${fmtVND(depositAmt)}</span>
-      ${d.remaining > 0 ? `<span class="info-label">Còn lại (trả khi check-in):</span><span class="info-value" style="color:#d4380d">${fmtVND(d.remaining)}</span>` : ''}
-    </div>
-  </div>
-
-  <div class="footer">
-    Phòng đã được giữ cho bạn. Hẹn gặp lại tại ${d.hostel_name}! 📞 ${d.hostel_phone}
-  </div>
-</body>
-</html>`
+export interface DepositRequestOptions {
+  depositAmount: number;    // số tiền yêu cầu cọc
+  deadline: string;         // 'YYYY-MM-DD' — hạn chuyển cọc
+  bankName?: string;
+  bankAccount?: string;
+  bankOwner?: string;
 }
 
-/** 4. Hoá đơn / Invoice */
-function renderInvoiceHtml(d: DocumentData): string {
-  const payments = d.payments ?? []
+export function renderDepositRequest(
+  d: DocumentData,
+  opts: DepositRequestOptions
+): { html: string; zaloText: string } {
+  const bank = opts.bankName ?? 'MB Bank';
+  const acct = opts.bankAccount ?? '0969975935';
+  const owner = opts.bankOwner ?? 'NGUYEN THANH HIEU';
 
-  const paymentRows = payments
-    .map(
-      (p) => `
-      <tr>
-        <td>${fmtDatetime(p.paid_at)}</td>
-        <td>${fmtMethod(p.method)}</td>
-        <td>${p.note ?? ''}</td>
-        <td class="text-right">${fmtVND(p.amount)}</td>
-      </tr>`
-    )
-    .join('')
+  const html = `<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><title>Yêu cầu đặt cọc</title>${BASE_STYLE}</head><body>
+    ${htmlHeader()}
+    <div class="doc-title">Yêu cầu đặt cọc</div>
+    <div class="doc-meta">Ngày tạo: ${fmtDateTime(d.generatedAt)}</div>
 
-  const roomRows = d.bookings
-    .map(
-      (b) => `
-      <tr>
-        <td>${b.room_name} (${b.room_number})</td>
-        <td>${fmtDate(b.check_in)} → ${fmtDate(b.check_out)}</td>
-        <td class="text-right">${b.nights}</td>
-        <td class="text-right">${fmtVND(b.rate_per_night)}</td>
-        <td class="text-right">${fmtVND(b.room_total)}</td>
-      </tr>`
-    )
-    .join('')
-
-  const serviceRows = d.services
-    .map(
-      (s) => `
-      <tr>
-        <td>${s.name}</td>
-        <td>—</td>
-        <td class="text-right">${s.quantity}</td>
-        <td class="text-right">${fmtVND(s.unit_price)}</td>
-        <td class="text-right">${fmtVND(s.total)}</td>
-      </tr>`
-    )
-    .join('')
-
-  const discountRows = d.discounts
-    .map(
-      (disc) => `
-      <tr>
-        <td colspan="4" style="color:#d4380d">${disc.description}</td>
-        <td class="text-right" style="color:#d4380d">-${fmtVND(disc.amount)}</td>
-      </tr>`
-    )
-    .join('')
-
-  return `<!DOCTYPE html>
-<html lang="vi">
-<head><meta charset="UTF-8">${BASE_CSS}</head>
-<body>
-  <div class="header">
-    <div>
-      <div class="hostel-name">${d.hostel_name}</div>
-      <div class="hostel-meta">${d.hostel_address}</div>
-      <div class="hostel-meta">📞 ${d.hostel_phone}</div>
+    <div class="section">
+      <div class="section-title">Thông tin đặt phòng</div>
+      <table><tbody>
+        <tr><td class="label">Khách</td><td class="value">${d.guestName}</td></tr>
+        <tr><td class="label">Phòng</td><td class="value">${d.roomName}</td></tr>
+        <tr><td class="label">Thời gian</td><td class="value">${nightsLabel(d)}</td></tr>
+        <tr><td class="label">Tổng tiền</td><td class="value">${fmtVND(d.grandTotal)}</td></tr>
+      </tbody></table>
     </div>
-    <div>
-      <div class="doc-title">HOÁ ĐƠN THANH TOÁN</div>
-      <div class="doc-code">#${d.group_code ?? shortCode(d.group_id)} · ${fmtDatetime(d.created_at)}</div>
-    </div>
-  </div>
 
-  <div class="section">
-    <div class="section-title">Thông tin khách</div>
-    <div class="info-grid">
-      <span class="info-label">Họ tên:</span>
-      <span class="info-value">${d.guest_name}</span>
-      ${d.guest_phone ? `<span class="info-label">Điện thoại:</span><span class="info-value">${d.guest_phone}</span>` : ''}
-      ${d.guest_email ? `<span class="info-label">Email:</span><span class="info-value">${d.guest_email}</span>` : ''}
-    </div>
-  </div>
-
-  <div class="section">
-    <div class="section-title">Chi tiết dịch vụ</div>
-    <table>
-      <thead>
-        <tr>
-          <th>Mô tả</th>
-          <th>Thời gian</th>
-          <th class="text-right">SL</th>
-          <th class="text-right">Đơn giá</th>
-          <th class="text-right">Thành tiền</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${roomRows}
-        ${serviceRows}
-        ${discountRows}
-        <tr class="total-row">
-          <td colspan="4">TỔNG CỘNG</td>
-          <td class="text-right">${fmtVND(d.grand_total)}</td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
-
-  ${payments.length > 0 ? `
-  <div class="section">
-    <div class="section-title">Lịch sử thanh toán</div>
-    <table>
-      <thead>
-        <tr>
-          <th>Thời gian</th>
-          <th>Phương thức</th>
-          <th>Ghi chú</th>
-          <th class="text-right">Số tiền</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${paymentRows}
-      </tbody>
-    </table>
-  </div>` : ''}
-
-  <div class="section">
-    <div class="summary-box">
-      <div class="summary-row grand">
-        <span>Tổng hoá đơn</span>
-        <span>${fmtVND(d.grand_total)}</span>
+    <div class="section">
+      <div class="section-title">Yêu cầu đặt cọc</div>
+      <div class="highlight">
+        <p>Để giữ chỗ, vui lòng chuyển khoản số tiền:</p>
+        <p style="font-size:20px; font-weight:700; color:#2d6a4f; margin: 8px 0">${fmtVND(opts.depositAmount)}</p>
+        <p>Hạn chuyển: <strong>${fmtDate(opts.deadline)}</strong></p>
       </div>
-      <div class="summary-row paid">
-        <span>Đã thanh toán</span>
-        <span>${fmtVND(d.total_paid)}</span>
-      </div>
-      ${d.remaining > 0
-        ? `<div class="summary-row remaining"><span>Còn lại</span><span>${fmtVND(d.remaining)}</span></div>`
-        : `<div class="summary-row" style="color:#389e0d;font-weight:700"><span>✓ Đã thanh toán đủ</span><span></span></div>`
-      }
     </div>
-  </div>
 
-  <div class="footer">
-    ${d.hostel_name} · ${d.hostel_address} · ${d.hostel_phone}<br/>
-    Cảm ơn quý khách đã lưu trú!
-  </div>
-</body>
-</html>`
+    <div class="section">
+      <div class="section-title">Thông tin chuyển khoản</div>
+      <table><tbody>
+        <tr><td class="label">Ngân hàng</td><td class="value">${bank}</td></tr>
+        <tr><td class="label">Số tài khoản</td><td class="value" style="font-size:16px;font-weight:700;letter-spacing:2px">${acct}</td></tr>
+        <tr><td class="label">Chủ tài khoản</td><td class="value">${owner}</td></tr>
+        <tr><td class="label">Nội dung CK</td><td class="value">Coc phong ${d.roomName} ${fmtDate(d.checkIn)} ${d.guestName}</td></tr>
+      </tbody></table>
+    </div>
+
+    <p style="font-size:12px;color:#888;margin-top:8px">* Nếu không nhận được xác nhận trong vòng 24h sau khi chuyển khoản, vui lòng liên hệ ${HOSTEL_PHONE}.</p>
+    <div class="footer">${HOSTEL_NAME} · ${HOSTEL_ADDRESS}</div>
+  </body></html>`;
+
+  const zaloText = `💰 *YÊU CẦU ĐẶT CỌC — ${HOSTEL_NAME}*
+
+Xin chào ${d.guestName},
+
+Để giữ chỗ cho đặt phòng của bạn:
+🛏 Phòng: ${d.roomName}
+📅 ${nightsLabel(d)}
+
+Vui lòng chuyển khoản:
+💵 *${fmtVND(opts.depositAmount)}*
+⏰ Hạn: ${fmtDate(opts.deadline)}
+
+🏦 ${bank}
+🔢 STK: *${acct}*
+👤 ${owner}
+📝 Nội dung: Coc phong ${d.roomName} ${fmtDate(d.checkIn)} ${d.guestName}
+
+Sau khi chuyển, gửi ảnh chụp màn hình để xác nhận nhé!
+Mọi thắc mắc: ${HOSTEL_PHONE}`;
+
+  return { html, zaloText };
 }
 
-/** 5. Thông báo đến nơi / Arrival notice */
-function renderArrivalNoticeHtml(d: DocumentData): string {
-  const checkIn = d.bookings[0]?.check_in
-  const checkOut = d.bookings[d.bookings.length - 1]?.check_out
+// ─── Template 3: Deposit Confirmation ─────────────────────────────────────────
 
-  return `<!DOCTYPE html>
-<html lang="vi">
-<head><meta charset="UTF-8">${BASE_CSS}</head>
-<body>
-  <div class="header">
-    <div>
-      <div class="hostel-name">${d.hostel_name}</div>
-      <div class="hostel-meta">${d.hostel_address}</div>
-      <div class="hostel-meta">📞 ${d.hostel_phone}</div>
-    </div>
-    <div>
-      <div class="doc-title">THÔNG BÁO CHECK-IN</div>
-      <div class="doc-code">#${d.group_code ?? shortCode(d.group_id)}</div>
-    </div>
-  </div>
+export function renderDepositConfirmation(d: DocumentData): { html: string; zaloText: string } {
+  const depositPaid = d.paid;
+  const balance = remaining(d);
 
-  <div class="section">
-    <div class="section-title">Chào mừng khách</div>
-    <div class="info-grid">
-      <span class="info-label">Khách:</span>
-      <span class="info-value">${d.guest_name}</span>
-      <span class="info-label">Check-in:</span>
-      <span class="info-value">${checkIn ? fmtDate(checkIn) : '—'} lúc 14:00</span>
-      <span class="info-label">Check-out:</span>
-      <span class="info-value">${checkOut ? fmtDate(checkOut) : '—'} lúc 12:00</span>
-    </div>
-  </div>
+  const html = `<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><title>Xác nhận đặt cọc</title>${BASE_STYLE}</head><body>
+    ${htmlHeader()}
+    <div class="doc-title">Xác nhận nhận cọc</div>
+    <div class="doc-meta">Ngày xác nhận: ${fmtDateTime(d.generatedAt)}</div>
 
-  <div class="section">
-    <div class="section-title">Phòng đã đặt</div>
-    <table>
-      <thead>
-        <tr>
-          <th>Phòng</th>
-          <th>Check-in</th>
-          <th>Check-out</th>
-          <th class="text-right">Số đêm</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${d.bookings
-          .map(
-            (b) => `
+    <div class="section">
+      <div class="section-title">Thông tin đặt phòng</div>
+      <table><tbody>
+        <tr><td class="label">Khách</td><td class="value">${d.guestName}</td></tr>
+        <tr><td class="label">Phòng</td><td class="value">${d.roomName}</td></tr>
+        <tr><td class="label">Thời gian</td><td class="value">${nightsLabel(d)}</td></tr>
+      </tbody></table>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Thanh toán</div>
+      <table class="line-table"><tbody>
+        <tr><td>Tổng tiền phòng</td><td style="text-align:right">${fmtVND(d.grandTotal)}</td></tr>
+        <tr class="paid-row"><td>✅ Đã đặt cọc</td><td style="text-align:right">${fmtVND(depositPaid)}</td></tr>
+        ${balance > 0
+          ? `<tr class="remaining-row"><td>⏳ Còn lại (thanh toán khi check-in)</td><td style="text-align:right">${fmtVND(balance)}</td></tr>`
+          : `<tr class="paid-row"><td>🎉 Đã thanh toán đủ</td><td style="text-align:right">${fmtVND(0)}</td></tr>`
+        }
+      </tbody></table>
+    </div>
+
+    <div class="highlight">
+      ✅ Chúng tôi đã nhận cọc và xác nhận giữ phòng cho bạn. Hẹn gặp bạn ngày ${fmtDate(d.checkIn)}!
+    </div>
+    <div class="footer">${HOSTEL_NAME} · ${HOSTEL_ADDRESS}</div>
+  </body></html>`;
+
+  const zaloText = `✅ *XÁC NHẬN ĐÃ NHẬN CỌC — ${HOSTEL_NAME}*
+
+Xin chào ${d.guestName},
+
+Chúng tôi đã nhận khoản đặt cọc:
+💰 *${fmtVND(depositPaid)}*
+
+Thông tin đặt phòng:
+🛏 Phòng: ${d.roomName}
+📅 ${nightsLabel(d)}
+💵 Tổng tiền: ${fmtVND(d.grandTotal)}
+${balance > 0 ? `⏳ Còn lại khi check-in: ${fmtVND(balance)}` : '🎉 Đã thanh toán đủ!'}
+
+Phòng của bạn đã được giữ chắc chắn rồi!
+Hẹn gặp bạn ngày ${fmtDate(d.checkIn)} tại Đà Lạt 🌿
+📞 ${HOSTEL_PHONE}`;
+
+  return { html, zaloText };
+}
+
+// ─── Template 4: Invoice (Hóa đơn checkout) ───────────────────────────────────
+
+export function renderInvoice(d: DocumentData): { html: string; zaloText: string } {
+  const invoiceNo = `HD-${dayjs(d.generatedAt).format('YYYYMMDD')}-${d.bookingId.slice(0, 6).toUpperCase()}`;
+  const balance = remaining(d);
+
+  const html = `<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><title>Hóa đơn</title>${BASE_STYLE}</head><body>
+    ${htmlHeader()}
+    <div class="doc-title">Hóa đơn thanh toán</div>
+    <div class="doc-meta">Số HĐ: ${invoiceNo} · Ngày: ${fmtDateTime(d.generatedAt)}</div>
+
+    <div class="section">
+      <div class="section-title">Thông tin khách</div>
+      <table><tbody>
+        <tr><td class="label">Họ tên</td><td class="value">${d.guestName}</td></tr>
+        <tr><td class="label">Số điện thoại</td><td class="value">${d.guestPhone || '—'}</td></tr>
+      </tbody></table>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Chi tiết sử dụng</div>
+      <table class="line-table">
+        <thead><tr><th>Mô tả</th><th style="text-align:right">Đơn giá</th><th style="text-align:center">SL</th><th style="text-align:right">Thành tiền</th></tr></thead>
+        <tbody>
           <tr>
-            <td><strong>${b.room_name}</strong> — ${b.room_number}</td>
-            <td>${fmtDate(b.check_in)}</td>
-            <td>${fmtDate(b.check_out)}</td>
-            <td class="text-right">${b.nights}</td>
-          </tr>`
-          )
-          .join('')}
-      </tbody>
-    </table>
-  </div>
-
-  ${d.remaining > 0 ? `
-  <div class="section">
-    <div class="summary-box">
-      <div class="summary-row remaining">
-        <span>💳 Số tiền cần thanh toán khi check-in</span>
-        <span>${fmtVND(d.remaining)}</span>
-      </div>
+            <td>Phòng ${d.roomName} (${d.roomType})<br><small style="color:#888">${nightsLabel(d)}</small></td>
+            <td style="text-align:right">${fmtVND(d.pricePerNight)}</td>
+            <td style="text-align:center">${d.nights}</td>
+            <td style="text-align:right">${fmtVND(d.pricePerNight * d.nights)}</td>
+          </tr>
+          ${d.services.map(s => `
+          <tr>
+            <td>${s.name}</td>
+            <td style="text-align:right">${fmtVND(s.price)}</td>
+            <td style="text-align:center">${s.qty}</td>
+            <td style="text-align:right">${fmtVND(s.price * s.qty)}</td>
+          </tr>`).join('')}
+          ${d.surcharge > 0 ? `
+          <tr>
+            <td>Phụ thu thanh toán thẻ</td>
+            <td style="text-align:right">—</td>
+            <td style="text-align:center">—</td>
+            <td style="text-align:right">${fmtVND(d.surcharge)}</td>
+          </tr>` : ''}
+          ${d.discounts.map(disc => `
+          <tr style="color:#0a3622">
+            <td>Giảm giá: ${disc.description}</td>
+            <td style="text-align:right">—</td>
+            <td style="text-align:center">—</td>
+            <td style="text-align:right">-${fmtVND(disc.amount)}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
     </div>
-  </div>` : `
-  <div class="section">
-    <div class="summary-box">
-      <div class="summary-row" style="color:#389e0d;font-weight:700">
-        <span>✓ Đã thanh toán đủ — không cần trả thêm</span>
-        <span></span>
-      </div>
+
+    <div class="section">
+      <table class="line-table"><tbody>
+        <tr class="total-row"><td colspan="3">TỔNG CỘNG</td><td style="text-align:right">${fmtVND(d.grandTotal)}</td></tr>
+        ${d.payments.map(p => `
+        <tr class="paid-row">
+          <td colspan="3">Đã thanh toán (${p.method}) — ${fmtDate(p.created_at)}</td>
+          <td style="text-align:right">-${fmtVND(p.amount)}</td>
+        </tr>`).join('')}
+        ${balance > 0
+          ? `<tr class="remaining-row"><td colspan="3">CÒN LẠI</td><td style="text-align:right">${fmtVND(balance)}</td></tr>`
+          : `<tr class="paid-row"><td colspan="3">ĐÃ THANH TOÁN ĐỦ</td><td style="text-align:right">${fmtVND(0)}</td></tr>`
+        }
+      </tbody></table>
     </div>
-  </div>`}
 
-  <div class="footer">
-    Hẹn gặp bạn tại ${d.hostel_name}! Mọi thắc mắc liên hệ ${d.hostel_phone}.
-  </div>
-</body>
-</html>`
+    <p style="text-align:center;margin-top:16px;font-size:12px;color:#555">Cảm ơn quý khách đã lưu trú tại ${HOSTEL_NAME}. Hẹn gặp lại! 🌿</p>
+    <div class="footer">${invoiceNo} · ${HOSTEL_NAME} · ${HOSTEL_ADDRESS}</div>
+  </body></html>`;
+
+  const zaloText = `🧾 *HÓA ĐƠN THANH TOÁN — ${HOSTEL_NAME}*
+Số HĐ: ${invoiceNo}
+
+Khách: ${d.guestName}
+🛏 Phòng: ${d.roomName} | ${nightsLabel(d)}
+
+CHI TIẾT:
+• Tiền phòng: ${fmtVND(d.pricePerNight * d.nights)}
+${d.services.map(s => `• ${s.name} (×${s.qty}): ${fmtVND(s.price * s.qty)}`).join('\n')}
+${d.surcharge > 0 ? `• Phụ thu thẻ: ${fmtVND(d.surcharge)}` : ''}
+${d.discounts.map(disc => `• Giảm (${disc.description}): -${fmtVND(disc.amount)}`).join('\n')}
+
+💰 TỔNG: ${fmtVND(d.grandTotal)}
+✅ Đã trả: ${fmtVND(d.paid)}
+${balance > 0 ? `⏳ Còn lại: ${fmtVND(balance)}` : '🎉 Đã thanh toán đủ'}
+
+Cảm ơn bạn đã ở lại Hello Dalat! 🌿`;
+
+  return { html, zaloText };
 }
 
-// ─── Zalo Text Templates ───────────────────────────────────────────────────────
+// ─── Template 5: Arrival Notice ───────────────────────────────────────────────
 
-function renderBookingConfirmationZalo(d: DocumentData): string {
-  const rooms = d.bookings.map((b) => `• ${b.room_name} (${b.room_number}): ${fmtDate(b.check_in)} → ${fmtDate(b.check_out)}`).join('\n')
-  return `✅ *XÁC NHẬN ĐẶT PHÒNG* — #${shortCode(d.group_id)}
+export function renderArrivalNotice(d: DocumentData): { html: string; zaloText: string } {
+  const html = `<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><title>Thông báo đến</title>${BASE_STYLE}</head><body>
+    ${htmlHeader()}
+    <div class="doc-title">Thông báo trước ngày đến</div>
+    <div class="doc-meta">Ngày gửi: ${fmtDateTime(d.generatedAt)}</div>
 
-Xin chào *${d.guest_name}*,
+    <div class="section">
+      <div class="section-title">Lịch check-in của bạn</div>
+      <table><tbody>
+        <tr><td class="label">Khách</td><td class="value">${d.guestName}</td></tr>
+        <tr><td class="label">Phòng</td><td class="value">${d.roomName}</td></tr>
+        <tr><td class="label">Check-in</td><td class="value">${fmtDate(d.checkIn)} — từ 14:00${d.hasEarlyCheckIn ? ' <span class="badge badge-green">Early check-in đã xác nhận</span>' : ''}</td></tr>
+        <tr><td class="label">Check-out</td><td class="value">${fmtDate(d.checkOut)} — trước 12:00${d.hasLateCheckOut ? ' <span class="badge badge-green">Late check-out đã xác nhận</span>' : ''}</td></tr>
+        <tr><td class="label">Số đêm</td><td class="value">${d.nights}</td></tr>
+      </tbody></table>
+    </div>
 
-${d.hostel_name} xác nhận đã nhận đặt phòng của bạn:
+    <div class="section">
+      <div class="section-title">Hướng dẫn nhận phòng</div>
+      <table><tbody>
+        <tr><td class="label">Địa chỉ</td><td class="value">${HOSTEL_ADDRESS}</td></tr>
+        <tr><td class="label">Giờ check-in</td><td class="value">14:00 – 22:00 (muộn hơn: báo trước qua Zalo)</td></tr>
+        <tr><td class="label">Liên hệ</td><td class="value">${HOSTEL_PHONE} (Zalo/Call)</td></tr>
+        <tr><td class="label">Thanh toán</td><td class="value">Tiền mặt hoặc chuyển khoản khi check-in</td></tr>
+      </tbody></table>
+    </div>
 
-${rooms}
+    ${d.paid < d.grandTotal ? `
+    <div class="highlight">
+      💵 Số tiền cần thanh toán khi check-in: <strong>${fmtVND(remaining(d))}</strong>
+    </div>` : `
+    <div class="highlight" style="border-color:#2d6a4f;background:#e8f5e9">
+      ✅ Bạn đã thanh toán đủ — chỉ cần đến nhận phòng!
+    </div>`}
 
-💰 Tổng tiền: *${fmtVND(d.grand_total)}*${d.total_paid > 0 ? `\n✓ Đã cọc: *${fmtVND(d.total_paid)}*` : ''}${d.remaining > 0 ? `\n⚠️ Còn lại: *${fmtVND(d.remaining)}* (thanh toán khi check-in)` : ''}
+    <div class="footer">${HOSTEL_NAME} · ${HOSTEL_ADDRESS}</div>
+  </body></html>`;
 
-📞 Liên hệ nếu cần hỗ trợ: *${d.hostel_phone}*
-Cảm ơn bạn đã chọn ${d.hostel_name}! 🏡`
+  const zaloText = `🌿 *NHẮC NHỞ CHECK-IN — ${HOSTEL_NAME}*
+
+Xin chào ${d.guestName}!
+
+Chúng tôi vui lòng nhắc bạn về lịch check-in:
+
+🛏 Phòng: ${d.roomName}
+📅 Check-in: *${fmtDate(d.checkIn)}* từ 14:00${d.hasEarlyCheckIn ? ' (Early check-in)' : ''}
+📅 Check-out: ${fmtDate(d.checkOut)} trước 12:00${d.hasLateCheckOut ? ' (Late check-out)' : ''}
+
+📍 Địa chỉ: ${HOSTEL_ADDRESS}
+📞 Liên hệ: ${HOSTEL_PHONE}
+
+${d.paid < d.grandTotal
+  ? `💵 Còn lại khi check-in: *${fmtVND(remaining(d))}* (tiền mặt hoặc CK)`
+  : '✅ Bạn đã thanh toán đủ rồi!'
 }
 
-function renderDepositRequestZalo(d: DocumentData): string {
-  const depositAmt = d.deposit_amount ?? Math.round(d.grand_total * 0.3)
-  const deadline = d.deposit_deadline ? fmtDate(d.deposit_deadline) : 'trong vòng 24h'
-  const rooms = d.bookings.map((b) => `• ${b.room_name}: ${fmtDate(b.check_in)} → ${fmtDate(b.check_out)}`).join('\n')
+Nếu đến muộn sau 22:00, vui lòng báo trước qua Zalo này nhé!
+Hẹn gặp bạn tại Đà Lạt! 🌿`;
 
-  return `💳 *YÊU CẦU ĐẶT CỌC* — #${shortCode(d.group_id)}
-
-Xin chào *${d.guest_name}*,
-
-Để hoàn tất việc giữ phòng, vui lòng đặt cọc:
-
-${rooms}
-💰 Tổng tiền phòng: *${fmtVND(d.grand_total)}*
-📌 Số tiền cọc: *${fmtVND(depositAmt)}*
-⏰ Hạn cuối: *${deadline}*
-
-${d.hostel_bank || d.hostel_account ? `🏦 *Thông tin chuyển khoản:*\n${d.hostel_bank ? `Ngân hàng: ${d.hostel_bank}\n` : ''}${d.hostel_account ? `STK: ${d.hostel_account}\n` : ''}${d.hostel_account_name ? `Chủ TK: ${d.hostel_account_name}\n` : ''}Nội dung: #${shortCode(d.group_id)} ${d.guest_name}` : ''}
-
-Phòng chỉ được giữ sau khi nhận được tiền cọc.
-📞 Liên hệ: *${d.hostel_phone}*`
+  return { html, zaloText };
 }
-
-function renderDepositConfirmationZalo(d: DocumentData): string {
-  const depositAmt = d.deposit_amount ?? d.total_paid
-  const rooms = d.bookings.map((b) => `• ${b.room_name} (${b.room_number}): ${fmtDate(b.check_in)} → ${fmtDate(b.check_out)}`).join('\n')
-
-  return `✅ *XÁC NHẬN ĐÃ NHẬN CỌC* — #${shortCode(d.group_id)}
-
-Xin chào *${d.guest_name}*,
-
-${d.hostel_name} đã nhận được tiền cọc *${fmtVND(depositAmt)}* của bạn. Phòng đã được giữ! 🎉
-
-${rooms}
-💰 Tổng tiền: *${fmtVND(d.grand_total)}*
-✓ Đã cọc: *${fmtVND(depositAmt)}*${d.remaining > 0 ? `\n⚠️ Còn lại: *${fmtVND(d.remaining)}* (thanh toán khi check-in)` : '\n✓ Đã thanh toán đủ!'}
-
-Hẹn gặp bạn tại ${d.hostel_name}! 🏡
-📞 ${d.hostel_phone}`
-}
-
-function renderInvoiceZalo(d: DocumentData): string {
-  const rooms = d.bookings.map((b) => `• ${b.room_name}: ${b.nights} đêm × ${fmtVND(b.rate_per_night)} = ${fmtVND(b.room_total)}`).join('\n')
-  const services = d.services.length
-    ? '\n' + d.services.map((s) => `• ${s.name}: ${fmtVND(s.total)}`).join('\n')
-    : ''
-  const discounts = d.discounts.length
-    ? '\n' + d.discounts.map((disc) => `• 🎁 ${disc.description}: -${fmtVND(disc.amount)}`).join('\n')
-    : ''
-
-  return `🧾 *HOÁ ĐƠN THANH TOÁN* — #${shortCode(d.group_id)}
-
-Khách: *${d.guest_name}*
-Ngày: ${fmtDatetime(d.created_at)}
-
-─────────────────────
-${rooms}${services}${discounts}
-─────────────────────
-💰 Tổng cộng: *${fmtVND(d.grand_total)}*
-${d.total_paid > 0 ? `✓ Đã thanh toán: *${fmtVND(d.total_paid)}*` : ''}${d.remaining > 0 ? `\n⚠️ Còn lại: *${fmtVND(d.remaining)}*` : '\n✅ Đã thanh toán đủ'}
-
-Cảm ơn bạn đã lưu trú tại ${d.hostel_name}! 🙏
-📞 ${d.hostel_phone}`
-}
-
-function renderArrivalNoticeZalo(d: DocumentData): string {
-  const checkIn = d.bookings[0]?.check_in
-  const checkOut = d.bookings[d.bookings.length - 1]?.check_out
-  const rooms = d.bookings.map((b) => `• ${b.room_name} (${b.room_number})`).join('\n')
-
-  return `🏡 *THÔNG BÁO CHECK-IN* — #${shortCode(d.group_id)}
-
-Xin chào *${d.guest_name}*,
-
-${d.hostel_name} rất vui được đón bạn!
-
-📅 Check-in: *${checkIn ? fmtDate(checkIn) : '—'}* lúc 14:00
-📅 Check-out: *${checkOut ? fmtDate(checkOut) : '—'}* lúc 12:00
-
-🛏 Phòng của bạn:
-${rooms}
-
-${d.remaining > 0
-    ? `💳 Vui lòng thanh toán khi check-in: *${fmtVND(d.remaining)}*`
-    : '✅ Bạn đã thanh toán đủ — không cần trả thêm!'}
-
-📍 Địa chỉ: ${d.hostel_address}
-📞 ${d.hostel_phone}
-
-Hẹn gặp bạn sớm! 🎉`
-}
-
-// ─── Public API ────────────────────────────────────────────────────────────────
-
-/** Render HTML string từ DocumentData + DocKind */
-export function renderDocumentHtml(kind: DocKind, data: DocumentData): string {
-  switch (kind) {
-    case 'booking_confirmation':
-      return renderBookingConfirmationHtml(data)
-    case 'deposit_request':
-      return renderDepositRequestHtml(data)
-    case 'deposit_confirmation':
-      return renderDepositConfirmationHtml(data)
-    case 'invoice':
-      return renderInvoiceHtml(data)
-    case 'arrival_notice':
-      return renderArrivalNoticeHtml(data)
-    default:
-      throw new Error(`Unknown doc kind: ${kind}`)
-  }
-}
-
-/** Render Zalo text từ DocumentData + DocKind */
-export function renderDocumentZalo(kind: DocKind, data: DocumentData): string {
-  switch (kind) {
-    case 'booking_confirmation':
-      return renderBookingConfirmationZalo(data)
-    case 'deposit_request':
-      return renderDepositRequestZalo(data)
-    case 'deposit_confirmation':
-      return renderDepositConfirmationZalo(data)
-    case 'invoice':
-      return renderInvoiceZalo(data)
-    case 'arrival_notice':
-      return renderArrivalNoticeZalo(data)
-    default:
-      throw new Error(`Unknown doc kind: ${kind}`)
-  }
-}
-
-/** Label hiển thị cho từng DocKind */
-export const DOC_KIND_LABELS: Record<DocKind, string> = {
-  booking_confirmation: 'Xác nhận đặt phòng',
-  deposit_request: 'Yêu cầu đặt cọc',
-  deposit_confirmation: 'Xác nhận đã cọc',
-  invoice: 'Hoá đơn thanh toán',
-  arrival_notice: 'Thông báo check-in',
-    }
