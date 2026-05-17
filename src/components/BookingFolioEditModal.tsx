@@ -32,7 +32,7 @@ const SERVICE_CATALOG = [
   { id: 'svc_tour',       name: 'Tour Đà Lạt (người)',      price: 250000 },
 ]
 
-const fmt = (n: number) => n.toLocaleString('vi-VN') + ' ₫'
+const fmt = (n?: number | null) => (typeof n === 'number' && !isNaN(n) ? n.toLocaleString('vi-VN') + ' ₫' : '—')
 
 interface Props {
   open: boolean
@@ -43,9 +43,9 @@ interface Props {
 
 export default function BookingFolioEditModal({ open, onClose, bookingId, groupId }: Props) {
   const { data: folio, isLoading } = useBookingFolio(bookingId)
-  const { addDeposit, deleteDeposit } = useDepositActions(bookingId)
-  const { addService, deleteService } = useServiceActions(bookingId)
-  const { addDiscount, deleteDiscount } = useDiscountActions(bookingId)
+  const { addDeposit, deleteDeposit } = useDepositActions(bookingId, groupId)
+  const { addService, deleteService } = useServiceActions(bookingId, groupId)
+  const { addDiscount, deleteDiscount } = useDiscountActions(bookingId, groupId)
 
   const [depositForm] = Form.useForm()
   const [serviceForm] = Form.useForm()
@@ -326,29 +326,41 @@ export default function BookingFolioEditModal({ open, onClose, bookingId, groupI
   )
 
   // ── Grand total summary ───────────────────────────────────
-  const GrandTotalBar = folio && (
+  const GrandTotalBar = folio ? (
     <div style={{ background: '#fafafa', padding: '8px 12px', borderRadius: 6,
       display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
       <Space split={<Divider type="vertical" />}>
         <Text>Tiền phòng: <Text strong>{fmt(folio.booking.price)}</Text></Text>
         <Text>Dịch vụ: <Text strong>
-          +{fmt((folio.services ?? []).reduce((s, sv) => s + sv.price * sv.qty, 0))}
+          +{fmt((folio.services ?? []).reduce((s, sv) => s + sv.price * Number(sv.qty), 0))}
         </Text></Text>
-        <Text type="danger">Giảm giá: <Text strong type="danger">
+        <Text type="danger">Giảm: <Text strong type="danger">
           −{fmt((folio.discounts ?? []).reduce((s, d) => s + d.amount, 0))}
         </Text></Text>
       </Space>
-      <Text>
-        Grand Total:{' '}
-        <Text strong style={{ fontSize: 16 }}>{fmt(folio.booking.grand_total)}</Text>
-        {' '}|{' '}
-        Đã cọc:{' '}
-        <Text strong style={{ color: 'green' }}>
-          {fmt((folio.payments ?? []).reduce((s, p) => s + p.amount, 0))}
+      <Space split={<Divider type="vertical" />}>
+        <Text>
+          Grand Total:{' '}
+          <Text strong style={{ fontSize: 16 }}>{fmt(folio.booking.grandTotal)}</Text>
         </Text>
-      </Text>
+        <Text>
+          Đã cọc:{' '}
+          <Text strong style={{ color: '#52c41a' }}>
+            {fmt(folio.group.paid)}
+          </Text>
+        </Text>
+        <Text>
+          Còn lại:{' '}
+          <Text
+            strong
+            style={{ color: folio.group.paid >= folio.booking.grandTotal ? '#52c41a' : '#ff4d4f' }}
+          >
+            {fmt(Math.max(0, folio.booking.grandTotal - folio.group.paid))}
+          </Text>
+        </Text>
+      </Space>
     </div>
-  )
+  ) : null
 
   return (
     <Modal

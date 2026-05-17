@@ -9,11 +9,12 @@ interface AddDiscountPayload {
   description?: string
 }
 
-export function useDiscountActions(bookingId: string) {
+export function useDiscountActions(bookingId: string, groupId: string) {
   const queryClient = useQueryClient()
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['booking-folio', bookingId] })
+    queryClient.invalidateQueries({ queryKey: ['booking-detail', groupId] })
     queryClient.invalidateQueries({ queryKey: ['bookings'] })
   }
 

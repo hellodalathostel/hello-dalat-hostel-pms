@@ -92,6 +92,7 @@ export function useBookingFolio(bookingId: string | null) {
   return useQuery({
     queryKey: ['booking-folio', bookingId],
     enabled: Boolean(bookingId),
+    refetchOnMount: true,
     queryFn: async (): Promise<BookingFolio> => {
       if (!bookingId) {
         throw new Error('Thiếu bookingId')

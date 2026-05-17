@@ -13,8 +13,15 @@ interface DepositPayload {
   firstBookingId?: string
 }
 
-export function useDepositActions(bookingId: string) {
+export function useDepositActions(bookingId: string, groupId: string) {
   const queryClient = useQueryClient()
+
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ['booking-folio', bookingId] })
+    queryClient.invalidateQueries({ queryKey: ['booking-detail', groupId] })
+    queryClient.invalidateQueries({ queryKey: ['bookings'] })
+    queryClient.invalidateQueries({ queryKey: ['groups'] })
+  }
 
   const addDeposit = useMutation({
     mutationFn: async (payload: DepositPayload) => {
@@ -30,10 +37,7 @@ export function useDepositActions(bookingId: string) {
     },
     onSuccess: () => {
       message.success('Đã ghi nhận cọc')
-      // Invalidate folio + group + bookings list
-      queryClient.invalidateQueries({ queryKey: ['booking-folio', bookingId] })
-      queryClient.invalidateQueries({ queryKey: ['bookings'] })
-      queryClient.invalidateQueries({ queryKey: ['groups'] })
+      invalidate()
     },
     onError: (err: Error) => {
       message.error(`Lỗi ghi cọc: ${err.message}`)
@@ -51,9 +55,7 @@ export function useDepositActions(bookingId: string) {
     },
     onSuccess: () => {
       message.success('Đã xóa khoản cọc')
-      queryClient.invalidateQueries({ queryKey: ['booking-folio', bookingId] })
-      queryClient.invalidateQueries({ queryKey: ['bookings'] })
-      queryClient.invalidateQueries({ queryKey: ['groups'] })
+      invalidate()
     },
     onError: (err: Error) => {
       message.error(`Lỗi xóa cọc: ${err.message}`)
