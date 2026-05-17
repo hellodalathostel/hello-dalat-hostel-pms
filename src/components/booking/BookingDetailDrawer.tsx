@@ -26,6 +26,7 @@ import { useBookingDetail } from '@/hooks/useBookingDetail'
 import type { BookingDetailItem } from '@/hooks/useBookingDetail'
 // BookingDetailItem được export từ useBookingDetail
 import { EditBookingModal } from '@/components/EditBookingModal'
+import BookingFolioEditModal from '@/components/BookingFolioEditModal'
 import { CheckInModal } from '@/components/checkin/CheckInModal'
 import { CheckoutModal } from '@/components/checkout/CheckoutModal'
 import { BookingActionButtons } from '@/components/BookingActionButtons'
@@ -64,6 +65,9 @@ export default function BookingDetailDrawer({ groupId, open, onClose, onEditBook
   const [editingBooking, setEditingBooking] = useState<BookingDetailItem | null>(null)
   const [checkinBookingId, setCheckinBookingId] = useState<string | null>(null)
   const [checkoutBookingId, setCheckoutBookingId] = useState<string | null>(null)
+  // State for folio edit modal
+  const [folioEditOpen, setFolioEditOpen] = useState(false)
+  const [folioEditBookingId, setFolioEditBookingId] = useState<string | null>(null)
 
   // Tổng grand_total tất cả bookings chưa cancelled
   const totalGrandTotal = (data?.bookings ?? [])
@@ -154,7 +158,7 @@ export default function BookingDetailDrawer({ groupId, open, onClose, onEditBook
             </Descriptions>
 
             {/* Tổng quan tài chính */}
-            <Row gutter={16}>
+            <Row gutter={16} align="middle">
               <Col span={8}>
                 <Statistic
                   title="Tổng hoá đơn"
@@ -170,15 +174,37 @@ export default function BookingDetailDrawer({ groupId, open, onClose, onEditBook
                   formatter={(v) => formatVND(v as number)}
                 />
               </Col>
-              <Col span={8}>
+              <Col span={8} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <Statistic
                   title="Còn lại"
                   value={balanceDue}
                   valueStyle={{ color: balanceDue > 0 ? '#ff4d4f' : '#52c41a' }}
                   formatter={(v) => formatVND(v as number)}
+                  style={{ flex: 1 }}
                 />
+                {/* Nút mở modal folio */}
+                {data.bookings.length > 0 && (
+                  <Button
+                    size="small"
+                    type="primary"
+                    icon={<EditOutlined />}
+                    onClick={() => {
+                      setFolioEditBookingId(data.bookings[0].id)
+                      setFolioEditOpen(true)
+                    }}
+                  >
+                    Sổ folio
+                  </Button>
+                )}
               </Col>
             </Row>
+      {/* Modal chỉnh sửa folio */}
+      <BookingFolioEditModal
+        open={folioEditOpen}
+        onClose={() => setFolioEditOpen(false)}
+        bookingId={folioEditBookingId || ''}
+        groupId={groupId || ''}
+      />
 
             {/* Danh sách phòng */}
             <div>

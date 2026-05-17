@@ -4,6 +4,7 @@
 // Template KHÔNG query DB — caller (useDocumentGenerator) cung cấp data đầy đủ.
 
 import dayjs from 'dayjs';
+import type { DocKind } from './useDocumentGenerator';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -493,3 +494,15 @@ Hẹn gặp bạn tại Đà Lạt! 🌿`;
 
   return { html, zaloText };
 }
+
+// Labels hiển thị cho từng doc kind
+export const DOC_KIND_LABELS: Record<DocKind, string> = {
+  booking_confirmation: 'Xác nhận đặt phòng',
+  deposit_request: 'Yêu cầu đặt cọc',
+  deposit_confirmation: 'Xác nhận nhận cọc',
+  invoice: 'Hóa đơn',
+  arrival_notice: 'Thông báo check-in',
+};
+
+// Re-export DocKind type để DocumentActionsMenu import được
+export type { DocKind };

@@ -8,6 +8,7 @@
 
 import { useState } from 'react';
 import { message } from 'antd';
+import dayjs from 'dayjs';
 import { supabase } from '@/api/supabase';
 import type { DocumentData, DepositRequestOptions } from './documentTemplates';
 import {
@@ -111,7 +112,7 @@ async function fetchDocumentData(
     guestPhone: group.customer_phone ?? '',
     source: group.source,
     otaBookingNumber: group.ota_booking_number ?? undefined,
-    pricePerNight: booking.price,
+    pricePerNight: booking.nights > 0 ? Math.round(booking.price / booking.nights) : booking.price,
     surcharge: booking.surcharge ?? 0,
     grandTotal: booking.grand_total,
     services: (services ?? []).map(s => ({
@@ -308,5 +309,121 @@ export function useBookingDocuments(
     copyInvoiceZalo: () => run('invoice', 'zalo_text'),
     printArrivalNotice: () => run('arrival_notice', 'pdf'),
     copyArrivalNoticeZalo: () => run('arrival_notice', 'zalo_text'),
+  };
+}
+
+// ─── Adapter cho DocumentActionsMenu ─────────────────────────────────────────
+// Copilot dùng interface { groupId } + generateAndPrint/generateAndCopyZalo
+// Hook này bridge sang useDocumentGenerator bên dưới
+
+interface UseDocumentGeneratorByGroupOptions {
+  groupId: string;
+}
+
+interface GenerateByGroupParams {
+  kind: DocKind;
+  bookingId?: string;       // nếu không truyền → lấy booking đầu tiên của group
+  depositAmount?: number;
+  depositDeadline?: string; // 'YYYY-MM-DD'
+}
+
+interface UseDocumentGeneratorByGroupReturn {
+  isGenerating: boolean;
+  zaloText: string | null;
+  clearZaloText: () => void;
+  generateAndPrint: (params: GenerateByGroupParams) => Promise<void>;
+  generateAndCopyZalo: (params: GenerateByGroupParams) => Promise<void>;
+}
+
+export function useDocumentGeneratorByGroup(
+  { groupId }: UseDocumentGeneratorByGroupOptions
+): UseDocumentGeneratorByGroupReturn {
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [zaloText, setZaloText] = useState<string | null>(null);
+
+  /** Resolve bookingId: dùng param nếu có, không thì query booking đầu tiên của group */
+  async function resolveBookingId(paramBookingId?: string): Promise<string> {
+    if (paramBookingId) return paramBookingId;
+    const { data, error } = await supabase
+      .from('bookings')
+      .select('id')
+      .eq('group_id', groupId)
+      .eq('is_deleted', false)
+      .neq('status', 'cancelled')
+      .order('check_in', { ascending: true })
+      .limit(1)
+      .single();
+
+    if (error || !data) throw new Error('Không tìm thấy booking trong group');
+    return data.id;
+  }
+
+  async function run(params: GenerateByGroupParams, format: DocFormat): Promise<string | null> {
+    setIsGenerating(true);
+    try {
+      const bookingId = await resolveBookingId(params.bookingId);
+      const docData = await fetchDocumentData(bookingId, groupId);
+
+      let result: { html: string; zaloText: string };
+
+      switch (params.kind) {
+        case 'booking_confirmation':
+          result = renderBookingConfirmation(docData);
+          break;
+        case 'deposit_request': {
+          // Nếu không truyền amount → 30% grand_total
+          const amount = params.depositAmount ?? Math.round(docData.grandTotal * 0.3);
+          const deadline = params.depositDeadline ?? dayjs().add(1, 'day').format('YYYY-MM-DD');
+          result = renderDepositRequest(docData, { depositAmount: amount, deadline });
+          break;
+        }
+        case 'deposit_confirmation':
+          result = renderDepositConfirmation(docData);
+          break;
+        case 'invoice':
+          result = renderInvoice(docData);
+          break;
+        case 'arrival_notice':
+          result = renderArrivalNotice(docData);
+          break;
+        default:
+          throw new Error('Loại document không hợp lệ');
+      }
+
+      const sentVia = format === 'pdf' ? 'print' : 'zalo_clipboard';
+      await logDocument(
+        { bookingId, groupId, docKind: params.kind, docFormat: format },
+        docData,
+        sentVia
+      );
+
+      if (format === 'pdf') {
+        printHtml(result.html);
+        message.success('Đang mở cửa sổ in PDF…');
+        return null;
+      }
+
+      await copyZaloText(result.zaloText);
+      message.success('Đã sao chép nội dung Zalo vào clipboard!');
+      return result.zaloText;
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Lỗi không xác định';
+      message.error('Không thể tạo document: ' + msg);
+      console.error('[useDocumentGeneratorByGroup]', err);
+      return null;
+    } finally {
+      setIsGenerating(false);
+    }
+  }
+
+  return {
+    isGenerating,
+    zaloText,
+    clearZaloText: () => setZaloText(null),
+    generateAndPrint: async (params) => { await run(params, 'pdf'); },
+    generateAndCopyZalo: async (params) => {
+      const text = await run(params, 'zalo_text');
+      if (text) setZaloText(text);
+    },
   };
 }

@@ -23,7 +23,7 @@ import {
   CopyOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
-import { useDocumentGenerator } from './useDocumentGenerator'
+import { useDocumentGeneratorByGroup as useDocumentGenerator } from './useDocumentGenerator'
 import { DOC_KIND_LABELS, type DocKind } from './documentTemplates'
 
 const { Text } = Typography
