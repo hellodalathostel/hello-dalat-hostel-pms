@@ -7,6 +7,7 @@ import DK14Report from '@/pages/DK14Report'
 import LoginPage from '@/pages/LoginPage'
 import NewBooking from '@/pages/NewBooking'
 import RevenueDashboard from '@/pages/RevenueDashboard'
+import FinancePage from '@/pages/Finance/FinancePage'
 import RoomCalendar from '@/pages/RoomCalendar'
 import { ICalFeedPanel } from '@/pages/Settings/ICalFeedPanel'
 import SettingsPage from '@/pages/Settings/SettingsPage'
@@ -43,6 +44,10 @@ export const appRouter = createBrowserRouter([
       {
         path: 'revenue',
         element: <RevenueDashboard />,
+      },
+      {
+        path: 'finance',
+        element: <FinancePage />,
       },
       {
         path: 'orevenue',

@@ -6,6 +6,7 @@ import {
   RiseOutlined,
   TableOutlined,
   UserAddOutlined,
+  DollarOutlined,
 } from '@ant-design/icons'
 import { Layout, Menu, Space, Typography } from 'antd'
 import { useMemo } from 'react'
@@ -30,6 +31,11 @@ const menuItems: ItemType[] = [
     key: '/calendar',
     icon: <TableOutlined />,
     label: 'Lịch phòng',
+  },
+  {
+    key: '/finance',
+    icon: <DollarOutlined />,
+    label: 'Tài chính',
   },
   {
     key: '/revenue',
@@ -64,6 +70,10 @@ export function MainLayout(): JSX.Element {
 
     if (location.pathname.startsWith('/calendar')) {
       return ['/calendar']
+    }
+
+    if (location.pathname.startsWith('/finance')) {
+      return ['/finance']
     }
 
     if (location.pathname.startsWith('/revenue') || location.pathname.startsWith('/orevenue')) {
