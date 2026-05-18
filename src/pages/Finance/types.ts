@@ -5,9 +5,10 @@ export interface GroupRevenueSummary {
   net_revenue: number // từ groups.net_revenue (trigger-driven)
   paid: number // groups.paid
   channel_fee_rate: number // để tính OTA fee hiển thị
-  service_revenue: number // từ booking_services
-  check_in: string // date string
-  check_out: string
+  service_revenue: number // từ view (booking_services aggregated)
+  booking_count: number // từ view — số booking trong group
+  check_in: string // date string (từ view)
+  check_out: string // date string (từ view)
 }
 
 export interface MonthlyRevenueSummary {

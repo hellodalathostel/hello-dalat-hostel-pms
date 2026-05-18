@@ -4,58 +4,32 @@ import { supabase } from '@/api/supabase'
 import { normalizeError } from '@/shared/utils/normalizeError'
 import type { GroupRevenueSummary, MonthlyRevenueSummary } from '../types'
 
-// Kiểu trả về từ Supabase khi query groups với bookings lồng nhau
-interface RawBookingService {
-  price: number
-  qty: number
-}
-
-interface RawBooking {
-  check_in: string
-  check_out: string
-  booking_services: RawBookingService[]
-}
-
-interface RawGroup {
-  id: string
+// Kiểu row trả về từ view finance_monthly_revenue
+interface FinanceMonthlyRow {
+  group_id: string
   customer_name: string
   source: string | null
   net_revenue: number
   paid: number
   channel_fee_rate: number
-  bookings: RawBooking[]
+  service_revenue: number
+  booking_count: number
+  check_in: string
+  check_out: string
 }
 
 async function fetchMonthlyRevenue(month: dayjs.Dayjs): Promise<MonthlyRevenueSummary> {
   const startOfMonth = month.startOf('month').format('YYYY-MM-DD')
   const endOfMonth = month.add(1, 'month').startOf('month').format('YYYY-MM-DD')
 
-  // Query 1: groups có booking checked-out trong tháng
+  // Query 1: dùng view finance_monthly_revenue — filter check_out đúng level
   const { data: rawGroups, error: groupsError } = await supabase
-    .from('groups')
-    .select(
-      `
-      id,
-      customer_name,
-      source,
-      net_revenue,
-      paid,
-      channel_fee_rate,
-      bookings!inner(
-        check_in,
-        check_out,
-        booking_services(price, qty)
-      )
-    `,
-    )
-    .eq('bookings.is_deleted', false)
-    .eq('bookings.status', 'checked-out')
-    .gte('bookings.check_out', startOfMonth)
-    .lt('bookings.check_out', endOfMonth)
+    .from('finance_monthly_revenue')
+    .select('*')
+    .gte('check_out', startOfMonth)
+    .lt('check_out', endOfMonth)
 
-  if (groupsError) {
-    throw normalizeError(groupsError)
-  }
+  if (groupsError) throw normalizeError(groupsError)
 
   // Query 2: revenue_manual_log cùng tháng
   const { data: manualData, error: manualError } = await supabase
@@ -68,33 +42,19 @@ async function fetchMonthlyRevenue(month: dayjs.Dayjs): Promise<MonthlyRevenueSu
     throw normalizeError(manualError)
   }
 
-  // Tổng hợp dữ liệu từ raw groups
-  const groups: GroupRevenueSummary[] = ((rawGroups ?? []) as RawGroup[]).map((g) => {
-    const bookings = g.bookings ?? []
-    const checkIns = bookings.map((b) => b.check_in).filter(Boolean)
-    const checkOuts = bookings.map((b) => b.check_out).filter(Boolean)
-
-    // Tính service_revenue từ booking_services của tất cả bookings trong group
-    const serviceRevenue = bookings.reduce((sum, b) => {
-      const bsSum = (b.booking_services ?? []).reduce(
-        (s, bs) => s + (bs.price ?? 0) * (bs.qty ?? 1),
-        0,
-      )
-      return sum + bsSum
-    }, 0)
-
-    return {
-      group_id: g.id,
-      customer_name: g.customer_name,
-      source: g.source,
-      net_revenue: g.net_revenue ?? 0,
-      paid: g.paid ?? 0,
-      channel_fee_rate: g.channel_fee_rate ?? 0,
-      service_revenue: serviceRevenue,
-      check_in: checkIns.length > 0 ? checkIns.sort()[0] : '',
-      check_out: checkOuts.length > 0 ? checkOuts.sort().at(-1)! : '',
-    }
-  })
+  // Map trực tiếp từ view — không cần tính toán thêm
+  const groups: GroupRevenueSummary[] = ((rawGroups ?? []) as FinanceMonthlyRow[]).map((g) => ({
+    group_id: g.group_id,
+    customer_name: g.customer_name,
+    source: g.source,
+    net_revenue: g.net_revenue ?? 0,
+    paid: g.paid ?? 0,
+    channel_fee_rate: g.channel_fee_rate ?? 0,
+    service_revenue: g.service_revenue ?? 0,
+    booking_count: g.booking_count ?? 1,
+    check_in: g.check_in ?? '',
+    check_out: g.check_out ?? '',
+  }))
 
   const manual_revenue = (manualData ?? []).reduce((sum, r) => sum + (r.amount ?? 0), 0)
   const total_net = groups.reduce((sum, g) => sum + g.net_revenue, 0) + manual_revenue
