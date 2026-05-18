@@ -1,6 +1,5 @@
 import dayjs, { Dayjs } from 'dayjs'
 import { z } from 'zod'
-import { ROOM_CAPACITY_BY_ID } from '@/shared/constants/rooms'
 
 const dayjsSchema = z.custom<Dayjs>(
   (value) => dayjs.isDayjs(value) && value.isValid(),
@@ -54,15 +53,6 @@ export const newBookingSchema = z.object({
               code: z.ZodIssueCode.custom,
               message: 'Ngày check-out phải sau ngày check-in',
               path: ['check_out'],
-            })
-          }
-
-          const roomCapacity = ROOM_CAPACITY_BY_ID[value.room_id]
-          if (roomCapacity !== undefined && value.guests_count > roomCapacity) {
-            context.addIssue({
-              code: z.ZodIssueCode.custom,
-              message: `Số khách không được vượt quá sức chứa phòng (${roomCapacity})`,
-              path: ['guests_count'],
             })
           }
         }),
