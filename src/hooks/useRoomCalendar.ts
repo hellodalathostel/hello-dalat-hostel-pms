@@ -4,11 +4,18 @@ import { supabase } from '@/api/supabase'
 import { normalizeError } from '@/shared/utils/normalizeError'
 import type { CalendarEvent, RoomRow } from '@/types/calendar'
 
-const DEFAULT_ROOM_ORDER = ['101', '102', '103', '104', '201', '202', '301', '302']
+// Thứ tự mặc định chỉ dùng khi chưa có dữ liệu phòng từ DB
+const DEFAULT_ROOM_ORDER = ['101', '102', '103', '201', '202', '203', '301', '302']
+
+interface BaseRoom {
+  id: string
+  name: string
+}
 
 interface UseRoomCalendarParams {
   startDate?: string
   endDate?: string
+  rooms?: BaseRoom[]
 }
 
 interface RoomCalendarData {
@@ -72,13 +79,22 @@ function transformCalendarRows(
   records: CalendarEvent[],
   startDate: string,
   endDate: string,
+  baseRooms?: BaseRoom[],
 ): RoomCalendarData {
   const dates = buildDateRange(startDate, endDate)
   const roomNameMap = new Map<string, string>()
   const roomEventsMap = new Map<string, Map<string, CalendarEvent>>()
 
+  // Ưu tiên tên phòng từ DB (baseRooms) — đảm bảo đúng ngay cả khi phòng không có sự kiện
+  if (baseRooms) {
+    for (const room of baseRooms) {
+      roomNameMap.set(room.id, room.name)
+    }
+  }
+
   for (const record of records) {
-    if (record.room_name) {
+    // Chỉ ghi đè tên nếu chưa có từ DB
+    if (record.room_name && !roomNameMap.has(record.room_id)) {
       roomNameMap.set(record.room_id, record.room_name)
     }
 
@@ -87,10 +103,13 @@ function transformCalendarRows(
     roomEventsMap.set(record.room_id, dateMap)
   }
 
+  // Dùng thứ tự từ DB nếu có, fallback về DEFAULT_ROOM_ORDER
+  const baseOrderIds = baseRooms ? baseRooms.map((r) => r.id) : DEFAULT_ROOM_ORDER
+
   const orderedRoomIds = [
-    ...DEFAULT_ROOM_ORDER,
+    ...baseOrderIds,
     ...Array.from(roomEventsMap.keys())
-      .filter((roomId) => !DEFAULT_ROOM_ORDER.includes(roomId))
+      .filter((roomId) => !baseOrderIds.includes(roomId))
       .sort((left, right) => {
         const leftNum = Number(left)
         const rightNum = Number(right)
@@ -286,7 +305,7 @@ function isMissingDateColumnsError(errorMessage: string): boolean {
   )
 }
 
-async function fetchRoomCalendar(startDate: string, endDate: string): Promise<RoomCalendarData> {
+async function fetchRoomCalendar(startDate: string, endDate: string, baseRooms?: BaseRoom[]): Promise<RoomCalendarData> {
   try {
     const overlapQuery = await supabase
       .from('room_calendar')
@@ -319,7 +338,7 @@ async function fetchRoomCalendar(startDate: string, endDate: string): Promise<Ro
 
     const normalizedRecords = normalizeCalendarRecords(records ?? [], startDate, endDate)
 
-    return transformCalendarRows(normalizedRecords, startDate, endDate)
+    return transformCalendarRows(normalizedRecords, startDate, endDate, baseRooms)
   } catch (error) {
     throw normalizeError(error)
   }
@@ -329,9 +348,10 @@ async function fetchRoomCalendar(startDate: string, endDate: string): Promise<Ro
 export function useRoomCalendar(params: UseRoomCalendarParams = {}) {
   const startDate = params.startDate ?? dayjs().format('YYYY-MM-DD')
   const endDate = params.endDate ?? dayjs().add(14, 'day').format('YYYY-MM-DD')
+  const rooms = params.rooms
 
   return useQuery({
     queryKey: ['room-calendar', startDate, endDate],
-    queryFn: () => fetchRoomCalendar(startDate, endDate),
+    queryFn: () => fetchRoomCalendar(startDate, endDate, rooms),
   })
 }

@@ -8,6 +8,7 @@ import BookingDetailDrawer from '@/components/booking/BookingDetailDrawer'
 import { EditBookingModal } from '@/components/EditBookingModal'
 import { BlockRoomModal } from '@/components/booking/BlockRoomModal'
 import { useRoomCalendar } from '@/hooks/useRoomCalendar'
+import { useRooms } from '@/hooks/useRooms'
 import { useDeleteBlock } from '@/hooks/useRoomBlocks'
 import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
 import type { CalendarEvent } from '@/types/calendar'
@@ -37,10 +38,12 @@ export default function RoomCalendar(): React.JSX.Element {
   const [blockModalOpen, setBlockModalOpen] = useState(false)
   const [blockPrefill, setBlockPrefill] = useState<{ roomId?: string; date?: string }>({})
 
+  const { data: rooms = [], isLoading: roomsLoading } = useRooms()
+
   const startDate = useMemo(() => range[0].format('YYYY-MM-DD'), [range])
   const endDate = useMemo(() => range[1].format('YYYY-MM-DD'), [range])
 
-  const { data, isLoading, isFetching, error } = useRoomCalendar({ startDate, endDate })
+  const { data, isLoading, isFetching, error } = useRoomCalendar({ startDate, endDate, rooms })
 
   const handleBookingClick = (event: CalendarEvent) => {
     if (event.entry_type === 'block' && event.block_id) {
@@ -132,7 +135,7 @@ export default function RoomCalendar(): React.JSX.Element {
         </Flex>
       </Flex>
 
-      <Spin spinning={isLoading || isFetching}>
+      <Spin spinning={isLoading || isFetching || roomsLoading}>
         <CalendarTimeline
           dates={data?.dates ?? []}
           rooms={data?.rooms ?? []}
