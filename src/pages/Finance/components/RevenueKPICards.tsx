@@ -1,4 +1,4 @@
-import { Card, Col, Row, Statistic } from 'antd'
+import { Card, Col, Row, Statistic, Tooltip } from 'antd'
 import {
   DollarOutlined,
   CheckCircleOutlined,
@@ -7,9 +7,9 @@ import {
 } from '@ant-design/icons'
 import type { MonthlyRevenueSummary } from '../types'
 
-// Chia 1000 để hiển thị dạng gọn (32.500 = 32.500.000 VND)
+// Hiển thị số VND đầy đủ (2.432.000 đ)
 function fmt(amount: number): string {
-  return new Intl.NumberFormat('vi-VN').format(Math.round(amount / 1000))
+  return amount.toLocaleString('vi-VN') + ' đ'
 }
 
 interface Props {
@@ -17,6 +17,9 @@ interface Props {
 }
 
 export function RevenueKPICards({ summary }: Props) {
+  // Clamp — không hiển thị số âm khi khách đã thanh toán trước cho nhiều tháng
+  const totalDebt = Math.max(0, summary.total_debt)
+
   return (
     <Row gutter={[16, 16]}>
       <Col xs={24} sm={12} lg={6}>
@@ -24,7 +27,6 @@ export function RevenueKPICards({ summary }: Props) {
           <Statistic
             title="Tổng doanh thu net"
             value={fmt(summary.total_net)}
-            suffix="nghìn đ"
             prefix={<DollarOutlined />}
             valueStyle={{ color: '#1677ff' }}
           />
@@ -35,22 +37,22 @@ export function RevenueKPICards({ summary }: Props) {
           <Statistic
             title="Đã thu"
             value={fmt(summary.total_paid)}
-            suffix="nghìn đ"
             prefix={<CheckCircleOutlined />}
             valueStyle={{ color: '#52c41a' }}
           />
         </Card>
       </Col>
       <Col xs={24} sm={12} lg={6}>
-        <Card>
-          <Statistic
-            title="Còn nợ"
-            value={fmt(summary.total_debt)}
-            suffix="nghìn đ"
-            prefix={<WarningOutlined />}
-            valueStyle={{ color: summary.total_debt > 0 ? '#ff4d4f' : '#52c41a' }}
-          />
-        </Card>
+        <Tooltip title="Chênh lệch do khách đã thanh toán trước cho nhiều tháng">
+          <Card>
+            <Statistic
+              title="Còn nợ"
+              value={fmt(totalDebt)}
+              prefix={<WarningOutlined />}
+              valueStyle={{ color: totalDebt > 0 ? '#ff4d4f' : '#52c41a' }}
+            />
+          </Card>
+        </Tooltip>
       </Col>
       <Col xs={24} sm={12} lg={6}>
         <Card>

@@ -36,7 +36,9 @@ function buildWeeklyData(groups: GroupRevenueSummary[], month: dayjs.Dayjs): Wee
     if (!g.check_out) continue
     const d = dayjs(g.check_out)
     if (d.month() !== month.month() || d.year() !== month.year()) continue
-    const weekIdx = Math.min(Math.floor((d.date() - 1) / 7), 4)
+    // Tuần trong tháng tính từ ngày check_out (1–5), không bị lệch sang tháng khác
+    const weekOfMonth = Math.ceil(d.date() / 7)
+    const weekIdx = Math.min(weekOfMonth - 1, 4)
     buckets[weekIdx].revenue += g.net_revenue
   }
 
