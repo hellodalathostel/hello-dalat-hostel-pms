@@ -181,7 +181,7 @@ export function CheckoutModal({ bookingId, open, onClose }: Props) {
             <Space direction="vertical" style={{ width: '100%' }} size={4}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <Text type="secondary">Tiền phòng</Text>
-                <Text>{formatVND(folio.booking.price)}</Text>
+                <Text>{formatVND(folio.booking.roomSubtotal)}</Text>
               </div>
 
               {folio.booking.surcharge > 0 && (

@@ -9,7 +9,7 @@ export interface UpdateBookingPayload {
   roomId?: string
   checkIn?: Dayjs
   checkOut?: Dayjs
-  price?: number
+  pricePerNight?: number
   guestsCount?: number
   guestName?: string
   note?: string
@@ -35,7 +35,7 @@ export function useUpdateBooking() {
           p_room_id: payload.roomId,
           p_check_in: payload.checkIn?.format('YYYY-MM-DD'),
           p_check_out: payload.checkOut?.format('YYYY-MM-DD'),
-          p_price: payload.price,
+          p_price_per_night: payload.pricePerNight,
           p_guests_count: payload.guestsCount,
           p_guest_name: payload.guestName,
           p_note: payload.note,

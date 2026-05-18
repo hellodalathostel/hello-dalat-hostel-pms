@@ -20,7 +20,7 @@ const schema = z
     room_id: z.string().min(1, 'Chon phong'),
     check_in: z.custom<Dayjs>((v) => dayjs.isDayjs(v)),
     check_out: z.custom<Dayjs>((v) => dayjs.isDayjs(v)),
-    price: z.number().min(1, 'Nhap gia'),
+    price_per_night: z.number().min(1, 'Nhap gia'),
     guests_count: z.number().min(1),
     guest_name: z.string().optional(),
     note: z.string().optional(),
@@ -39,7 +39,7 @@ function getDefaultValues(): FormValues {
     room_id: '',
     check_in: today,
     check_out: today.add(1, 'day'),
-    price: 0,
+    price_per_night: 0,
     guests_count: 1,
     guest_name: '',
     note: '',
@@ -67,7 +67,7 @@ export function EditBookingModal({ booking, onClose, onSuccess }: EditBookingMod
       room_id: booking.room_id,
       check_in: dayjs(booking.check_in),
       check_out: dayjs(booking.check_out),
-      price: booking.price,
+      price_per_night: booking.price_per_night,
       guests_count: booking.guests_count,
       guest_name: booking.guest_name ?? '',
       note: booking.note ?? '',
@@ -85,7 +85,7 @@ export function EditBookingModal({ booking, onClose, onSuccess }: EditBookingMod
         roomId: values.room_id,
         checkIn: values.check_in,
         checkOut: values.check_out,
-        price: values.price,
+        pricePerNight: values.price_per_night,
         guestsCount: values.guests_count,
         guestName: values.guest_name,
         note: values.note,
@@ -197,7 +197,7 @@ export function EditBookingModal({ booking, onClose, onSuccess }: EditBookingMod
 
         <Controller
           control={control}
-          name='price'
+          name='price_per_night'
           render={({ field, fieldState }) => (
             <Form.Item
               label='Gia phong'

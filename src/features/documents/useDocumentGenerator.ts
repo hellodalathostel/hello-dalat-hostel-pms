@@ -51,7 +51,7 @@ async function fetchDocumentData(
     .from('bookings')
     .select(`
       id, group_id, room_id, check_in, check_out, nights,
-      price, surcharge, grand_total, tax_rate, tax_amount,
+      price_per_night, room_subtotal, surcharge, grand_total, tax_rate, tax_amount,
       has_early_check_in, has_late_check_out,
       guest_name, guests_count, status, note
     `)
@@ -112,7 +112,8 @@ async function fetchDocumentData(
     guestPhone: group.customer_phone ?? '',
     source: group.source,
     otaBookingNumber: group.ota_booking_number ?? undefined,
-    pricePerNight: booking.nights > 0 ? Math.round(booking.price / booking.nights) : booking.price,
+    pricePerNight: booking.price_per_night,
+    roomSubtotal: booking.room_subtotal ?? 0,
     surcharge: booking.surcharge ?? 0,
     grandTotal: booking.grand_total,
     services: (services ?? []).map(s => ({

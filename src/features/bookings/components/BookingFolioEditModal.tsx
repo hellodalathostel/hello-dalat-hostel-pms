@@ -329,7 +329,7 @@ export default function BookingFolioEditModal({ open, onClose, bookingId, groupI
     <div style={{ background: '#fafafa', padding: '8px 12px', borderRadius: 6,
       display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
       <Space split={<Divider type="vertical" />}>
-        <Text>Tiền phòng: <Text strong>{fmt(folio.booking.price)}</Text></Text>
+        <Text>Tiền phòng: <Text strong>{fmt(folio.booking.roomSubtotal)}</Text></Text>
         <Text>Dịch vụ: <Text strong>
           +{fmt((folio.services ?? []).reduce((s, sv) => s + sv.price * Number(sv.qty), 0))}
         </Text></Text>

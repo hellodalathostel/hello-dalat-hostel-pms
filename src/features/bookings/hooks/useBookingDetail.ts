@@ -18,7 +18,7 @@ export type BookingRow = {
   check_in: string
   check_out: string
   nights: number | null
-  price: number
+  price_per_night: number
   surcharge: number
   grand_total: number | null
   guest_name: string | null

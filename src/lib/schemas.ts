@@ -35,7 +35,7 @@ export const newBookingSchema = z.object({
           room_id: z.string({ message: 'Vui lòng chọn phòng' }).min(1, 'Vui lòng chọn phòng'),
           check_in: dayjsSchema,
           check_out: dayjsSchema,
-          price: z.number({ message: 'Vui lòng nhập giá phòng' }).gt(0, 'Giá phòng phải lớn hơn 0'),
+          price_per_night: z.number({ message: 'Vui lòng nhập giá phòng' }).gt(0, 'Giá phòng phải lớn hơn 0'),
           guest_name: z.string().trim().max(120, 'Tên khách không vượt quá 120 ký tự').optional().or(z.literal('')),
           guests_count: z
             .number({ message: 'Vui lòng nhập số khách' })

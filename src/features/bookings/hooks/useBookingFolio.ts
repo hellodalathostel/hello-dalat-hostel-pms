@@ -8,7 +8,8 @@ type BookingRow = {
   status: BookingStatus
   check_in: string
   check_out: string
-  price: number
+  price_per_night: number
+  room_subtotal: number | null
   surcharge: number
   tax_amount: number | null
   grand_total: number | null
@@ -52,7 +53,8 @@ export interface BookingFolio {
     status: BookingStatus
     checkIn: string
     checkOut: string
-    price: number
+    pricePerNight: number
+    roomSubtotal: number
     surcharge: number
     taxAmount: number
     grandTotal: number
@@ -101,7 +103,7 @@ export function useBookingFolio(bookingId: string | null) {
       try {
         const { data: booking, error: bookingError } = await supabase
           .from('bookings')
-          .select('id, status, check_in, check_out, price, surcharge, tax_amount, grand_total, group_id, room_id, guest_name')
+          .select('id, status, check_in, check_out, price_per_night, room_subtotal, surcharge, tax_amount, grand_total, group_id, room_id, guest_name')
           .eq('id', bookingId)
           .single<BookingRow>()
 
@@ -152,6 +154,7 @@ export function useBookingFolio(bookingId: string | null) {
         const payments = (paymentsResult.data ?? []) as PaymentRow[]
 
         const grandTotal = booking.grand_total ?? 0
+        const roomSubtotal = booking.room_subtotal ?? 0
         const paid = group.paid ?? 0
 
         return {
@@ -160,7 +163,8 @@ export function useBookingFolio(bookingId: string | null) {
             status: booking.status,
             checkIn: booking.check_in,
             checkOut: booking.check_out,
-            price: booking.price,
+            pricePerNight: booking.price_per_night,
+            roomSubtotal,
             surcharge: booking.surcharge,
             taxAmount: booking.tax_amount ?? 0,
             grandTotal,

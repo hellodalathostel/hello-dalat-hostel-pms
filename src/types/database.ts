@@ -1,4 +1,3 @@
-// Các union type dùng chung cho nghiệp vụ DB/RPC.
-export type PaymentMethod = 'cash' | 'transfer' | 'card' | 'other'
-
-export type BookingStatus = 'booked' | 'checked-in' | 'checked-out' | 'cancelled'
+Need to install the following packages:
+supabase@2.98.2
+Ok to proceed? (y) 

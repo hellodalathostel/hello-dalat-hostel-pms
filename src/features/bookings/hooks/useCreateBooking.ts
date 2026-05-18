@@ -18,7 +18,7 @@ interface CreateBookingRpcPayload {
     room_id: string
     check_in: string
     check_out: string
-    price: number
+    price_per_night: number
     guest_name: string
     guests_count: number
     note: string
@@ -87,7 +87,7 @@ async function createBookingMutationFn(input: CreateBookingMutationInput): Promi
         room_id: booking.room_id,
         check_in: booking.check_in.format('YYYY-MM-DD'),
         check_out: booking.check_out.format('YYYY-MM-DD'),
-        price: booking.price,
+        price_per_night: booking.price_per_night,
         guest_name: booking.guest_name ?? '',
         guests_count: booking.guests_count,
         note: booking.note ?? '',
