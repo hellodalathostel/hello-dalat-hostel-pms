@@ -92,7 +92,7 @@ async function fetchDocumentData(
 
   // Payments của group
   const { data: payments = [] } = await supabase
-    .from('payments')
+    .from('payment_history')
     .select('amount, method, created_at')
     .eq('group_id', groupId)
     .order('created_at', { ascending: true });
