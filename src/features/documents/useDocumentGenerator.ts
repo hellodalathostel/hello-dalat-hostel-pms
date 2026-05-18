@@ -179,7 +179,7 @@ async function logDocument(
   const dbFormat = opts.docFormat === 'pdf' ? 'pdf' : 'zalo_text';
 
   // content_snapshot: lưu data tại thời điểm generate (bất biến kể cả sau khi booking sửa)
-  const snapshot = {
+  const snapshot = JSON.parse(JSON.stringify({
     guestName: docData.guestName,
     roomName: docData.roomName,
     checkIn: docData.checkIn,
@@ -188,7 +188,7 @@ async function logDocument(
     grandTotal: docData.grandTotal,
     paid: docData.paid,
     generatedAt: docData.generatedAt,
-  };
+  }));
 
   const { error } = await supabase.rpc('create_document_log', {
     p_group_id: opts.groupId,
