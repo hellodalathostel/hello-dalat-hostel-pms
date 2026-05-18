@@ -108,7 +108,7 @@ serve(async (req: Request) => {
 
   // Build iCal string theo RFC 5545
   const now = toICalTimestamp(new Date())
-  const calName = escapeICalText(`Hello Dalat Hostel - Room ${room.name}`)
+  const calName = escapeICalText(`Hello Dalat Hostel - Room ${room.id}`)
   const prodId = '-//Hello Dalat Hostel//PMS v1//VI'
 
   const lines: string[] = [
@@ -126,7 +126,7 @@ serve(async (req: Request) => {
   for (const booking of bookings ?? []) {
     // UID unique per booking
     const uid = `booking-${booking.id}@hellodalathostel`
-    const summary = escapeICalText(`BLOCKED - Room ${room.name}`)
+    const summary = escapeICalText(`BLOCKED - Room ${room.id}`)
 
     // Dùng DATE format (không có time) cho all-day events
     // Booking.com hiểu check_out date là ngày trả phòng (exclusive end)
