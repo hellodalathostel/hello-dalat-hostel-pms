@@ -1,7 +1,7 @@
 import { Button, Empty, InputNumber, Select, Spin, Table, Typography } from 'antd'
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
-import { useServices } from '@/hooks/useServices'
+import { useServices } from '@/features/bookings/hooks/useServices'
 import type { ServiceLineItem } from '@/features/bookings/types/booking'
 
 const { Text } = Typography

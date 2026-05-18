@@ -8,7 +8,7 @@ import BookingDetailDrawer from '@/features/bookings/components/BookingDetailDra
 import { EditBookingModal } from '@/features/bookings/components/EditBookingModal'
 import { BlockRoomModal } from '@/features/bookings/components/BlockRoomModal'
 import { useRoomCalendar } from '@/features/calendar/hooks/useRoomCalendar'
-import { useRooms } from '@/hooks/useRooms'
+import { useRooms } from '@/features/bookings/hooks/useRooms'
 import { useDeleteBlock } from '@/features/calendar/hooks/useRoomBlocks'
 import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
 import type { CalendarEvent } from '@/types/calendar'

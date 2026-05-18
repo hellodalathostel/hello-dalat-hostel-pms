@@ -5,7 +5,7 @@ import { z } from 'zod'
 import { Button, DatePicker, Form, Input, Modal, Select } from 'antd'
 import type { BlockReason } from '@/features/calendar/hooks/useRoomBlocks'
 import { useCreateBlock } from '@/features/calendar/hooks/useRoomBlocks'
-import { useRooms } from '@/hooks/useRooms'
+import { useRooms } from '@/features/bookings/hooks/useRooms'
 
 type DateRange = [Dayjs, Dayjs]
 

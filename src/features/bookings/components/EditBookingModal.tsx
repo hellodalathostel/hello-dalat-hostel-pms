@@ -6,7 +6,7 @@ import { Controller, useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { useCancelBooking, useUpdateBooking } from '@/features/bookings/hooks/useUpdateBooking'
 import type { BookingRow } from '@/features/bookings/hooks/useBookingDetail'
-import { useRooms } from '@/hooks/useRooms'
+import { useRooms } from '@/features/bookings/hooks/useRooms'
 import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
 
 type EditBookingModalProps = {
