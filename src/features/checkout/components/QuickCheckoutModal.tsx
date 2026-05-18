@@ -36,7 +36,7 @@ function formatVND(amount: number): string {
   return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount)
 }
 
-export function CheckoutModal({ target, onClose }: CheckoutModalProps) {
+export function QuickCheckoutModal({ target, onClose }: CheckoutModalProps) {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash')
   const [note, setNote] = useState('')
   const { mutateAsync, isPending } = useCheckout()
