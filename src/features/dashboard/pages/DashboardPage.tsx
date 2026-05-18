@@ -5,7 +5,7 @@ import { Button, Col, Flex, Row, Spin, Typography } from 'antd'
 import { ReloadOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { CheckInModal } from '@/features/checkin/components/CheckInModal'
-import { CheckoutModal, type CheckoutTarget } from '@/features/checkout/components/SimpleCheckoutModal'
+import { QuickCheckoutModal, type CheckoutTarget } from '@/features/checkout/components/QuickCheckoutModal'
 import { RoomCard } from '@/features/dashboard/components/RoomCard'
 import { PaymentModal } from '@/features/payment/components/PaymentModal'
 import { StatsBar } from '@/features/dashboard/components/StatsBar'
@@ -175,7 +175,7 @@ export default function Dashboard(): React.JSX.Element {
         />
       ) : null}
 
-      <CheckoutModal target={checkoutTarget} onClose={handleCloseCheckOutModal} />
+      <QuickCheckoutModal target={checkoutTarget} onClose={handleCloseCheckOutModal} />
 
       {selectedRoom ? (
         <PaymentModal
