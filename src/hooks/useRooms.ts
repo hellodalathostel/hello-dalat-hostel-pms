@@ -7,6 +7,7 @@ export interface Room {
   name: string
   type: string
   floor: number
+  capacity: number
   is_active: boolean
 }
 
@@ -16,7 +17,7 @@ export function useRooms(onlyActive = true) {
     queryFn: async () => {
       let query = supabase
         .from('rooms')
-        .select('id, name, type, floor, is_active')
+        .select('id, name, type, floor, capacity, is_active')
         .order('floor', { ascending: true })
         .order('id', { ascending: true })
 

@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { Button, DatePicker, Form, Input, Modal, Select } from 'antd'
 import type { BlockReason } from '@/hooks/useRoomBlocks'
 import { useCreateBlock } from '@/hooks/useRoomBlocks'
+import { useRooms } from '@/hooks/useRooms'
 
 type DateRange = [Dayjs, Dayjs]
 
@@ -39,17 +40,6 @@ const blockRoomSchema = z.object({
   }),
   note: z.string().max(1000, 'Ghi chú không vượt quá 1000 ký tự').optional().default(''),
 })
-
-const roomOptions = [
-  { label: 'Phòng 101', value: '101' },
-  { label: 'Phòng 102', value: '102' },
-  { label: 'Phòng 103', value: '103' },
-  { label: 'Phòng 104', value: '104' },
-  { label: 'Phòng 201', value: '201' },
-  { label: 'Phòng 202', value: '202' },
-  { label: 'Phòng 301', value: '301' },
-  { label: 'Phòng 302', value: '302' },
-]
 
 const reasonOptions: Array<{ label: string; value: BlockReason }> = [
   { label: 'Bảo trì', value: 'maintenance' },
@@ -87,6 +77,7 @@ export function BlockRoomModal({
 }: BlockRoomModalProps): JSX.Element {
   const [form] = Form.useForm<BlockRoomFormValues>()
   const createBlockMutation = useCreateBlock()
+  const { data: rooms = [], isLoading: roomsLoading } = useRooms()
 
   const initialDay = initialDate ? dayjs(initialDate).startOf('day') : dayjs().startOf('day')
 
@@ -153,7 +144,11 @@ export function BlockRoomModal({
           name="room_id"
           rules={[{ required: true, message: 'Vui lòng chọn phòng' }]}
         >
-          <Select options={roomOptions} placeholder="Chọn phòng cần khóa" />
+          <Select
+            options={rooms.map((r) => ({ value: r.id, label: r.name }))}
+            loading={roomsLoading}
+            placeholder="Chọn phòng cần khóa"
+          />
         </Form.Item>
 
         <Form.Item

@@ -6,7 +6,7 @@ import { Controller, useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { useCancelBooking, useUpdateBooking } from '@/hooks/useUpdateBooking'
 import type { BookingRow } from '@/hooks/useBookingDetail'
-import { ROOM_OPTIONS } from '@/shared/constants/rooms'
+import { useRooms } from '@/hooks/useRooms'
 import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
 
 type EditBookingModalProps = {
@@ -50,6 +50,7 @@ export function EditBookingModal({ booking, onClose, onSuccess }: EditBookingMod
   const updateMutation = useUpdateBooking()
   const cancelMutation = useCancelBooking()
   const { message } = useAppFeedback()
+  const { data: rooms = [], isLoading: roomsLoading } = useRooms()
 
   const { control, handleSubmit, reset } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -145,7 +146,11 @@ export function EditBookingModal({ booking, onClose, onSuccess }: EditBookingMod
               validateStatus={fieldState.error ? 'error' : ''}
               help={fieldState.error?.message}
             >
-              <Select {...field} options={ROOM_OPTIONS} />
+              <Select
+                {...field}
+                options={rooms.map((r) => ({ value: r.id, label: r.name }))}
+                loading={roomsLoading}
+              />
             </Form.Item>
           )}
         />

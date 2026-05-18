@@ -23,8 +23,8 @@ import { DeleteOutlined, PlusOutlined } from '@ant-design/icons'
 import { newBookingSchema } from '@/lib/schemas'
 import type { NewBookingFormValues } from '@/lib/schemas'
 import { useCreateBooking } from '@/hooks/useCreateBooking'
+import { useRooms } from '@/hooks/useRooms'
 import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
-import { ROOM_OPTIONS, ROOM_CAPACITY_BY_ID } from '@/shared/constants/rooms'
 import BookingImportPDF, { type ParsedBookingData } from '@/components/booking/BookingImportPDF'
 import { ServiceSection } from '@/features/bookings/components/ServiceSection'
 import { DiscountSection } from '@/features/bookings/components/DiscountSection'
@@ -81,6 +81,7 @@ export default function NewBooking(): JSX.Element {
   const [searchParams] = useSearchParams()
   const { message } = useAppFeedback()
   const createBookingMutation = useCreateBooking()
+  const { data: rooms = [], isLoading: roomsLoading } = useRooms()
 
   const prefilledRoomId = searchParams.get('roomId') ?? undefined
   const prefilledCheckIn = searchParams.get('checkIn') ?? undefined
@@ -354,7 +355,12 @@ export default function NewBooking(): JSX.Element {
                               validateStatus={fieldState.error ? 'error' : ''}
                               help={fieldState.error?.message}
                             >
-                              <Select {...bookingField} options={ROOM_OPTIONS} placeholder="Chọn phòng" />
+                              <Select
+                                {...bookingField}
+                                options={rooms.map((r) => ({ value: r.id, label: r.name }))}
+                                loading={roomsLoading}
+                                placeholder="Chọn phòng"
+                              />
                             </Form.Item>
                           )}
                         />
@@ -457,7 +463,7 @@ export default function NewBooking(): JSX.Element {
                           name={`bookings.${index}.guests_count`}
                           render={({ field: bookingField, fieldState }) => {
                             const roomId = control._formValues.bookings?.[index]?.room_id ?? ''
-                            const roomCapacity = ROOM_CAPACITY_BY_ID[roomId]
+                            const roomCapacity = rooms.find((r) => r.id === roomId)?.capacity
 
                             return (
                               <Form.Item
