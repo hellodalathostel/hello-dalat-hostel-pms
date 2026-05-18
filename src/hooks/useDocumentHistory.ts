@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { supabase } from '@/lib/supabase'
-import dayjs from 'dayjs'
+import { supabase } from '@/api/supabase'
 
 export interface DocumentLogEntry {
   id: string

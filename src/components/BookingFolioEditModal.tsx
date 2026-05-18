@@ -1,6 +1,5 @@
 // Modal chỉnh sửa folio: Cọc | Dịch vụ | Giảm giá
 // Mở từ BookingModal hoặc bất kỳ nơi nào có bookingId + groupId
-import { useState } from 'react'
 import {
   Modal, Tabs, Form, InputNumber, Select, Input, Button,
   Table, Popconfirm, Tag, Divider, Space, Typography, Spin,
@@ -229,7 +228,7 @@ export default function BookingFolioEditModal({ open, onClose, bookingId, groupI
             )},
           {
             title: '', width: 50, align: 'center',
-            render: (_: unknown, row: { id: string }) => (
+            render: (_: unknown, row: { id: string; price: number; qty: number }) => (
               <Popconfirm
                 title="Xóa dịch vụ này?"
                 onConfirm={() => deleteService.mutate(row.id)}

@@ -1,5 +1,5 @@
 import { useMutation } from '@tanstack/react-query'
-import { supabase } from '@/lib/supabase'
+import { supabase } from '@/api/supabase'
 
 // Kiểu dữ liệu cho params của RPC create_document_log
 interface CreateDocumentLogParams {

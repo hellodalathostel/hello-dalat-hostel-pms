@@ -66,7 +66,7 @@ export function WeeklyBarChart({ groups, month }: Props) {
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis dataKey="label" />
           <YAxis tickFormatter={fmtK} width={70} />
-          <Tooltip formatter={(v: number) => [fmtK(v), 'Doanh thu']} />
+          <Tooltip formatter={(v) => [fmtK(Number(v ?? 0)), 'Doanh thu']} />
           <Bar dataKey="revenue" fill="#1677ff" radius={[4, 4, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
