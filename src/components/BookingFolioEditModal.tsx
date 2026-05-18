@@ -99,7 +99,7 @@ export default function BookingFolioEditModal({ open, onClose, bookingId, groupI
       {/* Form thêm cọc mới */}
       <Form form={depositForm} layout="inline" style={{ marginBottom: 16 }}>
         <Form.Item name="amount" rules={[{ required: true, message: 'Nhập số tiền' }]}> 
-          <InputNumber
+          <InputNumber<number>
             placeholder="Số tiền"
             min={1000}
             step={50000}
@@ -188,7 +188,7 @@ export default function BookingFolioEditModal({ open, onClose, bookingId, groupI
           <Input placeholder="Tên dịch vụ" style={{ width: 180 }} />
         </Form.Item>
         <Form.Item name="price" rules={[{ required: true, message: 'Nhập giá' }]}> 
-          <InputNumber
+          <InputNumber<number>
             placeholder="Đơn giá"
             min={0}
             step={10000}
@@ -261,7 +261,7 @@ export default function BookingFolioEditModal({ open, onClose, bookingId, groupI
     <div>
       <Form form={discountForm} layout="inline" style={{ marginBottom: 16 }}>
         <Form.Item name="amount" rules={[{ required: true, message: 'Nhập số tiền' }]}> 
-          <InputNumber
+          <InputNumber<number>
             placeholder="Số tiền giảm"
             min={1000}
             step={10000}
