@@ -103,7 +103,7 @@ export default function BookingFolioEditModal({ open, onClose, bookingId, groupI
             placeholder="Số tiền"
             min={1000}
             step={50000}
-            formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+            formatter={(v): string => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
             parser={v => Number(v!.replace(/,/g, ''))}
             style={{ width: 150 }}
             addonAfter="₫"
@@ -192,7 +192,7 @@ export default function BookingFolioEditModal({ open, onClose, bookingId, groupI
             placeholder="Đơn giá"
             min={0}
             step={10000}
-            formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+            formatter={(v): string => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
             parser={v => Number(v!.replace(/,/g, ''))}
             style={{ width: 130 }}
             addonAfter="₫"
@@ -213,7 +213,7 @@ export default function BookingFolioEditModal({ open, onClose, bookingId, groupI
         </Form.Item>
       </Form>
 
-      <Table
+      <Table<{ id: string; price: number; qty: number; name: string }>
         dataSource={folio?.services ?? []}
         rowKey="id"
         size="small"
@@ -265,7 +265,7 @@ export default function BookingFolioEditModal({ open, onClose, bookingId, groupI
             placeholder="Số tiền giảm"
             min={1000}
             step={10000}
-            formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+            formatter={(v): string => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
             parser={v => Number(v!.replace(/,/g, ''))}
             style={{ width: 150 }}
             addonAfter="₫"

@@ -22,14 +22,7 @@ interface Props {
 export function DocumentActionsMenu({
   groupId,
   bookingId,
-  guestName,
-  guestPhone,
-  checkIn,
-  checkOut,
-  roomName,
   grandTotal,
-  totalPaid,
-  services = [],
 }: Props) {
   const { generateAndPrint, generateAndCopyZalo } = useDocumentGeneratorByGroup({ groupId })
 
