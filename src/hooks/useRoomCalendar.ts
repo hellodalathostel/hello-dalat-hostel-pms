@@ -82,44 +82,36 @@ function transformCalendarRows(
   baseRooms?: BaseRoom[],
 ): RoomCalendarData {
   const dates = buildDateRange(startDate, endDate)
-  const roomNameMap = new Map<string, string>()
-  const roomEventsMap = new Map<string, Map<string, CalendarEvent>>()
 
-  // Ưu tiên tên phòng từ DB (baseRooms) — đảm bảo đúng ngay cả khi phòng không có sự kiện
-  if (baseRooms) {
-    for (const room of baseRooms) {
-      roomNameMap.set(room.id, room.name)
-    }
-  }
-
+  // Bước 1: rooms table là source of truth — xác định danh sách và thứ tự phòng từ DB.
+  // Khi baseRooms chưa load (loading), fallback về DEFAULT_ROOM_ORDER + tên từ calendar data.
+  const roomNameFromCalendar = new Map<string, string>()
   for (const record of records) {
-    // Chỉ ghi đè tên nếu chưa có từ DB
-    if (record.room_name && !roomNameMap.has(record.room_id)) {
-      roomNameMap.set(record.room_id, record.room_name)
+    if (record.room_id && record.room_name && !roomNameFromCalendar.has(record.room_id)) {
+      roomNameFromCalendar.set(record.room_id, record.room_name)
     }
-
-    const dateMap = roomEventsMap.get(record.room_id) ?? new Map<string, CalendarEvent>()
-    dateMap.set(record.date, record)
-    roomEventsMap.set(record.room_id, dateMap)
   }
 
-  // Dùng thứ tự từ DB nếu có, fallback về DEFAULT_ROOM_ORDER
-  const baseOrderIds = baseRooms ? baseRooms.map((r) => r.id) : DEFAULT_ROOM_ORDER
+  const orderedRooms: { id: string; name: string }[] =
+    baseRooms && baseRooms.length > 0
+      ? baseRooms.map((r) => ({ id: r.id, name: r.name }))
+      : DEFAULT_ROOM_ORDER.map((id) => ({
+          id,
+          name: roomNameFromCalendar.get(id) ?? `Phòng ${id}`,
+        }))
 
-  const orderedRoomIds = [
-    ...baseOrderIds,
-    ...Array.from(roomEventsMap.keys())
-      .filter((roomId) => !baseOrderIds.includes(roomId))
-      .sort((left, right) => {
-        const leftNum = Number(left)
-        const rightNum = Number(right)
-        return leftNum - rightNum
-      }),
-  ]
+  // Bước 2: group calendar events theo room_id → merge vào từng hàng phòng
+  const eventsByRoom = new Map<string, Map<string, CalendarEvent>>()
+  for (const record of records) {
+    if (!record.room_id) continue
+    const dateMap = eventsByRoom.get(record.room_id) ?? new Map<string, CalendarEvent>()
+    dateMap.set(record.date, record)
+    eventsByRoom.set(record.room_id, dateMap)
+  }
 
-  const rooms: RoomRow[] = orderedRoomIds.map((roomId) => {
-    const roomEvents = roomEventsMap.get(roomId) ?? new Map<string, CalendarEvent>()
-    const roomName = roomNameMap.get(roomId) ?? `Phòng ${roomId}`
+  // Bước 3: render row cho mỗi phòng — phòng không có event vẫn xuất hiện (vacant)
+  const rooms: RoomRow[] = orderedRooms.map(({ id: roomId, name: roomName }) => {
+    const roomEvents = eventsByRoom.get(roomId) ?? new Map<string, CalendarEvent>()
     const days: RoomRow['days'] = []
 
     let dateIndex = 0
