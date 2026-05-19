@@ -39,6 +39,23 @@ export interface GenerateOptions {
   depositOptions?: DepositRequestOptions;
 }
 
+interface DocPayment {
+  id: string;
+  amount: number;
+  method: string | null;
+  date: string;
+  note: string | null;
+}
+
+const PAYMENT_METHOD_LABEL: Record<string, string> = {
+  cash: 'Tiền mặt',
+  transfer: 'Chuyển khoản',
+  card: 'Thẻ',
+  momo: 'MoMo',
+  zalopay: 'ZaloPay',
+  other: 'Khác',
+};
+
 // ─── Query helpers ─────────────────────────────────────────────────────────────
 
 /** Query toàn bộ data cần thiết cho 1 booking */
@@ -78,24 +95,29 @@ async function fetchDocumentData(
 
   if (rErr || !room) throw new Error('Không tìm thấy phòng: ' + rErr?.message);
 
-  // Services
-  const { data: services = [] } = await supabase
-    .from('booking_services')
-    .select('name, price, qty')
-    .eq('booking_id', bookingId);
+  const [servicesRes, discountsRes, paymentsRes] = await Promise.all([
+    supabase
+      .from('booking_services')
+      .select('name, price, qty')
+      .eq('booking_id', bookingId),
+    supabase
+      .from('booking_discounts')
+      .select('description, amount')
+      .eq('booking_id', bookingId),
+    supabase
+      .from('payment_history')
+      .select('id, amount, method, date, note')
+      .eq('group_id', groupId)
+      .order('date', { ascending: true }),
+  ]);
 
-  // Discounts
-  const { data: discounts = [] } = await supabase
-    .from('booking_discounts')
-    .select('description, amount')
-    .eq('booking_id', bookingId);
+  if (servicesRes.error) throw servicesRes.error;
+  if (discountsRes.error) throw discountsRes.error;
+  if (paymentsRes.error) throw paymentsRes.error;
 
-  // Payments của group
-  const { data: payments = [] } = await supabase
-    .from('payment_history')
-    .select('amount, method, created_at')
-    .eq('group_id', groupId)
-    .order('created_at', { ascending: true });
+  const services = servicesRes.data ?? [];
+  const discounts = discountsRes.data ?? [];
+  const payments = (paymentsRes.data ?? []) as DocPayment[];
 
   return {
     bookingId: booking.id,
@@ -121,16 +143,22 @@ async function fetchDocumentData(
       price: s.price,
       qty: Number(s.qty),
     })),
-    discounts: (discounts ?? []).map(d => ({
+    discounts: discounts.map(d => ({
       description: d.description,
       amount: d.amount,
     })),
     paid: group.paid ?? 0,
-    payments: (payments ?? []).map(p => ({
-      amount: p.amount,
-      method: p.method,
-      created_at: p.created_at,
-    })),
+    payments: payments.map(p => {
+      const methodKey = (p.method ?? 'other').toLowerCase();
+      const normalizedMethod = PAYMENT_METHOD_LABEL[methodKey] ? methodKey : 'other';
+      return {
+        id: p.id,
+        amount: p.amount,
+        method: normalizedMethod,
+        date: p.date,
+        note: p.note,
+      };
+    }),
     generatedAt: new Date().toISOString(),
   };
 }

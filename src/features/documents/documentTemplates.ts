@@ -15,14 +15,16 @@ export interface BookingServiceItem {
 }
 
 export interface BookingDiscountItem {
-  description: string;
+  description: string | null;
   amount: number;
 }
 
 export interface PaymentItem {
+  id: string;
   amount: number;
   method: string;
-  created_at: string;
+  date: string;
+  note: string | null;
 }
 
 /** Data object chuẩn hóa — useDocumentGenerator build từ DB rồi truyền vào đây */
@@ -64,6 +66,15 @@ const HOSTEL_NAME = 'Hello Dalat Hostel';
 const HOSTEL_ADDRESS = '33/18/2 Phan Đình Phùng, P.1, Đà Lạt';
 const HOSTEL_PHONE = '0969 975 935';
 const HOSTEL_EMAIL = 'hellodalathostel@gmail.com';
+
+const PAYMENT_METHOD_LABEL: Record<string, string> = {
+  cash: 'Tiền mặt',
+  transfer: 'Chuyển khoản',
+  card: 'Thẻ',
+  momo: 'MoMo',
+  zalopay: 'ZaloPay',
+  other: 'Khác',
+};
 
 /** Format tiền VND */
 const fmtVND = (amount: number) =>
@@ -168,10 +179,41 @@ export function renderBookingConfirmation(d: DocumentData): { html: string; zalo
         <tr><td>Tiền phòng (${d.nights} đêm × ${fmtVND(d.pricePerNight)})</td><td style="text-align:right">${fmtVND(d.nights * d.pricePerNight)}</td></tr>
         ${d.services.length > 0 ? `<tr><td>Dịch vụ</td><td style="text-align:right">${fmtVND(servicesTotal(d.services))}</td></tr>` : ''}
         ${d.surcharge > 0 ? `<tr><td>Phụ thu (card fee)</td><td style="text-align:right">${fmtVND(d.surcharge)}</td></tr>` : ''}
-        ${d.discounts.map(disc => `<tr><td>Giảm giá: ${disc.description}</td><td style="text-align:right">-${fmtVND(disc.amount)}</td></tr>`).join('')}
+        ${d.discounts.map(disc => `<tr><td>Giảm giá: ${disc.description ?? '—'}</td><td style="text-align:right">-${fmtVND(disc.amount)}</td></tr>`).join('')}
         <tr class="total-row"><td>TỔNG CỘNG</td><td style="text-align:right">${fmtVND(d.grandTotal)}</td></tr>
       </tbody></table>
     </div>
+
+    ${d.payments.length > 0 ? `
+    <div class="section">
+      <div class="section-title">Đã đặt cọc</div>
+      <table class="line-table">
+        <thead>
+          <tr>
+            <th>Ngày</th>
+            <th>Phương thức</th>
+            <th style="text-align:right">Số tiền</th>
+            <th>Ghi chú</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${d.payments.map(p => `
+          <tr>
+            <td>${fmtDate(p.date)}</td>
+            <td>${PAYMENT_METHOD_LABEL[p.method] ?? p.method}</td>
+            <td style="text-align:right">${fmtVND(p.amount)}</td>
+            <td>${p.note ?? '—'}</td>
+          </tr>`).join('')}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="2"><strong>Tổng đã cọc</strong></td>
+            <td style="text-align:right"><strong>${fmtVND(d.paid)}</strong></td>
+            <td></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>` : ''}
 
     <div class="highlight">
       🏡 Chúng tôi rất vui được đón tiếp quý khách! Nếu cần hỗ trợ, vui lòng liên hệ ${HOSTEL_PHONE} (Zalo/Call).
@@ -229,6 +271,8 @@ export function renderDepositRequest(
         <tr><td class="label">Phòng</td><td class="value">${d.roomName}</td></tr>
         <tr><td class="label">Thời gian</td><td class="value">${nightsLabel(d)}</td></tr>
         <tr><td class="label">Tổng tiền</td><td class="value">${fmtVND(d.grandTotal)}</td></tr>
+        ${d.paid > 0 ? `<tr><td class="label">Đã cọc trước</td><td class="value">${fmtVND(d.paid)}</td></tr>` : ''}
+        ${d.paid > 0 ? `<tr><td class="label">Còn cần đặt cọc</td><td class="value" style="color:#ff4d4f; font-weight:700">${fmtVND(Math.max(0, d.grandTotal - d.paid))}</td></tr>` : ''}
       </tbody></table>
     </div>
 
@@ -299,15 +343,48 @@ export function renderDepositConfirmation(d: DocumentData): { html: string; zalo
     </div>
 
     <div class="section">
-      <div class="section-title">Thanh toán</div>
-      <table class="line-table"><tbody>
-        <tr><td>Tổng tiền phòng</td><td style="text-align:right">${fmtVND(d.grandTotal)}</td></tr>
-        <tr class="paid-row"><td>✅ Đã đặt cọc</td><td style="text-align:right">${fmtVND(depositPaid)}</td></tr>
-        ${balance > 0
-          ? `<tr class="remaining-row"><td>⏳ Còn lại (thanh toán khi check-in)</td><td style="text-align:right">${fmtVND(balance)}</td></tr>`
-          : `<tr class="paid-row"><td>🎉 Đã thanh toán đủ</td><td style="text-align:right">${fmtVND(0)}</td></tr>`
-        }
-      </tbody></table>
+      <div class="section-title">Lịch sử đặt cọc</div>
+      <table class="line-table">
+        <thead>
+          <tr>
+            <th>Ngày</th>
+            <th>Phương thức</th>
+            <th style="text-align:right">Số tiền</th>
+            <th>Ghi chú</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${d.payments.length > 0
+            ? d.payments.map(p => `
+              <tr>
+                <td>${fmtDate(p.date)}</td>
+                <td>${PAYMENT_METHOD_LABEL[p.method] ?? p.method}</td>
+                <td style="text-align:right">${fmtVND(p.amount)}</td>
+                <td>${p.note ?? '—'}</td>
+              </tr>`).join('')
+            : '<tr><td colspan="4" style="text-align:center">Chưa có khoản cọc nào.</td></tr>'
+          }
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="2"><strong>Tổng đã cọc</strong></td>
+            <td style="text-align:right"><strong>${fmtVND(d.paid)}</strong></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td colspan="2">Tổng hóa đơn</td>
+            <td style="text-align:right">${fmtVND(d.grandTotal)}</td>
+            <td></td>
+          </tr>
+          <tr>
+            <td colspan="2"><strong>Còn lại</strong></td>
+            <td style="text-align:right; color: ${d.grandTotal - d.paid <= 0 ? '#52c41a' : '#ff4d4f'}">
+              <strong>${fmtVND(Math.max(0, d.grandTotal - d.paid))}</strong>
+            </td>
+            <td></td>
+          </tr>
+        </tfoot>
+      </table>
     </div>
 
     <div class="highlight">
@@ -382,7 +459,7 @@ export function renderInvoice(d: DocumentData): { html: string; zaloText: string
           </tr>` : ''}
           ${d.discounts.map(disc => `
           <tr style="color:#0a3622">
-            <td>Giảm giá: ${disc.description}</td>
+            <td>Giảm giá: ${disc.description ?? '—'}</td>
             <td style="text-align:right">—</td>
             <td style="text-align:center">—</td>
             <td style="text-align:right">-${fmtVND(disc.amount)}</td>
@@ -394,15 +471,17 @@ export function renderInvoice(d: DocumentData): { html: string; zaloText: string
     <div class="section">
       <table class="line-table"><tbody>
         <tr class="total-row"><td colspan="3">TỔNG CỘNG</td><td style="text-align:right">${fmtVND(d.grandTotal)}</td></tr>
-        ${d.payments.map(p => `
-        <tr class="paid-row">
-          <td colspan="3">Đã thanh toán (${p.method}) — ${fmtDate(p.created_at)}</td>
-          <td style="text-align:right">-${fmtVND(p.amount)}</td>
-        </tr>`).join('')}
-        ${balance > 0
-          ? `<tr class="remaining-row"><td colspan="3">CÒN LẠI</td><td style="text-align:right">${fmtVND(balance)}</td></tr>`
-          : `<tr class="paid-row"><td colspan="3">ĐÃ THANH TOÁN ĐỦ</td><td style="text-align:right">${fmtVND(0)}</td></tr>`
-        }
+        ${d.paid > 0 ? `
+        <tr>
+          <td colspan="3" style="text-align:right">Đã cọc</td>
+          <td style="text-align:right; color: #52c41a">-${fmtVND(d.paid)}</td>
+        </tr>` : ''}
+        <tr style="font-size:1.1em;">
+          <td colspan="3" style="text-align:right"><strong>CÒN LẠI</strong></td>
+          <td style="text-align:right; color: ${d.grandTotal - d.paid <= 0 ? '#52c41a' : '#ff4d4f'}">
+            <strong>${fmtVND(Math.max(0, d.grandTotal - d.paid))}</strong>
+          </td>
+        </tr>
       </tbody></table>
     </div>
 
@@ -420,7 +499,7 @@ CHI TIẾT:
 • Tiền phòng: ${fmtVND(d.pricePerNight * d.nights)}
 ${d.services.map(s => `• ${s.name} (×${s.qty}): ${fmtVND(s.price * s.qty)}`).join('\n')}
 ${d.surcharge > 0 ? `• Phụ thu thẻ: ${fmtVND(d.surcharge)}` : ''}
-${d.discounts.map(disc => `• Giảm (${disc.description}): -${fmtVND(disc.amount)}`).join('\n')}
+${d.discounts.map(disc => `• Giảm (${disc.description ?? '—'}): -${fmtVND(disc.amount)}`).join('\n')}
 
 💰 TỔNG: ${fmtVND(d.grandTotal)}
 ✅ Đã trả: ${fmtVND(d.paid)}
@@ -459,6 +538,29 @@ export function renderArrivalNotice(d: DocumentData): { html: string; zaloText: 
         <tr><td class="label">Thanh toán</td><td class="value">Tiền mặt hoặc chuyển khoản khi check-in</td></tr>
       </tbody></table>
     </div>
+
+    ${d.services.length > 0 ? `
+    <div class="section">
+      <div class="section-title">Dịch vụ đã đăng ký</div>
+      <table class="line-table">
+        <thead><tr><th>Dịch vụ</th><th style="text-align:center">SL</th><th style="text-align:right">Đơn giá</th></tr></thead>
+        <tbody>
+          ${d.services.map(s => `
+          <tr>
+            <td>${s.name}</td>
+            <td style="text-align:center">${s.qty}</td>
+            <td style="text-align:right">${fmtVND(s.price)}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>` : ''}
+
+    ${d.discounts.length > 0 ? `
+    <div class="section">
+      <div class="section-title">Ưu đãi</div>
+      <p>Giảm giá: ${fmtVND(d.discounts.reduce((s, discount) => s + discount.amount, 0))}
+      ${d.discounts[0].description ? `(${d.discounts[0].description})` : ''}</p>
+    </div>` : ''}
 
     ${d.paid < d.grandTotal ? `
     <div class="highlight">
