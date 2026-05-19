@@ -5,6 +5,7 @@ import {
   LinkOutlined,
   RiseOutlined,
   TableOutlined,
+  UnorderedListOutlined,
   UserAddOutlined,
   DollarOutlined,
 } from '@ant-design/icons'
@@ -31,6 +32,11 @@ const menuItems: ItemType[] = [
     key: '/calendar',
     icon: <TableOutlined />,
     label: 'Lịch phòng',
+  },
+  {
+    key: '/bookings',
+    icon: <UnorderedListOutlined />,
+    label: 'Đặt phòng',
   },
   {
     key: '/finance',
@@ -70,6 +76,10 @@ export function MainLayout(): JSX.Element {
 
     if (location.pathname.startsWith('/calendar')) {
       return ['/calendar']
+    }
+
+    if (location.pathname.startsWith('/bookings')) {
+      return ['/bookings']
     }
 
     if (location.pathname.startsWith('/finance')) {
