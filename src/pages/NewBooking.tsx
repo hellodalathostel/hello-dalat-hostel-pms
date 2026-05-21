@@ -61,7 +61,7 @@ function getDefaultValues(prefillRoomId?: string, prefillCheckIn?: string): NewB
         room_id: prefillRoomId ?? '',
         check_in: checkInDate,
         check_out: checkInDate.add(1, 'day'),
-        price: 0,
+        price_per_night: 0,
         guest_name: '',
         guests_count: 1,
         note: '',
@@ -134,7 +134,7 @@ export default function NewBooking(): JSX.Element {
       room_id: data.roomNumber ?? '',
       check_in: checkIn,
       check_out: checkOut,
-      price: data.grandTotal ?? 0,
+      price_per_night: data.grandTotal ?? 0,
       guest_name: data.guestName,
       guests_count: Math.max(1, data.numGuests ?? 1),
       note: noteParts.join(' | '),
@@ -153,7 +153,7 @@ export default function NewBooking(): JSX.Element {
       room_id: '',
       check_in: dayjs().startOf('day'),
       check_out: dayjs().add(1, 'day').startOf('day'),
-      price: 0,
+      price_per_night: 0,
       guest_name: '',
       guests_count: 1,
       note: '',
@@ -399,7 +399,7 @@ export default function NewBooking(): JSX.Element {
                       <Col xs={24} md={12}>
                         <Controller
                           control={control}
-                          name={`bookings.${index}.price`}
+                          name={`bookings.${index}.price_per_night`}
                           render={({ field: bookingField, fieldState }) => (
                             <Form.Item
                               label="Giá phòng"
@@ -407,8 +407,8 @@ export default function NewBooking(): JSX.Element {
                               validateStatus={fieldState.error ? 'error' : ''}
                               help={fieldState.error?.message}
                             >
-                              <InputNumber
-                                value={bookingField.value}
+                              <InputNumber<number>
+                                value={bookingField.value as number}
                                 onChange={(value) => bookingField.onChange(value ?? 0)}
                                 min={1}
                                 style={{ width: '100%' }}
