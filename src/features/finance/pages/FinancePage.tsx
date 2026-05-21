@@ -1,17 +1,19 @@
 import { useState } from 'react'
 import dayjs from 'dayjs'
 import { Alert, Button, DatePicker, Space, Spin, Typography } from 'antd'
-import { DownloadOutlined } from '@ant-design/icons'
+import { DownloadOutlined, PlusOutlined } from '@ant-design/icons'
 import type { Dayjs } from 'dayjs'
 import { useMonthlyRevenue } from '../hooks/useMonthlyRevenue'
 import { useUnpaidBookings } from '../hooks/useUnpaidBookings'
 import { FinanceTabs } from '../components/FinanceTabs'
+import { ManualRevenueModal } from '../components/ManualRevenueModal'
 import { exportFinanceExcel } from '../utils/exportFinanceExcel'
 
 const { Title } = Typography
 
 export default function FinancePage() {
   const [month, setMonth] = useState<Dayjs>(dayjs().startOf('month'))
+  const [manualRevenueOpen, setManualRevenueOpen] = useState(false)
 
   const {
     data: summary,
@@ -53,6 +55,13 @@ export default function FinancePage() {
         >
           Xuất Excel
         </Button>
+        <Button
+          type="primary"
+          icon={<PlusOutlined />}
+          onClick={() => setManualRevenueOpen(true)}
+        >
+          Nhập thủ công
+        </Button>
       </Space>
 
       {summaryError && (
@@ -76,6 +85,11 @@ export default function FinancePage() {
           month={month}
         />
       ) : null}
+
+      <ManualRevenueModal
+        open={manualRevenueOpen}
+        onClose={() => setManualRevenueOpen(false)}
+      />
     </div>
   )
 }
