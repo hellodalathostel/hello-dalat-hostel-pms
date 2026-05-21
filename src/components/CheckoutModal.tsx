@@ -29,6 +29,8 @@ const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   transfer: 'Chuyển khoản',
   card: 'Thẻ',
   other: 'Khác',
+  momo: 'MoMo',
+  zalopay: 'ZaloPay',
 }
 
 function formatVND(amount: number): string {

@@ -24,7 +24,7 @@ interface FormValues {
 
 export function ManualRevenueModal({ open, onClose }: Props) {
   const [form] = Form.useForm<FormValues>()
-  const { toast } = useAppFeedback()
+  const { message } = useAppFeedback()
   const { mutateAsync: createRevenue, isPending } = useCreateManualRevenue()
 
   useEffect(() => {
@@ -44,11 +44,11 @@ export function ManualRevenueModal({ open, onClose }: Props) {
 
     try {
       await createRevenue(payload)
-      toast.success('Đã nhập doanh thu thủ công')
+      message.success('Đã nhập doanh thu thủ công')
       onClose()
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Lỗi không xác định'
-      toast.error(`Nhập thất bại: ${message}`)
+      const errorMessage = error instanceof Error ? error.message : 'Lỗi không xác định'
+      message.error(`Nhập thất bại: ${errorMessage}`)
     }
   }
 
@@ -108,10 +108,10 @@ export function ManualRevenueModal({ open, onClose }: Props) {
             { type: 'number', min: 1000, message: 'Tối thiểu 1.000đ' },
           ]}
         >
-          <InputNumber
+          <InputNumber<number>
             style={{ width: '100%' }}
             formatter={(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-            parser={(value) => (value ? value.replace(/,/g, '') : '')}
+            parser={(value) => (value ? Number(value.replace(/[^\d]/g, '')) : 0)}
             placeholder="0"
             min={1000}
             step={10000}
