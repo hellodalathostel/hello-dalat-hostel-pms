@@ -51,6 +51,7 @@ export interface DocumentData {
   pricePerNight: number;    // bookings.price
   surcharge: number;        // bookings.surcharge (card_fee — trigger tính)
   grandTotal: number;       // bookings.grand_total (trigger tính)
+  roomSubtotal: number;     // bookings.room_subtotal (trigger-computed)
   services: BookingServiceItem[];
   discounts: BookingDiscountItem[];
   paid: number;             // groups.paid (tổng đã trả)
@@ -328,7 +329,7 @@ export function renderDepositConfirmation(d: DocumentData): { html: string; zalo
   const depositPaid = d.paid;
   const balance = remaining(d);
 
-  const html = `<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><title>Xác nhận đặt cọc</title>${BASE_STYLE}</head><body>
+  const html = `<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><title>Xác nhận nhận cọc</title>${BASE_STYLE}</head><body>
     ${htmlHeader()}
     <div class="doc-title">Xác nhận nhận cọc</div>
     <div class="doc-meta">Ngày xác nhận: ${fmtDateTime(d.generatedAt)}</div>
