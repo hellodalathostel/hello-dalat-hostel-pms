@@ -5,6 +5,7 @@ import {
   LinkOutlined,
   RiseOutlined,
   TableOutlined,
+  TeamOutlined,
   UnorderedListOutlined,
   UserAddOutlined,
   DollarOutlined,
@@ -37,6 +38,11 @@ const menuItems: ItemType[] = [
     key: '/bookings',
     icon: <UnorderedListOutlined />,
     label: 'Đặt phòng',
+  },
+  {
+    key: '/guests',
+    icon: <TeamOutlined />,
+    label: 'Khách',
   },
   {
     key: '/finance',
@@ -80,6 +86,10 @@ export function MainLayout(): JSX.Element {
 
     if (location.pathname.startsWith('/bookings')) {
       return ['/bookings']
+    }
+
+    if (location.pathname.startsWith('/guests')) {
+      return ['/guests']
     }
 
     if (location.pathname.startsWith('/finance')) {
