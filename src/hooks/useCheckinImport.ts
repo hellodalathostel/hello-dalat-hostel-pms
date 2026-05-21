@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { supabase } from '@/api/supabase';
-import { groupByRoomAndDate, parseCheckinExcel } from '@/utils/parseCheckinExcel';
+import { groupByRoomAndDate, parseCheckinExcel } from '@/shared/utils/parseCheckinExcel';
 import type { ImportGroup, ImportResult } from '@/types/checkin';
 
 export function useCheckinImport() {
