@@ -67,7 +67,7 @@ const HOSTEL_NAME = 'Hello Dalat Hostel';
 const HOSTEL_ADDRESS = '33/18/2 Phan Đình Phùng, P.1, Đà Lạt';
 const HOSTEL_PHONE = '0969 975 935';
 const HOSTEL_EMAIL = 'hellodalathostel@gmail.com';
-const LOGO_URL = 'https://rcfhhgywjdwqcgnpkbtl.supabase.co/storage/v1/object/public/assets/logo.png';
+const LOGO_URL = 'https://rcfhhgywjdwqcgnpkbtl.supabase.co/storage/v1/object/public/assets/1773723283955.png';
 
 // VietQR - Vietcombank
 const VQR_BANK = 'VCB';
@@ -106,14 +106,18 @@ const servicesTotal = (services: BookingServiceItem[]) =>
 /** Số dư còn lại */
 const remaining = (d: DocumentData) => d.grandTotal - d.paid;
 
+/** Bỏ dấu tiếng Việt để VietQR xử lý được */
+const removeDiacritics = (str: string) =>
+  str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D');
+
 /**
  * Generate VietQR image URL
- * Template 'print' có logo ngân hàng, phù hợp in ấn và scan
+ * addInfo phải là ASCII — strip dấu tiếng Việt trước khi encode
  */
 const vietQrUrl = (amount: number, addInfo: string) => {
-  const info = encodeURIComponent(addInfo);
-  const name = encodeURIComponent(VQR_OWNER);
-  return `https://img.vietqr.io/image/${VQR_BANK}-${VQR_ACCOUNT}-print.png?amount=${amount}&addInfo=${info}&accountName=${name}`;
+  const safeInfo = encodeURIComponent(removeDiacritics(addInfo));
+  const safeName = encodeURIComponent(removeDiacritics(VQR_OWNER));
+  return `https://img.vietqr.io/image/${VQR_BANK}-${VQR_ACCOUNT}-print.png?amount=${amount}&addInfo=${safeInfo}&accountName=${safeName}`;
 };
 
 // ─── CSS chung (print-safe) ───────────────────────────────────────────────────
@@ -148,7 +152,7 @@ const BASE_STYLE = `
     .badge-green { background: #d1e7dd; color: #0a3622; }
     .badge-yellow { background: #fff3cd; color: #856404; }
     .qr-block { display: flex; align-items: flex-start; gap: 16px; margin-top: 12px; }
-    .qr-block img { width: 160px; height: 160px; border: 1px solid #eee; border-radius: 8px; flex-shrink: 0; }
+    .qr-block img { width: 200px; height: 200px; border: 1px solid #eee; border-radius: 8px; flex-shrink: 0; }
     .qr-info { flex: 1; }
     .qr-info .amount { font-size: 20px; font-weight: 700; color: #2d6a4f; margin-bottom: 6px; }
     .qr-info table td { padding: 3px 6px; font-size: 12px; }
@@ -157,7 +161,7 @@ const BASE_STYLE = `
     .rules-list li:last-child { border-bottom: none; }
     .cancel-table td { padding: 5px 8px; font-size: 12px; border: 1px solid #e0e0e0; }
     .cancel-table th { padding: 5px 8px; font-size: 12px; background: #f5f5f5; border: 1px solid #e0e0e0; font-weight: 600; }
-    @media print { body { padding: 12px; } .qr-block img { width: 140px; height: 140px; } }
+    @media print { body { padding: 12px; } .qr-block img { width: 180px; height: 180px; } }
   </style>
 `;
 
