@@ -72,12 +72,19 @@ const mutation = useMutation({
 ```
 
 ### Migration Rule (từ 30/05/2026)
-Mọi table mới trong schema `public` hoặc `brain` **bắt buộc** thêm cuối migration:
+Mọi table mới trong schema `public` **bắt buộc** thêm cuối migration:
 ```sql
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.[table_name] TO anon;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.[table_name] TO authenticated;
 GRANT ALL ON public.[table_name] TO service_role;
 ALTER TABLE public.[table_name] ENABLE ROW LEVEL SECURITY;
+```
+
+Mọi table mới trong schema `brain` **bắt buộc** thêm cuối migration:
+```sql
+GRANT SELECT, INSERT, UPDATE, DELETE ON brain.[table_name] TO authenticated;
+GRANT ALL ON brain.[table_name] TO service_role;
+ALTER TABLE brain.[table_name] ENABLE ROW LEVEL SECURITY;
 ```
 
 ---
@@ -131,27 +138,36 @@ groups (
   source           booking_source,
   channel_fee_rate NUMERIC(4,3) DEFAULT 0,
   paid             INTEGER DEFAULT 0,
-  net_revenue      INTEGER DEFAULT 0,  -- tính bởi trigger
+  net_revenue      INTEGER DEFAULT 0,
+  -- net_revenue = SUM(grand_total) - channel_fee, computed by trigger update_group_net_revenue
+  -- KHÔNG sửa trực tiếp — để trigger xử lý
   status           TEXT DEFAULT 'active'
 )
 
 bookings (
-  id            UUID PRIMARY KEY,
-  group_id      UUID REFERENCES groups(id),
-  room_id       TEXT REFERENCES rooms(id),
-  check_in      DATE NOT NULL,
-  check_out     DATE NOT NULL,
-  nights        INTEGER GENERATED ALWAYS AS (check_out - check_in) STORED,
-  price         INTEGER DEFAULT 0,
-  surcharge     INTEGER DEFAULT 0,
-  grand_total   INTEGER,           -- tính bởi trigger
-  tax_rate      NUMERIC(4,3) DEFAULT 0,
-  tax_amount    INTEGER DEFAULT 0,
-  guest_name    TEXT,
-  guests_count  INTEGER DEFAULT 1,
-  status        booking_status DEFAULT 'booked',
-  is_deleted    BOOLEAN DEFAULT FALSE,
-  note          TEXT
+  id               UUID PRIMARY KEY,
+  group_id         UUID REFERENCES groups(id),
+  room_id          TEXT REFERENCES rooms(id),
+  check_in         DATE NOT NULL,
+  check_out        DATE NOT NULL,
+  nights           INTEGER GENERATED ALWAYS AS (check_out - check_in) STORED,
+  -- nights = GENERATED ALWAYS — KHÔNG INSERT trực tiếp
+  price_per_night  INTEGER DEFAULT 0,
+  -- price_per_night = INPUT DUY NHẤT cho giá phòng
+  surcharge        INTEGER DEFAULT 0,
+  -- surcharge = card_fee (4% nếu thanh toán thẻ), computed by RPC record_payment_txn
+  room_subtotal    INTEGER,
+  -- room_subtotal = price_per_night × nights, computed by DB trigger — FRONTEND KHÔNG TỰ TÍNH
+  grand_total      INTEGER,
+  -- grand_total = room_subtotal + surcharge + tax_amount + SUM(services) - SUM(discounts)
+  -- computed by DB trigger — FRONTEND KHÔNG TỰ TÍNH
+  tax_rate         NUMERIC(4,3) DEFAULT 0,
+  tax_amount       INTEGER DEFAULT 0,
+  guest_name       TEXT,
+  guests_count     INTEGER DEFAULT 1,
+  status           booking_status DEFAULT 'booked',
+  is_deleted       BOOLEAN DEFAULT FALSE,
+  note             TEXT
 )
 
 customers (
@@ -322,7 +338,8 @@ tours (
 // Tạo Group + Bookings + Services + Discounts trong 1 transaction
 supabase.rpc('create_group_booking_txn', {
   p_group:     { customer_name, customer_phone, source, channel_fee_rate },
-  p_bookings:  [{ room_id, check_in, check_out, price, guests_count }],
+  p_bookings:  [{ room_id, check_in, check_out, price_per_night, guests_count }],
+  // Lưu ý: price_per_night (KHÔNG phải price)
   p_services:  [{ service_id, booking_index, qty }],   // booking_index = 0-based
   p_discounts: [{ amount, description, booking_index }]
 })
@@ -330,15 +347,15 @@ supabase.rpc('create_group_booking_txn', {
 
 // Cập nhật booking (room, dates, price, status, cancel)
 supabase.rpc('update_booking_txn', {
-  p_booking_id:  UUID,
-  p_room_id:     string | null,
-  p_check_in:    string | null,   // YYYY-MM-DD
-  p_check_out:   string | null,
-  p_price:       number | null,
-  p_guests_count:number | null,
-  p_guest_name:  string | null,
-  p_note:        string | null,
-  p_cancel:      boolean          // true = huỷ booking
+  p_booking_id:   UUID,
+  p_room_id:      string | null,
+  p_check_in:     string | null,        // YYYY-MM-DD
+  p_check_out:    string | null,
+  p_price_per_night: number | null,     // KHÔNG phải p_price
+  p_guests_count: number | null,
+  p_guest_name:   string | null,
+  p_note:         string | null,
+  p_cancel:       boolean               // true = huỷ booking
 })
 
 // Check-in: upsert customers + link booking_guests + update status → 'checked-in'
@@ -389,26 +406,27 @@ supabase.rpc('get_suggested_price', {
 
 // Ghi document log (confirmation, invoice, v.v.)
 supabase.rpc('create_document_log', {
-  p_group_id:        UUID,
-  p_booking_id:      UUID | null,
-  p_doc_type:        doc_kind,
-  p_doc_format:      doc_format,
-  p_content_snapshot:JSONB,
-  p_sent_via:        string | null,
-  p_recipient_name:  string | null,
-  p_recipient_phone: string | null,
-  p_note:            string | null
+  p_group_id:         UUID,
+  p_booking_id:       UUID | null,
+  p_doc_type:         doc_kind,
+  p_doc_format:       doc_format,
+  p_content_snapshot: JSONB,
+  p_sent_via:         string | null,
+  p_recipient_name:   string | null,
+  p_recipient_phone:  string | null,
+  p_note:             string | null
 })
 ```
 
-### Views (chỉ SELECT, không mutate)
+### Views — chỉ SELECT, không mutate
+
 ```typescript
 // Trạng thái tất cả phòng hôm nay
 supabase.from('dashboard_today').select('*')
 // Columns: room_id, room_name, room_type, capacity,
 //          booking_id, check_in, check_out, status,
 //          guest_name, guests_count, customer_phone, source,
-//          paid, net_revenue, price, grand_total, balance_due,
+//          paid, net_revenue, price_per_night, grand_total, balance_due,
 //          is_blocked, block_reason
 
 // Lịch phòng hợp nhất (bookings + blocks)
@@ -416,7 +434,7 @@ supabase.from('room_calendar').select('*')
 // Columns: room_id, room_name, check_in, check_out, nights,
 //          booking_status, entry_type ('booking'|'block'),
 //          guest_name, customer_phone, source, paid, net_revenue,
-//          price, grand_total, group_id, booking_id, block_id
+//          price_per_night, grand_total, group_id, booking_id, block_id
 
 // Khai báo lưu trú ĐK14 — 19 cột chuẩn
 supabase.from('dk14_luu_tru').select('*')
@@ -442,11 +460,12 @@ interface OcrResult {
   country:         string;
   document_type:   'CCCD' | 'Hộ chiếu' | 'Giấy tờ khác';
   document_number: string;
+  phone:           string;
+  residency_type:  'Tạm trú' | null;  // null = khách nước ngoài
   province:        string;
   district:        string | null;  // null = địa chỉ mới (mặt sau CCCD)
   ward:            string;
   address_detail:  string;
-  residency_type:  'Tạm trú' | null;  // null = khách nước ngoài
 }
 
 // Input của RPC checkin_booking_txn (p_guests array item)
@@ -457,23 +476,24 @@ interface CheckInCustomerPayload extends OcrResult {
 
 // Row từ view dashboard_today
 interface DashboardRoom {
-  room_id:        string;
-  room_name:      string;
-  room_type:      string;
-  capacity:       number;
-  booking_id:     string | null;
-  check_in:       string | null;
-  check_out:      string | null;
-  status:         'booked' | 'checked-in' | 'checked-out' | null;
-  guest_name:     string | null;
-  guests_count:   number | null;
-  customer_phone: string | null;
-  source:         string | null;
-  paid:           number;
-  grand_total:    number | null;
-  balance_due:    number;
-  is_blocked:     boolean;
-  block_reason:   string | null;
+  room_id:         string;
+  room_name:       string;
+  room_type:       string;
+  capacity:        number;
+  booking_id:      string | null;
+  check_in:        string | null;
+  check_out:       string | null;
+  status:          'booked' | 'checked-in' | 'checked-out' | null;
+  guest_name:      string | null;
+  guests_count:    number | null;
+  customer_phone:  string | null;
+  source:          string | null;
+  paid:            number;
+  price_per_night: number | null;
+  grand_total:     number | null;
+  balance_due:     number;
+  is_blocked:      boolean;
+  block_reason:    string | null;
 }
 
 // Row từ view dk14_luu_tru
@@ -524,7 +544,9 @@ interface DK14Row {
 
 - ❌ Không tự thay đổi schema database khi chưa có instruction từ Claude
 - ❌ Không INSERT/UPDATE trực tiếp vào `bookings`, `payment_history`, `booking_guests`
+- ❌ Không mutate vào views (`dashboard_today`, `room_calendar`, `dk14_luu_tru`, `monthly_revenue`)
 - ❌ Không tạo Edge Function mới khi chưa kiểm tra 8 functions hiện có
 - ❌ Không dùng `any` trong TypeScript
 - ❌ Không hardcode Supabase URL/key
 - ❌ Không bypass RLS bằng service_role key trong frontend code
+- ❌ Không tự tính `room_subtotal` hay `grand_total` ở frontend — đọc từ DB
