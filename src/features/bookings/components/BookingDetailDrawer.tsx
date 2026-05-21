@@ -19,6 +19,7 @@ import {
   CalendarOutlined,
   CreditCardOutlined,
   EditOutlined,
+  HistoryOutlined,
   PhoneOutlined,
   UserOutlined,
 } from '@ant-design/icons'
@@ -31,6 +32,7 @@ import { CheckInModal } from '@/features/checkin/components/CheckInModal'
 import { CheckoutModal } from '@/features/checkout/components/CheckoutModal'
 import { BookingActionButtons } from '@/features/bookings/components/BookingActionButtons'
 import { DocumentActionsMenu } from '@/features/documents/DocumentActionsMenu'
+import { DocumentHistoryDrawer } from '@/features/documents/DocumentHistoryDrawer'
 
 // Map trạng thái sang màu Ant Design Tag
 const STATUS_COLOR: Record<string, string> = {
@@ -65,6 +67,7 @@ export default function BookingDetailDrawer({ groupId, open, onClose, onEditBook
   const [editingBooking, setEditingBooking] = useState<BookingDetailItem | null>(null)
   const [checkinBookingId, setCheckinBookingId] = useState<string | null>(null)
   const [checkoutBookingId, setCheckoutBookingId] = useState<string | null>(null)
+  const [historyOpen, setHistoryOpen] = useState(false)
   // State for folio edit modal
   const [folioEditOpen, setFolioEditOpen] = useState(false)
   const [folioEditBookingId, setFolioEditBookingId] = useState<string | null>(null)
@@ -113,7 +116,16 @@ export default function BookingDetailDrawer({ groupId, open, onClose, onEditBook
         onClose={onClose}
         extra={
           data && groupId ? (
-            <DocumentActionsMenu groupId={groupId} remaining={Math.max(0, balanceDue)} />
+            <Space size={8}>
+              <Button
+                icon={<HistoryOutlined />}
+                size="small"
+                onClick={() => setHistoryOpen(true)}
+              >
+                Lịch sử
+              </Button>
+              <DocumentActionsMenu groupId={groupId} remaining={Math.max(0, balanceDue)} />
+            </Space>
           ) : null
         }
         destroyOnClose
@@ -274,6 +286,12 @@ export default function BookingDetailDrawer({ groupId, open, onClose, onEditBook
         bookingId={checkoutBookingId}
         open={Boolean(checkoutBookingId)}
         onClose={() => setCheckoutBookingId(null)}
+      />
+
+      <DocumentHistoryDrawer
+        groupId={groupId}
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
       />
     </>
   )
