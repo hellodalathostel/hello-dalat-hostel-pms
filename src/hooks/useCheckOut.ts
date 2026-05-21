@@ -14,8 +14,7 @@ export interface CheckoutPayload {
 type CheckoutMutationInput = CheckoutPayload | string
 
 type CheckoutRpcResponse = {
-  ok?: boolean
-  success?: boolean
+  success: boolean
 }
 
 async function checkoutGroup(payload: CheckoutPayload): Promise<void> {
@@ -26,6 +25,8 @@ async function checkoutGroup(payload: CheckoutPayload): Promise<void> {
   }
 
   if (bookingIds.length === 0) {
+    // Lỗi của caller — log để debug
+    console.error('[useCheckout] bookingIds rỗng, groupId:', groupId)
     throw new Error('Thiếu danh sách booking để check-out')
   }
 
@@ -33,7 +34,8 @@ async function checkoutGroup(payload: CheckoutPayload): Promise<void> {
     const { data, error } = await supabase.rpc('checkout_group_txn', {
       p_group_id: groupId,
       p_booking_ids: bookingIds,
-      p_payment_amount: paymentAmount,
+      // Làm tròn tránh float gây lỗi Postgres integer
+      p_payment_amount: Math.round(paymentAmount),
       p_payment_method: paymentAmount > 0 ? (paymentMethod ?? null) : null,
       p_note: note ?? null,
     })
@@ -43,7 +45,7 @@ async function checkoutGroup(payload: CheckoutPayload): Promise<void> {
     }
 
     const result = (data ?? {}) as CheckoutRpcResponse
-    if (result.ok === false || result.success === false) {
+    if (result.success === false) {
       throw new Error('Checkout thất bại')
     }
   } catch (error) {

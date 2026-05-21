@@ -25,10 +25,10 @@ interface CheckoutModalProps {
 }
 
 const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
-  cash: 'Tien mat',
-  transfer: 'Chuyen khoan',
-  card: 'The',
-  other: 'Khac',
+  cash: 'Tiền mặt',
+  transfer: 'Chuyển khoản',
+  card: 'Thẻ',
+  other: 'Khác',
 }
 
 function formatVND(amount: number): string {
@@ -40,14 +40,14 @@ export function CheckoutModal({ target, onClose }: CheckoutModalProps) {
   const [note, setNote] = useState('')
   const { mutateAsync, isPending } = useCheckout()
 
-  useEffect(() => {
-    if (!target) {
-      return
-    }
+  // Tách bookingId ra ngoài để deps array không dùng optional chaining
+  const bookingId = target?.bookingId
 
+  useEffect(() => {
+    if (!bookingId) return
     setPaymentMethod('cash')
     setNote('')
-  }, [target?.bookingId])
+  }, [bookingId])
 
   if (!target) {
     return null
@@ -66,10 +66,10 @@ export function CheckoutModal({ target, onClose }: CheckoutModalProps) {
         note: note.trim() || undefined,
       })
 
-      message.success(`Da check-out phong ${target.roomNumber}`)
+      message.success(`Đã check-out phòng ${target.roomNumber}`)
       onClose()
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Checkout that bai'
+      const errorMessage = error instanceof Error ? error.message : 'Check-out thất bại'
       message.error(errorMessage)
     }
   }
@@ -81,7 +81,7 @@ export function CheckoutModal({ target, onClose }: CheckoutModalProps) {
       title={
         <Space>
           <LogoutOutlined />
-          <span>Check-out phong {target.roomNumber}</span>
+          <span>Check-out phòng {target.roomNumber}</span>
         </Space>
       }
       footer={null}
@@ -91,7 +91,7 @@ export function CheckoutModal({ target, onClose }: CheckoutModalProps) {
       <div style={{ marginBottom: 16 }}>
         <Title level={5} style={{ margin: 0 }}>{target.guestName}</Title>
         <Text type="secondary">
-          {dayjs(target.checkIn).format('DD/MM/YYYY')} - {dayjs(target.checkOut).format('DD/MM/YYYY')}
+          {dayjs(target.checkIn).format('DD/MM/YYYY')} – {dayjs(target.checkOut).format('DD/MM/YYYY')}
         </Text>
       </div>
 
@@ -99,21 +99,21 @@ export function CheckoutModal({ target, onClose }: CheckoutModalProps) {
 
       <Space direction="vertical" style={{ width: '100%' }} size={8}>
         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-          <Text>Tong hoa don</Text>
+          <Text>Tổng hoá đơn</Text>
           <Text strong>{formatVND(target.grandTotal)}</Text>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-          <Text>Da thu</Text>
+          <Text>Đã thu</Text>
           <Text style={{ color: '#52c41a' }}>{formatVND(target.paid)}</Text>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-          <Text strong>Con lai</Text>
+          <Text strong>Còn lại</Text>
           {hasDebt ? (
             <Tag color="red" style={{ fontSize: 14, padding: '2px 8px' }}>
               {formatVND(remaining)}
             </Tag>
           ) : (
-            <Tag color="green">Da thanh toan du</Tag>
+            <Tag color="green">Đã thanh toán đủ</Tag>
           )}
         </div>
       </Space>
@@ -138,14 +138,14 @@ export function CheckoutModal({ target, onClose }: CheckoutModalProps) {
               rows={3}
               value={note}
               onChange={(event) => setNote(event.target.value)}
-              placeholder="Ghi chu thanh toan (khong bat buoc)"
+              placeholder="Ghi chú thanh toán (không bắt buộc)"
             />
           </Space>
         </>
       )}
 
       <div style={{ display: 'flex', gap: 8, marginTop: 20, justifyContent: 'flex-end' }}>
-        <Button onClick={onClose} disabled={isPending}>Huy</Button>
+        <Button onClick={onClose} disabled={isPending}>Huỷ</Button>
         <Button
           type="primary"
           danger={hasDebt}
@@ -153,7 +153,7 @@ export function CheckoutModal({ target, onClose }: CheckoutModalProps) {
           onClick={handleConfirm}
           icon={<LogoutOutlined />}
         >
-          {hasDebt ? `Thu ${formatVND(remaining)} va Check-out` : 'Xac nhan Check-out'}
+          {hasDebt ? `Thu ${formatVND(remaining)} và Check-out` : 'Xác nhận Check-out'}
         </Button>
       </div>
     </Modal>
