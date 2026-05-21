@@ -6,7 +6,8 @@ import type { PaymentFormValues } from '@/lib/schemas'
 
 interface RecordPaymentPayload extends PaymentFormValues {
   groupId: string
-  firstBookingId: string
+  // undefined khi method !== 'card' — RPC nhận null, không bắt buộc
+  firstBookingId?: string
 }
 
 // Ghi nhận thanh toán thông qua RPC transaction tại database.
@@ -20,10 +21,12 @@ export function useRecordPayment() {
       try {
         const { data, error } = await supabase.rpc('record_payment_txn', {
           p_group_id: payload.groupId,
-          p_amount: payload.amount,
+          // Làm tròn tránh float gây lỗi Postgres integer
+          p_amount: Math.round(payload.amount),
           p_method: payload.method,
-          p_note: payload.note ?? '',
-          p_first_booking_id: payload.firstBookingId,
+          p_note: payload.note ?? null,
+          // Truyền null khi không có — RPC chỉ bắt buộc khi method = 'card'
+          p_first_booking_id: payload.firstBookingId ?? null,
         })
 
         if (error) {
@@ -36,18 +39,19 @@ export function useRecordPayment() {
       }
     },
     onSuccess: async () => {
-      // [Fix 3] — Đồng bộ invalidate theo convention query key mới.
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['dashboard', 'today'] }),
         queryClient.invalidateQueries({ queryKey: ['room-calendar'] }),
         queryClient.invalidateQueries({ queryKey: ['booking-detail'] }),
+        // Đồng bộ thêm bookings + groups để folio/summary đúng
+        queryClient.invalidateQueries({ queryKey: ['bookings'] }),
+        queryClient.invalidateQueries({ queryKey: ['groups'] }),
       ])
 
       message.success('Ghi nhận thanh toán thành công')
     },
     onError: (error) => {
       void error
-      // [Fix 3] — Theo yêu cầu nghiệp vụ, hiển thị toast lỗi ngắn gọn khi ghi nhận thất bại.
       message.error('Ghi nhận thanh toán thất bại')
     },
   })

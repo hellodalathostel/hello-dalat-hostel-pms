@@ -29,7 +29,7 @@ function getDefaultValues(room: DashboardRoom): PaymentFormValues {
   }
 }
 
-// Modal thu tiền cho booking/group hiện tại, dữ liệu tính toán tổng tiền do DB quản lý.
+// Modal thu tiền cho booking/group hiện tại, dữ liệu tổng tiền do DB quản lý.
 export function PaymentModal({ visible, room, onCancel }: PaymentModalProps): JSX.Element {
   const { notification } = useAppFeedback()
   const recordPaymentMutation = useRecordPayment()
@@ -53,18 +53,28 @@ export function PaymentModal({ visible, room, onCancel }: PaymentModalProps): JS
   }
 
   const onSubmit = async (values: PaymentFormValues) => {
-    try {
-      if (!room.group_id || !room.booking_id) {
-        notification.error({
-          message: 'Thiếu dữ liệu thanh toán',
-          description: 'Không tìm thấy group_id hoặc booking_id để ghi nhận thanh toán.',
-        })
-        return
-      }
+    if (!room.group_id) {
+      notification.error({
+        message: 'Thiếu dữ liệu thanh toán',
+        description: 'Không tìm thấy group_id để ghi nhận thanh toán.',
+      })
+      return
+    }
 
+    // RPC bắt buộc booking_id khi method = card (để tính surcharge vào bookings.surcharge)
+    if (values.method === 'card' && !room.booking_id) {
+      notification.error({
+        message: 'Thiếu dữ liệu thanh toán',
+        description: 'Quẹt thẻ cần booking_id để tính phụ phí 4%.',
+      })
+      return
+    }
+
+    try {
       await recordPaymentMutation.mutateAsync({
         groupId: room.group_id,
-        firstBookingId: room.booking_id,
+        // Chỉ truyền firstBookingId khi có — hook sẽ fallback về null
+        firstBookingId: room.booking_id ?? undefined,
         amount: values.amount,
         method: values.method,
         note: values.note,
@@ -73,7 +83,7 @@ export function PaymentModal({ visible, room, onCancel }: PaymentModalProps): JS
       reset(getDefaultValues(room))
       onCancel()
     } catch {
-      // Lỗi mutation đã được xử lý trong hook.
+      // Lỗi mutation đã được xử lý trong hook (onError toast).
     }
   }
 
@@ -85,7 +95,7 @@ export function PaymentModal({ visible, room, onCancel }: PaymentModalProps): JS
       destroyOnClose
       footer={
         <>
-          <Button onClick={handleClose}>Hủy</Button>
+          <Button onClick={handleClose}>Huỷ</Button>
           <Button
             type="primary"
             onClick={handleSubmit(onSubmit)}
