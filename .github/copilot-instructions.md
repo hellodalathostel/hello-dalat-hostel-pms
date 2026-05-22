@@ -72,19 +72,12 @@ const mutation = useMutation({
 ```
 
 ### Migration Rule (từ 30/05/2026)
-Mọi table mới trong schema `public` **bắt buộc** thêm cuối migration:
+Mọi table mới trong schema `public` hoặc `brain` **bắt buộc** thêm cuối migration:
 ```sql
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.[table_name] TO anon;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.[table_name] TO authenticated;
 GRANT ALL ON public.[table_name] TO service_role;
 ALTER TABLE public.[table_name] ENABLE ROW LEVEL SECURITY;
-```
-
-Mọi table mới trong schema `brain` **bắt buộc** thêm cuối migration:
-```sql
-GRANT SELECT, INSERT, UPDATE, DELETE ON brain.[table_name] TO authenticated;
-GRANT ALL ON brain.[table_name] TO service_role;
-ALTER TABLE brain.[table_name] ENABLE ROW LEVEL SECURITY;
 ```
 
 ---
@@ -97,51 +90,54 @@ daily-revenue       daily-revenue-summary
 tax-reminder        dk13-reminder     ical-feed
 ```
 
+> `ocr-id-scanner`: Edge Function giữ nguyên nhưng KHÔNG gọi từ UI — bỏ khỏi CheckInModal.
+
 ---
 
 ## Database Schema
 
 ### ENUMs
 ```
-booking_status    : booked | checked-in | checked-out | cancelled
-booking_source    : Booking.com | Facebook | Gọi điện/Zalo | Khách quen | Walk-in | Other
-payment_method    : cash | transfer | card | other | momo | zalopay
-block_reason      : maintenance | owner_use | ota_closed | deep_cleaning | other
-pricing_rule_type : weekend | peak_season | holiday | custom
-document_type     : CCCD | Hộ chiếu | Giấy tờ khác
-residency_type    : Thường trú | Tạm trú | Địa chỉ khác
-doc_kind          : booking_confirmation | deposit_request | deposit_confirmation | invoice | arrival_notice
-doc_format        : pdf | zalo_text | email_html
-expense_category  : Lương nhân viên | Điện nước | Vệ sinh | Sửa chữa | Marketing | Khác | Thuế & Phí
-bot_lead_status   : pending | closed | converted
-user_role         : owner | staff
+booking_status       : booked | checked-in | checked-out | cancelled
+booking_source       : Booking.com | Facebook | Gọi điện/Zalo | Khách quen | Walk-in | Other
+payment_method       : cash | transfer | card | other | momo | zalopay
+block_reason         : maintenance | owner_use | ota_closed | deep_cleaning | other
+pricing_rule_type    : weekend | peak_season | holiday | custom
+document_type        : CCCD | Hộ chiếu | Giấy tờ khác
+residency_type       : Thường trú | Tạm trú | Địa chỉ khác
+doc_kind             : booking_confirmation | deposit_request | deposit_confirmation | invoice | arrival_notice
+doc_format           : pdf | zalo_text | email_html
+expense_category     : Lương nhân viên | Điện nước | Vệ sinh | Sửa chữa | Marketing | Khác | Thuế & Phí
+bot_lead_status      : pending | closed | converted
+user_role            : owner | staff
+housekeeping_status  : clean | dirty | cleaning | out_of_order
 ```
 
 ### Bảng chính
 ```sql
 rooms (
-  id          TEXT PRIMARY KEY,  -- '101','102'...'302'
-  name        TEXT,
-  type        TEXT,              -- family|single|deluxe_double|deluxe_queen|standard_double
-  capacity    INTEGER,
-  base_price  INTEGER,
-  floor       INTEGER,
-  is_active   BOOLEAN DEFAULT TRUE
+  id                   TEXT PRIMARY KEY,  -- '101','102'...'302'
+  name                 TEXT,
+  type                 TEXT,              -- family|single|deluxe_double|deluxe_queen|standard_double
+  capacity             INTEGER,
+  base_price           INTEGER,
+  floor                INTEGER,
+  is_active            BOOLEAN DEFAULT TRUE,
+  housekeeping_status  housekeeping_status NOT NULL DEFAULT 'clean',  -- flip to 'dirty' on checkout (trigger)
+  housekeeping_note    TEXT                                           -- ghi chú cho nhân viên dọn phòng
 )
 
 groups (
-  id               UUID PRIMARY KEY,
-  customer_name    TEXT NOT NULL,
-  customer_phone   TEXT,
-  customer_note    TEXT,
-  customer_cccd    TEXT,
-  source           booking_source,
-  channel_fee_rate NUMERIC(4,3) DEFAULT 0,
-  paid             INTEGER DEFAULT 0,
-  net_revenue      INTEGER DEFAULT 0,
-  -- net_revenue = SUM(grand_total) - channel_fee, computed by trigger update_group_net_revenue
-  -- KHÔNG sửa trực tiếp — để trigger xử lý
-  status           TEXT DEFAULT 'active'
+  id                 UUID PRIMARY KEY,
+  customer_name      TEXT NOT NULL,
+  customer_phone     TEXT,
+  customer_note      TEXT,
+  customer_cccd      TEXT,
+  source             booking_source,
+  channel_fee_rate   NUMERIC(4,3) DEFAULT 0,
+  paid               INTEGER DEFAULT 0,
+  net_revenue        INTEGER DEFAULT 0,  -- tính bởi trigger
+  status             TEXT DEFAULT 'active'
 )
 
 bookings (
@@ -151,16 +147,10 @@ bookings (
   check_in         DATE NOT NULL,
   check_out        DATE NOT NULL,
   nights           INTEGER GENERATED ALWAYS AS (check_out - check_in) STORED,
-  -- nights = GENERATED ALWAYS — KHÔNG INSERT trực tiếp
-  price_per_night  INTEGER DEFAULT 0,
-  -- price_per_night = INPUT DUY NHẤT cho giá phòng
-  surcharge        INTEGER DEFAULT 0,
-  -- surcharge = card_fee (4% nếu thanh toán thẻ), computed by RPC record_payment_txn
-  room_subtotal    INTEGER,
-  -- room_subtotal = price_per_night × nights, computed by DB trigger — FRONTEND KHÔNG TỰ TÍNH
-  grand_total      INTEGER,
-  -- grand_total = room_subtotal + surcharge + tax_amount + SUM(services) - SUM(discounts)
-  -- computed by DB trigger — FRONTEND KHÔNG TỰ TÍNH
+  price_per_night  INTEGER DEFAULT 0,   -- ← input duy nhất cho giá phòng (KHÔNG dùng 'price')
+  room_subtotal    INTEGER,             -- price_per_night × nights, tính bởi trigger
+  surcharge        INTEGER DEFAULT 0,  -- card_fee (4%)
+  grand_total      INTEGER,            -- room_subtotal + surcharge + tax_amount + services - discounts, trigger
   tax_rate         NUMERIC(4,3) DEFAULT 0,
   tax_amount       INTEGER DEFAULT 0,
   guest_name       TEXT,
@@ -169,167 +159,176 @@ bookings (
   is_deleted       BOOLEAN DEFAULT FALSE,
   note             TEXT
 )
+-- Frontend KHÔNG tính room_subtotal hay grand_total — đọc từ DB
 
 customers (
-  id              UUID PRIMARY KEY,
-  full_name       TEXT NOT NULL,
-  date_of_birth   DATE,
-  gender          TEXT,              -- 'Nam' | 'Nữ'
-  nationality     CHAR(3),           -- ISO alpha-3: VNM, USA, GBR...
-  country         CHAR(3),
-  document_type   document_type,
-  document_number TEXT,
-  phone           TEXT,
-  residency_type  residency_type,
-  province        TEXT,
-  district        TEXT,
-  ward            TEXT,
-  address_detail  TEXT
+  id                UUID PRIMARY KEY,
+  full_name         TEXT NOT NULL,
+  date_of_birth     DATE,
+  gender            TEXT,              -- 'Nam' | 'Nữ'
+  nationality       CHAR(3),           -- ISO alpha-3: VNM, USA, GBR...
+  country           CHAR(3),
+  document_type     document_type,
+  document_number   TEXT,
+  phone             TEXT,
+  residency_type    residency_type,
+  province          TEXT,
+  district          TEXT,
+  ward              TEXT,
+  address_detail    TEXT
 )
 
 booking_guests (
-  id          UUID PRIMARY KEY,
-  booking_id  UUID REFERENCES bookings(id),
-  customer_id UUID REFERENCES customers(id),
-  is_primary  BOOLEAN DEFAULT FALSE,
+  id           UUID PRIMARY KEY,
+  booking_id   UUID REFERENCES bookings(id),
+  customer_id  UUID REFERENCES customers(id),
+  is_primary   BOOLEAN DEFAULT FALSE,
   UNIQUE (booking_id, customer_id)
   -- Partial unique index: chỉ 1 khách is_primary = TRUE per booking
 )
 
 booking_services (
-  id         UUID PRIMARY KEY,
-  booking_id UUID REFERENCES bookings(id),
-  service_id TEXT REFERENCES services(id),
-  name       TEXT NOT NULL,
-  price      INTEGER NOT NULL,
-  qty        NUMERIC(10,2) DEFAULT 1
+  id          UUID PRIMARY KEY,
+  booking_id  UUID REFERENCES bookings(id),
+  service_id  TEXT REFERENCES services(id),
+  name        TEXT NOT NULL,
+  price       INTEGER NOT NULL,
+  qty         NUMERIC(10,2) DEFAULT 1
 )
 
 booking_discounts (
-  id          UUID PRIMARY KEY,
-  booking_id  UUID REFERENCES bookings(id),
-  amount      INTEGER NOT NULL,
-  description TEXT
+  id           UUID PRIMARY KEY,
+  booking_id   UUID REFERENCES bookings(id),
+  amount       INTEGER NOT NULL,
+  description  TEXT
 )
 
 payment_history (
-  id       UUID PRIMARY KEY,
-  group_id UUID REFERENCES groups(id),
-  amount   INTEGER NOT NULL,
-  method   payment_method,
-  date     DATE NOT NULL,
-  note     TEXT
+  id        UUID PRIMARY KEY,
+  group_id  UUID REFERENCES groups(id),
+  amount    INTEGER NOT NULL,
+  method    payment_method,
+  date      DATE NOT NULL,
+  note      TEXT
 )
 
 room_blocks (
-  id         UUID PRIMARY KEY,
-  room_id    TEXT REFERENCES rooms(id),
-  start_date DATE NOT NULL,
-  end_date   DATE NOT NULL,
-  reason     block_reason DEFAULT 'other',
-  note       TEXT
+  id          UUID PRIMARY KEY,
+  room_id     TEXT REFERENCES rooms(id),
+  start_date  DATE NOT NULL,
+  end_date    DATE NOT NULL,
+  reason      block_reason DEFAULT 'other',
+  note        TEXT
 )
 
 expenses (
-  id          UUID PRIMARY KEY,
-  category    expense_category DEFAULT 'Khác',
-  description TEXT,
-  amount      INTEGER DEFAULT 0,
-  date        DATE NOT NULL,
-  is_deleted  BOOLEAN DEFAULT FALSE
+  id           UUID PRIMARY KEY,
+  category     expense_category DEFAULT 'Khác',
+  description  TEXT,
+  amount       INTEGER DEFAULT 0,
+  date         DATE NOT NULL,
+  is_deleted   BOOLEAN DEFAULT FALSE
 )
 
 services (
-  id         TEXT PRIMARY KEY,
-  name       TEXT NOT NULL,
-  price      INTEGER NOT NULL,
-  is_deleted BOOLEAN DEFAULT FALSE
+  id          TEXT PRIMARY KEY,
+  name        TEXT NOT NULL,
+  price       INTEGER NOT NULL,
+  is_deleted  BOOLEAN DEFAULT FALSE
 )
 
 app_users (
-  id    UUID PRIMARY KEY,
-  email TEXT UNIQUE,
-  name  TEXT,
-  role  user_role DEFAULT 'staff'
+  id     UUID PRIMARY KEY,
+  email  TEXT UNIQUE,
+  name   TEXT,
+  role   user_role DEFAULT 'staff'
 )
 ```
 
 ### Bảng phụ trợ
 ```sql
 pricing_rules (
-  id          UUID PRIMARY KEY,
-  name        TEXT,
-  rule_type   pricing_rule_type,
-  room_id     TEXT REFERENCES rooms(id),  -- NULL = áp dụng tất cả phòng
-  multiplier  NUMERIC,                    -- VD: 1.15
-  flat_amount INTEGER,                    -- hoặc dùng flat thay multiplier
-  start_date  DATE,
-  end_date    DATE,
-  day_of_week INTEGER[],                  -- 0=CN, 1=T2... (dùng cho weekend)
-  priority    INTEGER DEFAULT 0,
-  is_active   BOOLEAN DEFAULT TRUE
+  id           UUID PRIMARY KEY,
+  name         TEXT,
+  rule_type    pricing_rule_type,
+  room_id      TEXT REFERENCES rooms(id),  -- NULL = áp dụng tất cả phòng
+  multiplier   NUMERIC,                    -- VD: 1.15
+  flat_amount  INTEGER,                    -- hoặc dùng flat thay multiplier
+  start_date   DATE,
+  end_date     DATE,
+  day_of_week  INTEGER[],                  -- 0=CN, 1=T2... (dùng cho weekend)
+  priority     INTEGER DEFAULT 0,
+  is_active    BOOLEAN DEFAULT TRUE
 )
 
 revenue_manual_log (
-  id          UUID PRIMARY KEY,
-  period      DATE,                       -- ngày đầu tháng
-  source      TEXT,
-  description TEXT,
-  amount      INTEGER,
-  note        TEXT
+  id           UUID PRIMARY KEY,
+  period       DATE,                       -- ngày đầu tháng
+  source       TEXT,
+  description  TEXT,
+  amount       INTEGER,
+  note         TEXT
 )
 
 bot_leads (
-  id        UUID PRIMARY KEY,
-  chat_id   BIGINT NOT NULL,             -- Telegram chat_id
-  content   TEXT NOT NULL,
-  remind_at TIMESTAMPTZ,
-  status    bot_lead_status DEFAULT 'pending',
-  group_id  UUID REFERENCES groups(id)
+  id         UUID PRIMARY KEY,
+  chat_id    BIGINT NOT NULL,             -- Telegram chat_id
+  content    TEXT NOT NULL,
+  remind_at  TIMESTAMPTZ,
+  status     bot_lead_status DEFAULT 'pending',
+  group_id   UUID REFERENCES groups(id)
 )
+-- bot_leads: No UI — managed by Telegram bot only
 
 document_logs (
-  id               UUID PRIMARY KEY,
-  group_id         UUID REFERENCES groups(id),
-  booking_id       UUID REFERENCES bookings(id),
-  doc_type         doc_kind,
-  doc_format       doc_format,
-  content_snapshot JSONB DEFAULT '{}',
-  generated_by     UUID,
-  sent_via         TEXT,
-  recipient_name   TEXT,
-  recipient_phone  TEXT,
-  note             TEXT
+  id                UUID PRIMARY KEY,
+  group_id          UUID REFERENCES groups(id),
+  booking_id        UUID REFERENCES bookings(id),
+  doc_type          doc_kind,
+  doc_format        doc_format,
+  content_snapshot  JSONB DEFAULT '{}',
+  generated_by      UUID,
+  sent_via          TEXT,
+  recipient_name    TEXT,
+  recipient_phone   TEXT,
+  note              TEXT
 )
 
 ota_calendar_feed (
-  id              UUID PRIMARY KEY,
-  room_id         TEXT REFERENCES rooms(id),
-  ical_uid        TEXT,
-  ota_source      TEXT DEFAULT 'Booking.com',
-  check_in        DATE,
-  check_out       DATE,
-  summary         TEXT,
-  status          TEXT,
-  ota_booking_num TEXT,
-  linked_group_id UUID REFERENCES groups(id),
-  last_synced_at  TIMESTAMPTZ DEFAULT now()
+  id               UUID PRIMARY KEY,
+  room_id          TEXT REFERENCES rooms(id),
+  ical_uid         TEXT,
+  ota_source       TEXT DEFAULT 'Booking.com',
+  check_in         DATE,
+  check_out        DATE,
+  summary          TEXT,
+  status           TEXT,
+  ota_booking_num  TEXT,
+  linked_group_id  UUID REFERENCES groups(id),
+  last_synced_at   TIMESTAMPTZ DEFAULT now()
 )
 
 tours (
-  id              TEXT PRIMARY KEY,
-  name            TEXT,
-  partner         TEXT,
-  duration        TEXT,
-  price_weekday   INTEGER,
-  price_weekend   INTEGER,
-  pickup_time     TEXT,
-  suitable_for    TEXT,
-  included        TEXT,
-  not_included    TEXT,
-  notes           TEXT,
-  is_active       BOOLEAN DEFAULT TRUE
+  id               TEXT PRIMARY KEY,
+  name             TEXT,
+  partner          TEXT,
+  duration         TEXT,
+  price_weekday    INTEGER,
+  price_weekend    INTEGER,
+  pickup_time      TEXT,
+  suitable_for     TEXT,
+  included         TEXT,
+  not_included     TEXT,
+  notes            TEXT,
+  is_active        BOOLEAN DEFAULT TRUE
 )
+```
+
+### Triggers liên quan housekeeping
+```
+trg_room_dirty_on_checkout: bookings AFTER UPDATE
+  → khi status flip sang 'checked-out'
+  → rooms.housekeeping_status = 'dirty' tự động
 ```
 
 ### RPC Functions — PHẢI dùng thay vì INSERT/UPDATE trực tiếp
@@ -339,7 +338,6 @@ tours (
 supabase.rpc('create_group_booking_txn', {
   p_group:     { customer_name, customer_phone, source, channel_fee_rate },
   p_bookings:  [{ room_id, check_in, check_out, price_per_night, guests_count }],
-  // Lưu ý: price_per_night (KHÔNG phải price)
   p_services:  [{ service_id, booking_index, qty }],   // booking_index = 0-based
   p_discounts: [{ amount, description, booking_index }]
 })
@@ -349,13 +347,13 @@ supabase.rpc('create_group_booking_txn', {
 supabase.rpc('update_booking_txn', {
   p_booking_id:   UUID,
   p_room_id:      string | null,
-  p_check_in:     string | null,        // YYYY-MM-DD
+  p_check_in:     string | null,   // YYYY-MM-DD
   p_check_out:    string | null,
-  p_price_per_night: number | null,     // KHÔNG phải p_price
+  p_price_per_night: number | null,  // ← KHÔNG dùng p_price
   p_guests_count: number | null,
   p_guest_name:   string | null,
   p_note:         string | null,
-  p_cancel:       boolean               // true = huỷ booking
+  p_cancel:       boolean          // true = hủy booking
 })
 
 // Check-in: upsert customers + link booking_guests + update status → 'checked-in'
@@ -372,11 +370,11 @@ supabase.rpc('process_check_out_txn', {
 
 // Check-out nhiều booking trong 1 group + thanh toán cuối
 supabase.rpc('checkout_group_txn', {
-  p_group_id:       UUID,
-  p_booking_ids:    UUID[],
-  p_payment_amount: number,            // 0 nếu không thanh toán thêm
-  p_payment_method: payment_method | null,
-  p_note:           string | null
+  p_group_id:        UUID,
+  p_booking_ids:     UUID[],
+  p_payment_amount:  number,          // 0 nếu không thanh toán thêm
+  p_payment_method:  payment_method | null,
+  p_note:            string | null
 })
 
 // Ghi nhận thanh toán (tự xử lý 4% surcharge nếu method = card)
@@ -418,8 +416,13 @@ supabase.rpc('create_document_log', {
 })
 ```
 
-### Views — chỉ SELECT, không mutate
+### RPC Legacy — ĐÃ BỎ, không dùng
+```
+checkout_booking      ← dùng process_check_out_txn thay thế
+process_checkout      ← dùng checkout_group_txn thay thế
+```
 
+### Views (chỉ SELECT, không mutate)
 ```typescript
 // Trạng thái tất cả phòng hôm nay
 supabase.from('dashboard_today').select('*')
@@ -440,7 +443,8 @@ supabase.from('room_calendar').select('*')
 supabase.from('dk14_luu_tru').select('*')
 
 // Doanh thu theo tháng/kênh/phòng (chỉ checked-out)
-supabase.from('monthly_revenue').select('*')
+// Dùng: finance_monthly_revenue (KHÔNG dùng monthly_revenue cũ)
+supabase.from('finance_monthly_revenue').select('*')
 // Columns: month, source, room_id, booking_count, total_nights,
 //          gross_room_revenue, total_tax, net_revenue, avg_channel_fee_rate
 ```
@@ -460,12 +464,11 @@ interface OcrResult {
   country:         string;
   document_type:   'CCCD' | 'Hộ chiếu' | 'Giấy tờ khác';
   document_number: string;
-  phone:           string;
-  residency_type:  'Tạm trú' | null;  // null = khách nước ngoài
   province:        string;
   district:        string | null;  // null = địa chỉ mới (mặt sau CCCD)
   ward:            string;
   address_detail:  string;
+  residency_type:  'Tạm trú' | null;  // null = khách nước ngoài
 }
 
 // Input của RPC checkin_booking_txn (p_guests array item)
@@ -489,7 +492,6 @@ interface DashboardRoom {
   customer_phone:  string | null;
   source:          string | null;
   paid:            number;
-  price_per_night: number | null;
   grand_total:     number | null;
   balance_due:     number;
   is_blocked:      boolean;
@@ -498,29 +500,47 @@ interface DashboardRoom {
 
 // Row từ view dk14_luu_tru
 interface DK14Row {
-  stt:              number;
-  ho_va_ten:        string;
-  ngay_sinh:        string;
-  gioi_tinh:        string;
-  quoc_gia:         string;
-  quoc_tich:        string;
-  loai_giay_to:     string;
-  ten_giay_to:      string | null;
-  so_giay_to:       string;
-  so_dien_thoai:    string | null;
-  loai_cu_tru:      string | null;
-  tinh_tp:          string | null;
-  quan_huyen:       string | null;
-  phuong_xa:        string | null;
-  dia_chi_chi_tiet: string | null;
-  tu_ngay:          string;
-  den_ngay:         string;
-  ly_do_luu_tru:    string;
-  ten_phong:        string;
-  booking_id:       string;
-  check_in:         string;
-  check_out:        string;
-  is_primary:       boolean;
+  stt:               number;
+  ho_va_ten:         string;
+  ngay_sinh:         string;
+  gioi_tinh:         string;
+  quoc_gia:          string;
+  quoc_tich:         string;
+  loai_giay_to:      string;
+  ten_giay_to:       string | null;
+  so_giay_to:        string;
+  so_dien_thoai:     string | null;
+  loai_cu_tru:       string | null;
+  tinh_tp:           string | null;
+  quan_huyen:        string | null;
+  phuong_xa:         string | null;
+  dia_chi_chi_tiet:  string | null;
+  tu_ngay:           string;
+  den_ngay:          string;
+  ly_do_luu_tru:     string;
+  ten_phong:         string;
+  booking_id:        string;
+  check_in:          string;
+  check_out:         string;
+  is_primary:        boolean;
+}
+
+// Housekeeping
+type HousekeepingStatus = 'clean' | 'dirty' | 'cleaning' | 'out_of_order'
+
+// Rooms (đầy đủ với housekeeping)
+interface Room {
+  id:                  string;
+  name:                string;
+  type:                string;
+  capacity:            number;
+  base_price:          number;
+  floor:               number;
+  is_active:           boolean;
+  housekeeping_status: HousekeepingStatus;
+  housekeeping_note:   string | null;
+  created_at:          string;
+  updated_at:          string;
 }
 ```
 
@@ -531,12 +551,15 @@ interface DK14Row {
 | # | Quyết định |
 |---|---|
 | 1 | Không có trang Register công khai — chỉ Owner tạo tài khoản Staff |
-| 2 | Sau Check-out → phòng về "Trống" ngay |
+| 2 | Sau Check-out → phòng về "Cần dọn" (dirty) tự động qua trigger |
 | 3 | CCCD không bắt buộc khi tạo Booking, BẮT BUỘC khi Check-in |
 | 4 | Check-out khi còn nợ: CHO PHÉP, phải có checkbox xác nhận (`p_confirm_debt: true`) |
 | 5 | Phụ thu thẻ 4%: method = card → +4% surcharge, truyền `p_first_booking_id` |
 | 6 | Giờ check-in mặc định: 14:00 — check-out: 12:00 |
-| 7 | Không bypass RLS — không dùng service_role key trong frontend |
+| 7 | Không bypass RLS — không dùng service_role key trong frontend code |
+| 8 | `ocr-id-scanner` Edge Function: GIỮ NGUYÊN nhưng không gọi từ UI |
+| 9 | `bot_leads`: No UI — managed by Telegram bot only |
+| 10 | Finance view: dùng `finance_monthly_revenue`, KHÔNG dùng `monthly_revenue` cũ |
 
 ---
 
@@ -544,9 +567,10 @@ interface DK14Row {
 
 - ❌ Không tự thay đổi schema database khi chưa có instruction từ Claude
 - ❌ Không INSERT/UPDATE trực tiếp vào `bookings`, `payment_history`, `booking_guests`
-- ❌ Không mutate vào views (`dashboard_today`, `room_calendar`, `dk14_luu_tru`, `monthly_revenue`)
 - ❌ Không tạo Edge Function mới khi chưa kiểm tra 8 functions hiện có
 - ❌ Không dùng `any` trong TypeScript
 - ❌ Không hardcode Supabase URL/key
 - ❌ Không bypass RLS bằng service_role key trong frontend code
-- ❌ Không tự tính `room_subtotal` hay `grand_total` ở frontend — đọc từ DB
+- ❌ Không dùng RPC legacy: `checkout_booking`, `process_checkout`
+- ❌ Không dùng field `price` trong bookings — phải là `price_per_night`
+- ❌ Không tính `room_subtotal` hay `grand_total` ở frontend — đọc từ DB

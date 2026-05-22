@@ -1,13 +1,8 @@
 # Hello Dalat PMS — Repo Structure & Roadmap
-> v3.2 — legacy path annotated 2026-05-21  
+> v3 — gap analysis & confirmed 2026-05-21  
 > Kiến trúc: Feature-based colocation  
 > Stack: React 18 + TS + Vite + Ant Design 5 + Supabase  
 > Deploy: Vercel → https://hello-dalat-hostel-pms.vercel.app
-
-> **Quy ước annotation:**
-> - `✅ done` — đã build, đang chạy production
-> - `[legacy path: ...]` — file đã tồn tại ở path khác, KHÔNG move/rename — giữ nguyên đến khi có lý do refactor rõ ràng
-> - *(no annotation)* — chưa build, dùng path v3 này khi tạo mới
 
 ---
 
@@ -27,38 +22,25 @@ hello-dalat-pms/
 │   ├── App.tsx                          ← Router root + AuthGuard
 │   ├── vite-env.d.ts
 │   │
-│   ├── lib/                             ← Target path cho code mới
+│   ├── lib/
 │   │   ├── supabase.ts                  ← Supabase client (import.meta.env)
-│   │   │                                   [legacy path: src/api/supabase.ts] ✅ done — KHÔNG move
 │   │   └── queryClient.ts               ← TanStack Query client config
 │   │
 │   ├── types/
 │   │   ├── supabase.ts                  ← Generated types từ Supabase CLI
-│   │   │                                   [legacy path: src/types/database.ts] ✅ done — KHÔNG move
 │   │   └── global.ts                    ← Shared enums, common types
-│   │                                       [legacy path: src/types/index.ts barrel + calendar.ts + checkin.ts + dashboard.ts]
-│   │                                       ✅ done — KHÔNG move, dùng barrel import như cũ
 │   │
 │   ├── store/
-│   │   └── authStore.ts                 ← Zustand: user session + role ✅ done
+│   │   └── authStore.ts                 ← Zustand: user session + role
 │   │
 │   ├── router/
 │   │   ├── index.tsx                    ← Route definitions
-│   │   │                                   [legacy path: src/app/router.tsx] ✅ done — KHÔNG move
 │   │   ├── AuthGuard.tsx                ← Redirect nếu chưa login
-│   │   │                                   [legacy path: src/shared/components/AuthGuard.tsx] ✅ done — KHÔNG move
 │   │   └── RoleGuard.tsx                ← Chặn staff vào trang owner-only
 │   │                                       (dùng RPC current_user_role)
 │   │
-│   ├── utils/                           ← Target path cho utilities mới (thay src/shared/utils/)
-│   │   └── normalizeError.ts            [legacy path: src/shared/utils/normalizeError.ts] ✅ done — KHÔNG move
-│   │
-│   ├── hooks/                           ← Target path cho shared hooks mới (thay src/shared/hooks/)
-│   │   └── useAppFeedback.ts            [legacy path: src/shared/hooks/useAppFeedback.ts] ✅ done — KHÔNG move
-│   │
 │   ├── components/                      ← Shared UI (không thuộc feature nào)
 │   │   ├── AppLayout.tsx                ← Ant Design Layout + Sidebar
-│   │   │                                   [legacy path: src/app/layouts/MainLayout.tsx] ✅ done — KHÔNG move
 │   │   ├── PageHeader.tsx
 │   │   ├── StatusBadge.tsx              ← Badge cho booking_status
 │   │   ├── MoneyText.tsx                ← Format VND
@@ -86,10 +68,8 @@ hello-dalat-pms/
 │       │   │   └── QuickCheckoutModal.tsx ✅ done — chỉ ở đây, không ở checkout
 │       │   ├── hooks/
 │       │   │   └── useDashboardToday.ts ← Query view dashboard_today
-│       │   │                               [legacy path: features/dashboard/hooks/useDashboard.ts] ✅ done — KHÔNG move
 │       │   └── types/
 │       │       └── dashboard.types.ts   ← DashboardRoom interface
-│       │                                   [legacy path: src/types/dashboard.ts] ✅ done — KHÔNG move
 │       │
 │       ├── calendar/
 │       │   ├── pages/
@@ -108,7 +88,6 @@ hello-dalat-pms/
 │       │   │   └── useOtaFeed.ts        ← Query ota_calendar_feed
 │       │   └── types/
 │       │       └── calendar.types.ts    ← RoomRow phải có housekeeping_status + housekeeping_note
-│       │                                   [legacy path: src/types/calendar.ts] ✅ done — KHÔNG move
 │       │
 │       ├── bookings/
 │       │   ├── pages/
@@ -142,19 +121,15 @@ hello-dalat-pms/
 │       │   │   └── parseCheckinExcel.ts ✅ done — parse Excel multi-room
 │       │   └── types/
 │       │       └── checkin.types.ts     ← CheckInCustomerPayload (không có OcrResult)
-│       │                                   [legacy path: src/types/checkin.ts] ✅ done — KHÔNG move
 │       │
 │       ├── checkout/
 │       │   ├── components/
-│       │   │   └── CheckoutModal.tsx    ✅ done — Folio 3-step (folio → payment → done)
-│       │   │      Lưu ý: QuickCheckoutModal nằm ở features/dashboard/, KHÔNG ở đây
+│       │   │   └── CheckoutModal.tsx    ← Folio đầy đủ (debt warning + confirm)
+│       │   │   -- Lưu ý: QuickCheckoutModal nằm ở features/dashboard/
 │       │   ├── hooks/
-│       │   │   ├── useCheckout.ts       ← RPC checkout_booking_txn(p_booking_id)
-│       │   │   │                           ⚠️ Signature thực tế: chỉ có p_booking_id — KHÔNG có p_confirm_debt
-│       │   │   │                           [legacy path: features/checkout/hooks/useCheckoutBooking.ts] ✅ done
+│       │   │   ├── useCheckout.ts       ← RPC checkout_booking_txn
+│       │   │   │                           (có debt warning, p_confirm_debt)
 │       │   │   └── useGroupCheckout.ts  ← RPC checkout_group_txn
-│       │   │                               (p_group_id, p_booking_ids[], p_payment_amount,
-│       │   │                                p_payment_method, p_note)
 │       │   └── types/
 │       │       └── checkout.types.ts
 │       │
@@ -165,9 +140,7 @@ hello-dalat-pms/
 │       │   │   └── CardSurchargeNote.tsx ← Note +4% nếu chọn card
 │       │   ├── hooks/
 │       │   │   └── useRecordPayment.ts  ← RPC record_payment_txn
-│       │   │                               (p_first_booking_id bắt buộc nếu method = card)
-│       │   │                               [legacy path: features/checkout/hooks/useCheckoutBooking.ts
-│       │   │                                — cùng file với useCheckoutBooking] ✅ done
+│       │   │                               (p_first_booking_id bắt buộc nếu card)
 │       │   └── types/
 │       │       └── payment.types.ts
 │       │
@@ -179,7 +152,7 @@ hello-dalat-pms/
 │       │   │   └── DK14Table.tsx        ← View dk14_luu_tru → xuất báo cáo
 │       │   ├── hooks/
 │       │   │   ├── useGuestsList.ts
-│       │   │   └── useDK14.ts           [legacy path: features/compliance/hooks/useDK14.ts] ✅ done
+│       │   │   └── useDK14.ts
 │       │   └── types/
 │       │       └── guest.types.ts       ← DK14Row interface (19 cột)
 │       │
@@ -191,12 +164,10 @@ hello-dalat-pms/
 │       │   │   └── RoomSettingsForm.tsx ← Sửa base_price, capacity
 │       │   ├── hooks/
 │       │   │   ├── useRooms.ts          ← SELECT bao gồm housekeeping_status + housekeeping_note
-│       │   │   │                           [legacy path: features/bookings/hooks/useRooms.ts] ✅ done
-│       │   │   │                           Khi build RoomsPage: import từ legacy path, KHÔNG tạo duplicate
-│       │   │   ├── useRoomBlocks.ts     [legacy path: features/calendar/hooks/useRoomBlocks.ts] ✅ done
-│       │   │   └── useHousekeeping.ts   ← UPDATE rooms.housekeeping_status (mutation) — chưa build
+│       │   │   ├── useRoomBlocks.ts
+│       │   │   └── useHousekeeping.ts   ← UPDATE rooms.housekeeping_status (mutation)
 │       │   └── types/
-│       │       └── room.types.ts        ← HousekeepingStatus type + Room interface đầy đủ — chưa build
+│       │       └── room.types.ts        ← HousekeepingStatus type + Room interface đầy đủ
 │       │
 │       ├── finance/
 │       │   ├── pages/
@@ -209,7 +180,7 @@ hello-dalat-pms/
 │       │   ├── hooks/
 │       │   │   ├── useFinanceMonthlyRevenue.ts ← Query finance_monthly_revenue
 │       │   │   │                                  (KHÔNG dùng monthly_revenue cũ)
-│       │   │   ├── useExpenses.ts       ✅ done
+│       │   │   ├── useExpenses.ts
 │       │   │   └── useManualRevenue.ts  ← CRUD revenue_manual_log
 │       │   └── types/
 │       │       └── finance.types.ts
@@ -238,15 +209,15 @@ hello-dalat-pms/
 │       │
 │       └── settings/                    ← Owner only
 │           ├── pages/
-│           │   └── SettingsPage.tsx     [legacy path: features/settings/pages/SettingsPage.tsx] ✅ done
+│           │   └── SettingsPage.tsx
 │           ├── components/
 │           │   ├── UserManagement.tsx   ← Tạo tài khoản staff (không có public register)
 │           │   ├── PricingRulesTable.tsx ← CRUD pricing_rules
 │           │   └── ServicesTable.tsx    ← CRUD services catalog
 │           └── hooks/
 │               ├── usePricingRules.ts
-│               └── useServices.ts       [legacy path: features/bookings/hooks/useServices.ts] ✅ done
-
+│               └── useServices.ts
+│
 ├── supabase/
 │   ├── functions/                       ← 8 Edge Functions — KHÔNG tạo thêm khi chưa check
 │   │   ├── checkin-processor/
@@ -271,19 +242,19 @@ hello-dalat-pms/
 
 ## PHẦN 2 — RPC REFERENCE (active only)
 
-> Legacy đã loại: `checkout_booking`, `process_checkout`, `create_booking`, `check_booking_conflict`  
+> Legacy đã loại: `checkout_booking`, `process_checkout`  
 > Dùng đúng RPC — không gọi legacy
 
-| RPC | Dùng ở hook | Signature / Ghi chú |
+| RPC | Dùng ở hook | Ghi chú |
 |---|---|---|
 | `create_group_booking_txn` | `useCreateBooking` | `p_bookings[].price_per_night` — KHÔNG phải `price` |
 | `update_booking_txn` | `useUpdateBooking`, `useCancelBooking` | `p_price_per_night`, `p_cancel: true` để huỷ |
 | `process_check_in_txn` | `useCheckIn` | Upsert customers + link booking_guests |
-| `checkout_booking_txn` | `useCheckout` | `(p_booking_id uuid)` — ⚠️ KHÔNG có `p_confirm_debt` |
-| `checkout_group_txn` | `useGroupCheckout` | `(p_group_id, p_booking_ids[], p_payment_amount, p_payment_method, p_note)` |
+| `checkout_booking_txn` | `useCheckout` | Có debt warning, trả `warning` field |
+| `checkout_group_txn` | `useGroupCheckout` | Checkout nhiều booking + payment cuối |
 | `record_payment_txn` | `useRecordPayment` | `p_first_booking_id` bắt buộc nếu `method = card` |
 | `check_room_availability` | `useRoomAvailability` | Trả `conflict_type` nếu bị chặn |
-| `get_suggested_price` | inline trong NewBookingPage | Trả number (VND) — 1 rule ưu tiên cao nhất |
+| `get_suggested_price` | inline trong NewBookingPage | Trả number (VND) |
 | `create_document_log` | `useCreateDocument` | |
 | `current_user_role` | `RoleGuard` | Phân quyền owner/staff |
 
@@ -338,7 +309,7 @@ hello-dalat-pms/
 
 | # | Feature | File chính | Ghi chú |
 |---|---|---|---|
-| 3.1 | Check-out flow — folio + debt confirm | `features/checkout/` | RPC `checkout_booking_txn(p_booking_id)` đã có trong DB |
+| 3.1 | Check-out flow — folio + debt confirm | `features/checkout/` | RPC `checkout_booking_txn` đã có |
 | 3.2 | Payment recording — modal + card surcharge | `features/payments/` | RPC `record_payment_txn` đã có |
 | 3.3 | Guests page + DK14 table | `features/guests/` | View `dk14_luu_tru` đã có |
 | 3.4 | Housekeeping status — badge trên Tape Chart | `features/rooms/` + `features/calendar/` | Migration ĐÃ chạy production (2026-05-21). Enum: `housekeeping_status` (clean\|dirty\|cleaning\|out_of_order). Trigger tự flip `dirty` khi checkout. UI: `HousekeepingBadge` ghép vào `CalendarTimeline` (calendar-room-cell). Còn lại: type `RoomRow`, `useRooms`, `useRoomCalendar`, `CalendarTimeline.tsx` |
@@ -371,8 +342,6 @@ hello-dalat-pms/
 ---
 
 ## PHẦN 5 — THỨ TỰ BUILD (repo mới)
-
-> Dành cho trường hợp build lại từ đầu. Với repo hiện tại: theo legacy path ở Phần 1.
 
 ```
 Chunk 1 — Nền
