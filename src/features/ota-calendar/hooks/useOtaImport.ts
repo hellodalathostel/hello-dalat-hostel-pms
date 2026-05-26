@@ -1,7 +1,7 @@
 // src/features/ota-calendar/hooks/useOtaImport.ts
 // Hook trigger manual sync "Sync Now" từ UI OTA Calendar tab
 
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { message } from 'antd'
 import { supabase } from '@/lib/supabase'
 
@@ -23,6 +23,8 @@ interface SyncResponse {
 }
 
 export function useOtaImport() {
+  const qc = useQueryClient()
+
   return useMutation<SyncResponse, Error>({
     mutationFn: async () => {
       const { data: { session } } = await supabase.auth.getSession()
@@ -51,6 +53,8 @@ export function useOtaImport() {
     },
 
     onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['ota-events'] })
+      qc.invalidateQueries({ queryKey: ['ota-rooms'] })
       if (data.totalConflicts > 0) {
         message.warning(
           `Sync xong — ${data.totalUpserted} events, ⚠️ ${data.totalConflicts} conflict cần xử lý`
