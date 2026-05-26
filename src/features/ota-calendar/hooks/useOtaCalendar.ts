@@ -3,7 +3,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { message } from 'antd'
-import { supabase } from '@/lib/supabase'
+import { supabase } from '@/api/supabase'
 import type { OtaCalendarEvent, RoomWithFeed } from '../types'
 
 // ─── Query keys ──────────────────────────────────────────────────────────────
