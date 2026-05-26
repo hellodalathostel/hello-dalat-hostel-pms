@@ -24,11 +24,12 @@ import {
   PhoneOutlined,
   UserOutlined,
 } from '@ant-design/icons'
+import { useQueryClient } from '@tanstack/react-query'
 import { useBookingDetail } from '@/hooks/useBookingDetail'
 import type { BookingDetailItem } from '@/hooks/useBookingDetail'
 // BookingDetailItem được export từ useBookingDetail
 import { EditBookingModal } from '@/components/EditBookingModal'
-import { CheckInModal } from '@/components/checkin/CheckInModal'
+import { CheckinImportModal } from '@/features/checkin/components/CheckinImportModal'
 import { CheckoutModal, type CheckoutTarget } from '@/components/CheckoutModal'
 
 // Map trạng thái sang màu Ant Design Tag
@@ -60,9 +61,10 @@ interface Props {
 
 // Drawer chi tiết group booking: thông tin khách, danh sách phòng, thanh toán.
 export default function BookingDetailDrawer({ groupId, open, onClose, onEditBooking }: Props) {
+  const queryClient = useQueryClient()
   const { data, isLoading } = useBookingDetail(groupId)
   const [editingBooking, setEditingBooking] = useState<BookingDetailItem | null>(null)
-  const [checkinBookingId, setCheckinBookingId] = useState<string | null>(null)
+  const [checkinImportOpen, setCheckinImportOpen] = useState(false)
   const [checkoutTarget, setCheckoutTarget] = useState<CheckoutTarget | null>(null)
 
   // Tổng grand_total tất cả bookings chưa cancelled
@@ -196,6 +198,7 @@ export default function BookingDetailDrawer({ groupId, open, onClose, onEditBook
                       setEditingBooking(bookingItem)
                     }}
                     onCheckin={() => setCheckinBookingId(booking.id)}
+                    onCheckin={() => setCheckinImportOpen(true)}
                     onCheckout={() => {
                       if (!data) {
                         return
@@ -253,13 +256,17 @@ export default function BookingDetailDrawer({ groupId, open, onClose, onEditBook
         />
       )}
 
-      {checkinBookingId && (
-        <CheckInModal
-          isOpen={Boolean(checkinBookingId)}
-          onClose={() => setCheckinBookingId(null)}
-          bookingId={checkinBookingId}
-        />
-      )}
+      <CheckinImportModal
+        open={checkinImportOpen}
+        onClose={() => setCheckinImportOpen(false)}
+        onSuccess={() => {
+          setCheckinImportOpen(false)
+
+          if (groupId) {
+            void queryClient.invalidateQueries({ queryKey: ['booking-detail', groupId] })
+          }
+        }}
+      />
 
       <CheckoutModal target={checkoutTarget} onClose={() => setCheckoutTarget(null)} />
     </>

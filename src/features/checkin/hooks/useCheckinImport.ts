@@ -1,131 +1,208 @@
 import { useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/api/supabase'
-import type { CheckinGuestPayload } from '@/features/checkin/hooks/useCheckIn'
-import { groupByRoomAndDate, parseCheckinExcel } from '@/shared/utils/parseCheckinExcel'
-import type { ImportGroup, ImportResult } from '@/types/checkin'
-import { mapExcelIdTypeToDatabaseFormat } from '@/types/checkin'
+import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
+import { parseCheckinExcel, type GuestImportRow } from '../utils/parseCheckinExcel'
 
-function toCheckinGuestPayload(row: ImportGroup['guests'][number]): CheckinGuestPayload {
+type ImportStatus = 'success' | 'no_booking' | 'error'
+
+export interface ImportRowResult extends GuestImportRow {
+  status: ImportStatus
+  message: string
+}
+
+interface CheckinImportGuestPayload {
+  full_name: string
+  date_of_birth?: string
+  gender?: string
+  document_type: 'CCCD' | 'Hộ chiếu' | 'Giấy tờ khác'
+  document_number: string
+  nationality: string
+  residency_type?: 'Thường trú' | 'Tạm trú' | 'Địa chỉ khác'
+  province?: string
+  ward?: string
+  address_detail?: string
+  country: string
+  is_primary: boolean
+}
+
+function getGroupKey(row: GuestImportRow): string {
+  return `${row.roomId}__${row.checkInDate}`
+}
+
+function getRowValidationMessage(row: GuestImportRow): string | null {
+  if (!row.fullName) return 'Thiếu họ tên khách.'
+  if (!row.roomId) return 'Thiếu số phòng.'
+  if (!row.checkInDate) return 'Ngày đến không hợp lệ.'
+  if (!row.documentType) return 'Thiếu loại giấy tờ.'
+  if (!row.documentNumber) return 'Thiếu số giấy tờ.'
+
+  return null
+}
+
+function toGuestPayload(row: GuestImportRow, isPrimary: boolean): CheckinImportGuestPayload {
   return {
-    full_name: row.full_name,
-    document_type: mapExcelIdTypeToDatabaseFormat(row.id_type), // Mapping từ Excel -> DB format
-    document_number: row.id_number,
-    nationality: row.nationality,
-    date_of_birth: row.date_of_birth || undefined,
-    gender: row.gender === 'male' ? 'Nam' : row.gender === 'female' ? 'Nữ' : undefined,
-    address_detail: row.address || undefined,
+    full_name: row.fullName,
+    date_of_birth: row.dateOfBirth ?? undefined,
+    gender: row.gender ?? undefined,
+    document_type: row.documentType ?? 'Giấy tờ khác',
+    document_number: row.documentNumber ?? '',
+    nationality: row.nationality ?? row.country,
+    residency_type: row.residencyType ?? undefined,
+    province: row.province ?? undefined,
+    ward: row.ward ?? undefined,
+    address_detail: row.addressDetail ?? undefined,
+    country: row.country,
+    is_primary: isPrimary,
   }
 }
 
 export function useCheckinImport() {
-  const [importing, setImporting] = useState(false)
-  const [preview, setPreview] = useState<ImportGroup[]>([])
-  const [results, setResults] = useState<ImportResult[]>([])
+  const queryClient = useQueryClient()
+  const { message } = useAppFeedback()
+  const [parsing, setParsing] = useState(false)
+  const [processing, setProcessing] = useState(false)
+  const [rows, setRows] = useState<GuestImportRow[]>([])
+  const [results, setResults] = useState<ImportRowResult[]>([])
 
-  // Bước 1: Parse file + match booking -> hiện preview
-  async function loadPreview(file: File): Promise<void> {
-    const rows = await parseCheckinExcel(file)
-    const groups = groupByRoomAndDate(rows)
-    const result: ImportGroup[] = []
-
-    for (const [key, guests] of groups) {
-      const [room_number, check_in_date] = key.split('__')
-
-      // Tìm room theo mã phòng trong hệ thống
-      const { data: room } = await supabase
-        .from('rooms')
-        .select('id')
-        .eq('id', room_number)
-        .single()
-
-      if (!room) {
-        result.push({
-          room_number,
-          check_in_date,
-          booking_id: null,
-          booking_status: null,
-          guests,
-          error: `Không tìm thấy phòng ${room_number}`,
-        })
-        continue
-      }
-
-      // Tìm booking cùng phòng + ngày check-in
-      const { data: booking } = await supabase
-        .from('bookings')
-        .select('id, status')
-        .eq('room_id', room.id)
-        .eq('check_in', check_in_date)
-        .in('status', ['booked', 'checked-in'])
-        .limit(1)
-        .single()
-
-      result.push({
-        room_number,
-        check_in_date,
-        booking_id: booking?.id ?? null,
-        booking_status: booking?.status ?? null,
-        guests,
-        error: !booking
-          ? `Không tìm thấy booking phòng ${room_number} ngày ${check_in_date}`
-          : undefined,
-      })
-    }
-
-    setPreview(result)
-  }
-
-  // Bước 2: Confirm -> thực hiện import
-  async function confirmImport(): Promise<void> {
-    setImporting(true)
-    const importResults: ImportResult[] = []
+  async function parseFile(file: File): Promise<GuestImportRow[]> {
+    setParsing(true)
 
     try {
-      for (const group of preview) {
-        if (!group.booking_id || group.error) {
-          importResults.push({
-            room_number: group.room_number,
-            success: false,
-            guests_upserted: 0,
-            error: group.error ?? 'Không có booking hợp lệ',
+      const parsedRows = await parseCheckinExcel(file)
+      setRows(parsedRows)
+      setResults([])
+      return parsedRows
+    } catch (error) {
+      setRows([])
+      setResults([])
+      throw error
+    } finally {
+      setParsing(false)
+    }
+  }
+
+  async function runImport(sourceRows: GuestImportRow[]): Promise<ImportRowResult[]> {
+    setProcessing(true)
+
+    const nextResults: ImportRowResult[] = []
+    const validGroups = new Map<string, GuestImportRow[]>()
+
+    try {
+      for (const row of sourceRows) {
+        const validationMessage = getRowValidationMessage(row)
+
+        if (validationMessage) {
+          nextResults.push({
+            ...row,
+            status: 'error',
+            message: validationMessage,
+          })
+          continue
+        }
+
+        const groupKey = getGroupKey(row)
+        const currentRows = validGroups.get(groupKey) ?? []
+        currentRows.push(row)
+        validGroups.set(groupKey, currentRows)
+      }
+
+      for (const [groupKey, groupRows] of validGroups.entries()) {
+        const [roomId, checkInDate] = groupKey.split('__')
+        const { data: booking, error: bookingError } = await supabase
+          .from('bookings')
+          .select('id, status')
+          .eq('room_id', roomId)
+          .eq('check_in', checkInDate)
+          .in('status', ['booked', 'checked-in'])
+          .order('id', { ascending: true })
+          .limit(1)
+          .maybeSingle()
+
+        if (bookingError) {
+          groupRows.forEach((row) => {
+            nextResults.push({
+              ...row,
+              status: 'error',
+              message: bookingError.message,
+            })
+          })
+          continue
+        }
+
+        if (!booking) {
+          groupRows.forEach((row) => {
+            nextResults.push({
+              ...row,
+              status: 'no_booking',
+              message: `Không tìm thấy booking phòng ${roomId} ngày ${checkInDate}.`,
+            })
           })
           continue
         }
 
         try {
           const { error } = await supabase.rpc('checkin_booking_txn', {
-            p_booking_id: group.booking_id,
-            p_guests: group.guests.map(toCheckinGuestPayload),
+            p_booking_id: booking.id,
+            p_guests: groupRows.map((row, index) => toGuestPayload(row, index === 0)),
           })
 
           if (error) {
-            throw error
+            throw new Error(error.message)
           }
 
-          importResults.push({
-            room_number: group.room_number,
-            success: true,
-            guests_upserted: group.guests.length,
+          groupRows.forEach((row) => {
+            nextResults.push({
+              ...row,
+              status: 'success',
+              message: '',
+            })
           })
-        } catch (err: unknown) {
-          importResults.push({
-            room_number: group.room_number,
-            success: false,
-            guests_upserted: 0,
-            error: err instanceof Error ? err.message : 'Lỗi không xác định',
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Lỗi không xác định'
+          groupRows.forEach((row) => {
+            nextResults.push({
+              ...row,
+              status: 'error',
+              message: errorMessage,
+            })
           })
         }
       }
+
+      nextResults.sort((leftRow, rightRow) => leftRow.rowIndex - rightRow.rowIndex)
+      setResults(nextResults)
+
+      if (nextResults.some((row) => row.status === 'success')) {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['dashboard', 'today'] }),
+          queryClient.invalidateQueries({ queryKey: ['bookings'] }),
+          queryClient.invalidateQueries({ queryKey: ['room-calendar'] }),
+        ])
+      }
+
+      return nextResults
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Import thất bại'
+      message.error(errorMessage)
+      throw error
     } finally {
-      setResults(importResults)
-      setImporting(false)
+      setProcessing(false)
     }
   }
 
   function reset() {
-    setPreview([])
+    setRows([])
     setResults([])
   }
 
-  return { importing, preview, results, loadPreview, confirmImport, reset }
+  return {
+    parsing,
+    processing,
+    rows,
+    results,
+    parseFile,
+    runImport,
+    reset,
+  }
 }

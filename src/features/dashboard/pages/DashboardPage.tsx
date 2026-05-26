@@ -4,7 +4,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { Button, Col, Flex, Row, Spin, Typography } from 'antd'
 import { ReloadOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
-import { CheckInModal } from '@/features/checkin/components/CheckInModal'
+import { CheckinImportModal } from '@/features/checkin/components/CheckinImportModal'
 import { QuickCheckoutModal, type CheckoutTarget } from '@/features/checkout/components/QuickCheckoutModal'
 import { RoomCard } from '@/features/dashboard/components/RoomCard'
 import { PaymentModal } from '@/features/payment/components/PaymentModal'
@@ -45,7 +45,7 @@ export default function Dashboard(): React.JSX.Element {
     }, { ...initialStats })
   }, [rooms])
 
-  const handleCloseCheckInModal = useCallback(() => {
+  const handleCloseImportModal = useCallback(() => {
     setIsCheckInVisible(false)
     if (!checkoutTarget && !isPaymentVisible) {
       setSelectedRoom(null)
@@ -168,10 +168,12 @@ export default function Dashboard(): React.JSX.Element {
       </Spin>
 
       {selectedRoom ? (
-        <CheckInModal
-          isOpen={isCheckInVisible}
-          bookingId={selectedRoom.booking_id ?? ''}
-          onClose={handleCloseCheckInModal}
+        <CheckinImportModal
+          open={isCheckInVisible}
+          onClose={handleCloseImportModal}
+          onSuccess={() => {
+            void queryClient.invalidateQueries({ queryKey: ['bookings'] })
+          }}
         />
       ) : null}
 

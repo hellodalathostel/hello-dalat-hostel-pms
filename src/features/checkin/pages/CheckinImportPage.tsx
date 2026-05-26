@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import {
-  Alert,
   Button,
   Card,
   Divider,
@@ -12,14 +11,14 @@ import {
 } from 'antd';
 import { CheckCircleOutlined, CloseCircleOutlined, UploadOutlined } from '@ant-design/icons';
 import type { UploadFile } from 'antd';
-import { useCheckinImport } from '@/features/checkin/hooks/useCheckinImport';
+import { useCheckinImport, type ImportRowResult } from '@/features/checkin/hooks/useCheckinImport';
 import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
-import type { ImportGroup } from '@/types/checkin';
+import type { GuestImportRow } from '@/features/checkin/utils/parseCheckinExcel';
 
 const { Title, Text } = Typography;
 
 export default function CheckinImportPage() {
-  const { importing, preview, results, loadPreview, confirmImport, reset } = useCheckinImport();
+  const { parsing, processing, rows, results, parseFile, runImport, reset } = useCheckinImport();
   const { message } = useAppFeedback()
   const [loading, setLoading] = useState(false);
   const [fileList, setFileList] = useState<UploadFile[]>([]);
@@ -27,7 +26,7 @@ export default function CheckinImportPage() {
   async function handleFile(file: File) {
     setLoading(true);
     try {
-      await loadPreview(file);
+      await parseFile(file);
     } catch {
       message.error('Không đọc được file. Kiểm tra lại định dạng Excel.');
     } finally {
@@ -38,75 +37,66 @@ export default function CheckinImportPage() {
   }
 
   async function handleConfirm() {
-    await confirmImport();
+    await runImport(rows);
     message.success('Import hoàn tất');
   }
 
-  const hasErrors = preview.some((g) => g.error);
-  const validCount = preview.filter((g) => !g.error).length;
+  const successCount = results.filter((row) => row.status === 'success').length;
+  const noBookingCount = results.filter((row) => row.status === 'no_booking').length;
+  const errorCount = results.filter((row) => row.status === 'error').length;
 
   const previewColumns = [
     {
+      title: '#',
+      dataIndex: 'rowIndex',
+      width: 60,
+    },
+    {
+      title: 'Họ tên',
+      dataIndex: 'fullName',
+    },
+    {
       title: 'Phòng',
-      dataIndex: 'room_number',
+      dataIndex: 'roomId',
       width: 80,
     },
     {
-      title: 'Check-in',
-      dataIndex: 'check_in_date',
+      title: 'Ngày đến',
+      dataIndex: 'checkInDate',
       width: 120,
     },
     {
-      title: 'Booking',
-      dataIndex: 'booking_id',
-      width: 120,
-      render: (_id: string | null, row: ImportGroup) =>
-        row.error ? <Tag color="red">Không tìm thấy</Tag> : <Tag color="green">Match</Tag>,
-    },
-    {
-      title: 'Khách',
-      dataIndex: 'guests',
-      render: (guests: ImportGroup['guests']) => (
-        <Space direction="vertical" size={0}>
-          {guests.map((g, i) => (
-            <Text key={`${g.id_number}-${i}`} style={{ fontSize: 12 }}>
-              {i + 1}. {g.full_name} ({g.id_number})
-            </Text>
-          ))}
-        </Space>
-      ),
-    },
-    {
-      title: 'Trạng thái',
-      dataIndex: 'error',
-      width: 260,
-      render: (err: string | undefined) =>
-        err ? (
-          <Text type="danger" style={{ fontSize: 12 }}>
-            {err}
-          </Text>
-        ) : (
-          <Text type="success" style={{ fontSize: 12 }}>
-            Sẵn sàng import
-          </Text>
-        ),
+      title: 'Số giấy tờ',
+      dataIndex: 'documentNumber',
+      width: 180,
     },
   ];
 
   const resultColumns = [
     {
+      title: '#',
+      dataIndex: 'rowIndex',
+      width: 60,
+    },
+    {
+      title: 'Họ tên',
+      dataIndex: 'fullName',
+    },
+    {
       title: 'Phòng',
-      dataIndex: 'room_number',
+      dataIndex: 'roomId',
       width: 80,
     },
     {
       title: 'Kết quả',
-      dataIndex: 'success',
-      render: (ok: boolean) =>
-        ok ? (
+      dataIndex: 'status',
+      render: (status: ImportRowResult['status']) =>
+        status === 'success' ? (
           <Tag icon={<CheckCircleOutlined />} color="success">
             Thành công
           </Tag>
+        ) : status === 'no_booking' ? (
+          <Tag color="warning">Chưa có booking</Tag>
         ) : (
           <Tag icon={<CloseCircleOutlined />} color="error">
             Thất bại
@@ -114,14 +104,14 @@ export default function CheckinImportPage() {
         ),
     },
     {
-      title: 'Khách đã lưu',
-      dataIndex: 'guests_upserted',
+      title: 'Ngày đến',
+      dataIndex: 'checkInDate',
       width: 120,
     },
     {
-      title: 'Lỗi',
-      dataIndex: 'error',
-      render: (e?: string) => (e ? <Text type="danger">{e}</Text> : '—'),
+      title: 'Ghi chú',
+      dataIndex: 'message',
+      render: (value?: string) => (value ? <Text type="danger">{value}</Text> : '—'),
     },
   ];
 
@@ -150,57 +140,57 @@ export default function CheckinImportPage() {
               reset();
             }}
           >
-            <Button icon={<UploadOutlined />} loading={loading}>
+            <Button icon={<UploadOutlined />} loading={loading || parsing}>
               Chọn file khai báo lưu trú
             </Button>
           </Upload>
         </Card>
       )}
 
-      {preview.length > 0 && results.length === 0 && (
+      {rows.length > 0 && results.length === 0 && (
         <Card
-          title={`Bước 2 — Xác nhận (${validCount}/${preview.length} nhóm hợp lệ)`}
+          title={`Bước 2 — Xác nhận (${rows.length} khách)`}
           style={{ marginBottom: 16 }}
           extra={
             <Space>
               <Button onClick={reset}>Chọn lại</Button>
               <Button
                 type="primary"
-                loading={importing}
-                disabled={validCount === 0}
+                loading={processing}
+                disabled={rows.length === 0}
                 onClick={() => {
                   void handleConfirm();
                 }}
               >
-                Xác nhận Import ({validCount} nhóm)
+                Xác nhận Import ({rows.length} khách)
               </Button>
             </Space>
           }
         >
-          {hasErrors && (
-            <Alert
-              type="warning"
-              message="Một số nhóm không match được booking. Chỉ các nhóm hợp lệ mới được import."
-              style={{ marginBottom: 12 }}
-            />
-          )}
           <Table
-            dataSource={preview}
+            dataSource={rows}
             columns={previewColumns}
-            rowKey={(r) => `${r.room_number}_${r.check_in_date}`}
+            rowKey={(row: GuestImportRow) => `${row.fileType}_${row.rowIndex}`}
             pagination={false}
             size="small"
-            rowClassName={(r) => (r.error ? 'ant-table-row-disabled' : '')}
           />
         </Card>
       )}
 
       {results.length > 0 && (
-        <Card title="Kết quả Import" extra={<Button onClick={reset}>Import thêm</Button>}>
+        <Card
+          title="Kết quả Import"
+          extra={<Button onClick={reset}>Import thêm</Button>}
+        >
+          <Space style={{ marginBottom: 12 }}>
+            <Tag color="success">{successCount} thành công</Tag>
+            {noBookingCount > 0 && <Tag color="warning">{noBookingCount} chưa có booking</Tag>}
+            {errorCount > 0 && <Tag color="error">{errorCount} lỗi</Tag>}
+          </Space>
           <Table
             dataSource={results}
             columns={resultColumns}
-            rowKey="room_number"
+            rowKey="rowIndex"
             pagination={false}
             size="small"
           />

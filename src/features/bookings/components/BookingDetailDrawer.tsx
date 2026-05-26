@@ -20,15 +20,17 @@ import {
   CreditCardOutlined,
   EditOutlined,
   HistoryOutlined,
+  LoginOutlined,
   PhoneOutlined,
   UserOutlined,
 } from '@ant-design/icons'
+import { useQueryClient } from '@tanstack/react-query'
 import { useBookingDetail } from '@/features/bookings/hooks/useBookingDetail'
 import type { BookingDetailItem } from '@/features/bookings/hooks/useBookingDetail'
 // BookingDetailItem được export từ useBookingDetail
 import { EditBookingModal } from '@/features/bookings/components/EditBookingModal'
 import BookingFolioEditModal from '@/features/bookings/components/BookingFolioEditModal'
-import { CheckInModal } from '@/features/checkin/components/CheckInModal'
+import { CheckinImportModal } from '@/features/checkin/components/CheckinImportModal'
 import { CheckoutModal } from '@/features/checkout/components/CheckoutModal'
 import { BookingActionButtons } from '@/features/bookings/components/BookingActionButtons'
 import { DocumentActionsMenu } from '@/features/documents/DocumentActionsMenu'
@@ -63,9 +65,10 @@ interface Props {
 
 // Drawer chi tiết group booking: thông tin khách, danh sách phòng, thanh toán.
 export default function BookingDetailDrawer({ groupId, open, onClose, onEditBooking }: Props) {
+  const queryClient = useQueryClient()
   const { data, isLoading } = useBookingDetail(groupId)
   const [editingBooking, setEditingBooking] = useState<BookingDetailItem | null>(null)
-  const [checkinBookingId, setCheckinBookingId] = useState<string | null>(null)
+  const [checkinImportOpen, setCheckinImportOpen] = useState(false)
   const [checkoutBookingId, setCheckoutBookingId] = useState<string | null>(null)
   const [historyOpen, setHistoryOpen] = useState(false)
   // State for folio edit modal
@@ -229,6 +232,7 @@ export default function BookingDetailDrawer({ groupId, open, onClose, onEditBook
                   <BookingRoomCard
                     key={booking.id}
                     booking={{ ...booking, services: [], discounts: [] }}
+                    onCheckin={() => setCheckinImportOpen(true)}
                     onEdit={() => {
                       const bookingItem = { ...booking, services: [], discounts: [] }
                       if (onEditBooking) {
@@ -274,13 +278,17 @@ export default function BookingDetailDrawer({ groupId, open, onClose, onEditBook
         />
       )}
 
-      {checkinBookingId && (
-        <CheckInModal
-          isOpen={Boolean(checkinBookingId)}
-          onClose={() => setCheckinBookingId(null)}
-          bookingId={checkinBookingId}
-        />
-      )}
+      <CheckinImportModal
+        open={checkinImportOpen}
+        onClose={() => setCheckinImportOpen(false)}
+        onSuccess={() => {
+          setCheckinImportOpen(false)
+
+          if (groupId) {
+            void queryClient.invalidateQueries({ queryKey: ['booking-detail', groupId] })
+          }
+        }}
+      />
 
       <CheckoutModal
         bookingId={checkoutBookingId}
@@ -300,9 +308,11 @@ export default function BookingDetailDrawer({ groupId, open, onClose, onEditBook
 // Card hiển thị một booking trong group
 function BookingRoomCard({
   booking,
+  onCheckin,
   onEdit,
 }: {
   booking: BookingDetailItem
+  onCheckin: () => void
   onEdit: () => void
 }) {
   const nights = booking.nights ?? dayjs(booking.check_out).diff(dayjs(booking.check_in), 'day')
@@ -343,12 +353,14 @@ function BookingRoomCard({
 
             {booking.status === 'booked' && (
               <>
-                <BookingActionButtons
-                  bookingId={booking.id}
-                  status={booking.status}
+                <Button
+                  type="primary"
                   size="small"
-                  showDetails={false}
-                />
+                  icon={<LoginOutlined />}
+                  onClick={onCheckin}
+                >
+                  Check-in
+                </Button>
                 <Button
                   size="small"
                   icon={<EditOutlined />}
