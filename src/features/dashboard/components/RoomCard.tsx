@@ -115,6 +115,19 @@ function renderActionButtons(
     )
   }
 
+  // blocked — chỉ xem thông tin, không action
+  if (roomStatus === 'blocked') {
+    return (
+      <Button
+        size="small"
+        icon={<InfoCircleOutlined />}
+        onClick={(event) => stopAndCall(event, onDetailsClick)}
+      >
+        Details
+      </Button>
+    )
+  }
+
   return null
 }
 
