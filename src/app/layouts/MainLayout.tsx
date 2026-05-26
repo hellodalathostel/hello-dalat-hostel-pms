@@ -9,6 +9,7 @@ import {
   UnorderedListOutlined,
   UserAddOutlined,
   DollarOutlined,
+  CalendarOutlined,
 } from '@ant-design/icons'
 import { Layout, Menu, Space, Typography } from 'antd'
 import { useMemo } from 'react'
@@ -69,6 +70,11 @@ const menuItems: ItemType[] = [
     icon: <LinkOutlined />,
     label: 'iCal Feed',
   },
+  {
+    key: '/ota-calendar',
+    icon: <CalendarOutlined />,
+    label: 'OTA Calendar',
+  },
 ]
 
 export function MainLayout(): JSX.Element {
@@ -106,6 +112,10 @@ export function MainLayout(): JSX.Element {
 
     if (location.pathname.startsWith('/checkin-import')) {
       return ['/checkin-import']
+    }
+
+    if (location.pathname.startsWith('/ota-calendar')) {
+      return ['/ota-calendar']
     }
 
     if (location.pathname.startsWith('/settings')) {

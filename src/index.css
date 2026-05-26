@@ -255,3 +255,12 @@ body {
     padding: 16px;
   }
 }
+
+/* OTA Calendar table row highlighting */
+.ota-row-conflict td {
+  background-color: #fff2f0 !important;
+}
+
+.ota-row-conflict:hover td {
+  background-color: #ffebe8 !important;
+}
