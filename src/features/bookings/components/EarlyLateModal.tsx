@@ -69,7 +69,7 @@ export function EarlyLateModal({
     ? `Đêm ${newCheckIn.format('DD/MM')} -> ${dayjs(booking.check_in).format('DD/MM')}`
     : `Đêm ${dayjs(booking.check_out).format('DD/MM')} -> ${newCheckOut.format('DD/MM')}`
 
-  const submitDisabled = Boolean(isBlocked)
+  const submitDisabled = Boolean(isBlocked || (earlyDisabled && lateDisabled))
 
   const handleOk = () => {
     if (isBlocked) {
