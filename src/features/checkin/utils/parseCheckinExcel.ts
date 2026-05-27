@@ -5,6 +5,7 @@ import customParseFormat from 'dayjs/plugin/customParseFormat'
 dayjs.extend(customParseFormat)
 
 type FileType = 'VN' | 'NNN' | 'UNKNOWN'
+type ExcelFormat = 'template' | 'export' | 'unknown'
 
 export interface GuestImportRow {
   roomId: string
@@ -22,6 +23,71 @@ export interface GuestImportRow {
   country: string
   rowIndex: number
   fileType: 'VN' | 'NNN'
+}
+
+const HEADER_ALIASES = {
+  common: {
+    stt: ['stt'],
+  },
+  template: {
+    fullName: ['họ và tên (*)', 'họ và tên'],
+    dateOfBirth: ['ngày, tháng, năm sinh (*)', 'ngày, tháng, năm sinh', 'ngày sinh'],
+    gender: ['giới tính (*)', 'giới tính'],
+    documentType: ['loại giấy tờ (*)', 'loại giấy tờ'],
+    documentNumber: ['số giấy tờ (*)', 'số giấy tờ'],
+    nationality: ['quốc tịch (*)', 'quốc tịch'],
+    checkIn: ['thời gian lưu trú (từ ngày) (*)', 'thời gian lưu trú  (từ ngày) (*)', 'thời gian lưu trú (từ ngày)'],
+    checkOut: ['thời gian lưu trú (đến ngày)', 'thời gian lưu trú  (đến ngày)', 'thời gian lưu trú  (đến ngày) (*)', 'thời gian lưu trú (đến ngày) (*)'],
+    roomNumber: ['tên phòng / khoa (*)', 'tên phòng / khoa', 'số phòng'],
+    residencyType: ['loại cư trú', 'loại cư trú (*)'],
+    province: ['tỉnh/tp (*)', 'tỉnh/tp'],
+    ward: ['phường/xã/ đặc khu (*)', 'phường/xã/đặc khu (*)', 'phường/xã'],
+    addressDetail: ['địa chỉ chi tiết (*)', 'địa chỉ chi tiết'],
+  },
+  export: {
+    fullName: ['họ tên', 'họ và tên'],
+    dateOfBirth: ['ngày sinh', 'ngày, tháng, năm sinh'],
+    gender: ['gt', 'giới tính'],
+    nationality: ['qt', 'quốc tịch'],
+    passportNumber: ['số hộ chiếu'],
+    documentNumber: ['số cmnd/cccd', 'số giấy tờ'],
+    documentType: ['loại giấy tờ', 'loại giấy tờ (*)'],
+    checkIn: ['ngày đến'],
+    checkOut: ['ngày đi dự kiến', 'ngày đi thực tế', 'ngày đi'],
+    roomNumber: ['số phòng', 'tên phòng / khoa'],
+    residencyType: ['loại cư trú'],
+    province: ['tỉnh/tp'],
+    ward: ['phường/xã'],
+    addressDetail: ['địa chỉ', 'địa chỉ chi tiết'],
+  },
+} as const
+
+function normalizeHeader(value: unknown): string {
+  return String(value ?? '').trim().toLowerCase().replace(/\s+/g, ' ')
+}
+
+function hasAnyHeader(headers: string[], aliases: readonly string[]): boolean {
+  const normalizedHeaders = headers.map(normalizeHeader)
+  const normalizedAliases = aliases.map(normalizeHeader)
+  return normalizedHeaders.some((header) => normalizedAliases.includes(header))
+}
+
+function findHeaderIndex(headers: string[], aliases: readonly string[]): number {
+  const normalizedHeaders = headers.map(normalizeHeader)
+  const normalizedAliases = aliases.map(normalizeHeader)
+  return normalizedHeaders.findIndex((header) => normalizedAliases.includes(header))
+}
+
+function findCellValue(row: unknown[], headers: string[], aliases: readonly string[]): unknown {
+  const index = findHeaderIndex(headers, aliases)
+  if (index === -1) return null
+  return row[index]
+}
+
+function toNullableString(value: unknown): string | null {
+  if (value === null || value === undefined) return null
+  const text = String(value).trim()
+  return text ? text : null
 }
 
 function parseDate(raw: unknown): string | null {
@@ -68,9 +134,30 @@ function mapResidencyType(raw: string | null): GuestImportRow['residencyType'] {
   return 'Địa chỉ khác'
 }
 
-function detectFileType(headers: string[]): FileType {
-  if (headers.some((header) => header.includes('QT') || header.includes('Hộ chiếu'))) return 'NNN'
-  if (headers.some((header) => header.includes('Loại giấy tờ'))) return 'VN'
+function detectFormat(headers: string[]): ExcelFormat {
+  const isExport =
+    hasAnyHeader(headers, HEADER_ALIASES.export.fullName) &&
+    hasAnyHeader(headers, HEADER_ALIASES.export.gender) &&
+    (hasAnyHeader(headers, HEADER_ALIASES.export.nationality) ||
+      hasAnyHeader(headers, HEADER_ALIASES.export.passportNumber))
+
+  if (isExport) return 'export'
+
+  const isTemplate =
+    hasAnyHeader(headers, HEADER_ALIASES.template.fullName) &&
+    hasAnyHeader(headers, HEADER_ALIASES.template.gender) &&
+    hasAnyHeader(headers, HEADER_ALIASES.template.documentType) &&
+    hasAnyHeader(headers, HEADER_ALIASES.template.checkIn) &&
+    hasAnyHeader(headers, HEADER_ALIASES.template.roomNumber)
+
+  if (isTemplate) return 'template'
+
+  return 'unknown'
+}
+
+function toFileType(format: ExcelFormat): FileType {
+  if (format === 'export') return 'NNN'
+  if (format === 'template') return 'VN'
 
   return 'UNKNOWN'
 }
@@ -91,7 +178,7 @@ export function parseCheckinExcel(file: File): Promise<GuestImportRow[]> {
         })
 
         const headerRowIndex = rows.findIndex(
-          (row) => Array.isArray(row) && String(row[0] ?? '').trim() === 'STT',
+          (row) => Array.isArray(row) && normalizeHeader(row[0]) === 'stt',
         )
 
         if (headerRowIndex === -1) {
@@ -99,12 +186,13 @@ export function parseCheckinExcel(file: File): Promise<GuestImportRow[]> {
           return
         }
 
-        const headers = (rows[headerRowIndex] as unknown[]).map((header) => String(header ?? '').trim())
-        const fileType = detectFileType(headers)
+        const headers = (rows[headerRowIndex] as unknown[]).map((header) => String(header ?? ''))
+        const format = detectFormat(headers)
+        const fileType = toFileType(format)
 
         if (fileType === 'UNKNOWN') {
           reject(
-            new Error('File không đúng format. Cần có cột "Loại giấy tờ" (VN) hoặc "QT"/"Hộ chiếu" (NNN).'),
+            new Error('File không đúng format. Cần format export (Họ tên + GT + QT/Số hộ chiếu) hoặc format template nhập liệu.'),
           )
           return
         }
@@ -113,52 +201,57 @@ export function parseCheckinExcel(file: File): Promise<GuestImportRow[]> {
         const dataRows = rows.slice(headerRowIndex + 1)
 
         dataRows.forEach((row, index) => {
-          if (!Array.isArray(row) || !row[1]) {
+          if (!Array.isArray(row)) {
             return
           }
 
-          const cell = (columnIndex: number) => {
-            const value = row[columnIndex]
-            return value != null ? String(value).trim() : null
-          }
+          const sttRaw = toNullableString(findCellValue(row, headers, HEADER_ALIASES.common.stt))
+          const stt = Number.parseInt(sttRaw ?? '', 10)
+          if (Number.isNaN(stt)) return
 
-          if (fileType === 'VN') {
+          if (format === 'template') {
+            const nationality = toNullableString(findCellValue(row, headers, HEADER_ALIASES.template.nationality))
             result.push({
               rowIndex: index + 1,
               fileType: 'VN',
-              roomId: cell(9) ?? '',
-              checkInDate: parseDate(row[6]) ?? '',
-              fullName: cell(1) ?? '',
-              dateOfBirth: parseDate(row[2]),
-              gender: cell(3),
-              documentType: mapDocumentType(cell(4)),
-              documentNumber: cell(5),
-              nationality: null,
-              residencyType: mapResidencyType(cell(10)),
-              province: null,
-              ward: null,
-              addressDetail: null,
-              country: 'VNM',
+              roomId: toNullableString(findCellValue(row, headers, HEADER_ALIASES.template.roomNumber)) ?? '',
+              checkInDate: parseDate(findCellValue(row, headers, HEADER_ALIASES.template.checkIn)) ?? '',
+              fullName: toNullableString(findCellValue(row, headers, HEADER_ALIASES.template.fullName)) ?? '',
+              dateOfBirth: parseDate(findCellValue(row, headers, HEADER_ALIASES.template.dateOfBirth)),
+              gender: toNullableString(findCellValue(row, headers, HEADER_ALIASES.template.gender)),
+              documentType: mapDocumentType(toNullableString(findCellValue(row, headers, HEADER_ALIASES.template.documentType))),
+              documentNumber: toNullableString(findCellValue(row, headers, HEADER_ALIASES.template.documentNumber)),
+              nationality,
+              residencyType: mapResidencyType(toNullableString(findCellValue(row, headers, HEADER_ALIASES.template.residencyType))),
+              province: toNullableString(findCellValue(row, headers, HEADER_ALIASES.template.province)),
+              ward: toNullableString(findCellValue(row, headers, HEADER_ALIASES.template.ward)),
+              addressDetail: toNullableString(findCellValue(row, headers, HEADER_ALIASES.template.addressDetail)),
+              country: nationality ?? 'VNM',
             })
             return
           }
 
+          const passportNumber = toNullableString(findCellValue(row, headers, HEADER_ALIASES.export.passportNumber))
+          const idNumberFallback = toNullableString(findCellValue(row, headers, HEADER_ALIASES.export.documentNumber))
+          const documentTypeRaw = toNullableString(findCellValue(row, headers, HEADER_ALIASES.export.documentType))
+          const nationality = toNullableString(findCellValue(row, headers, HEADER_ALIASES.export.nationality))
+
           result.push({
             rowIndex: index + 1,
             fileType: 'NNN',
-            roomId: cell(9) ?? '',
-            checkInDate: parseDate(row[6]) ?? '',
-            fullName: cell(1) ?? '',
-            dateOfBirth: parseDate(row[2]),
-            gender: cell(3),
-            documentType: 'Hộ chiếu',
-            documentNumber: cell(5),
-            nationality: cell(4),
-            residencyType: null,
-            province: null,
-            ward: null,
-            addressDetail: null,
-            country: cell(4) ?? 'XXX',
+            roomId: toNullableString(findCellValue(row, headers, HEADER_ALIASES.export.roomNumber)) ?? '',
+            checkInDate: parseDate(findCellValue(row, headers, HEADER_ALIASES.export.checkIn)) ?? '',
+            fullName: toNullableString(findCellValue(row, headers, HEADER_ALIASES.export.fullName)) ?? '',
+            dateOfBirth: parseDate(findCellValue(row, headers, HEADER_ALIASES.export.dateOfBirth)),
+            gender: toNullableString(findCellValue(row, headers, HEADER_ALIASES.export.gender)),
+            documentType: documentTypeRaw ? mapDocumentType(documentTypeRaw) : passportNumber ? 'Hộ chiếu' : 'Giấy tờ khác',
+            documentNumber: passportNumber ?? idNumberFallback,
+            nationality,
+            residencyType: mapResidencyType(toNullableString(findCellValue(row, headers, HEADER_ALIASES.export.residencyType))),
+            province: toNullableString(findCellValue(row, headers, HEADER_ALIASES.export.province)),
+            ward: toNullableString(findCellValue(row, headers, HEADER_ALIASES.export.ward)),
+            addressDetail: toNullableString(findCellValue(row, headers, HEADER_ALIASES.export.addressDetail)),
+            country: nationality ?? 'XXX',
           })
         })
 
