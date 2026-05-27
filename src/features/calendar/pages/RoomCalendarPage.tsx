@@ -12,7 +12,7 @@ import { useRooms } from '@/features/bookings/hooks/useRooms'
 import { useDeleteBlock } from '@/features/calendar/hooks/useRoomBlocks'
 import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
 import type { CalendarEvent } from '@/types/calendar'
-import type { BookingRow } from '@/features/bookings/hooks/useBookingDetail'
+import type { BookingDetailItem } from '@/features/bookings/hooks/useBookingDetail'
 
 type DateRangeValue = [Dayjs, Dayjs]
 
@@ -34,7 +34,7 @@ export default function RoomCalendar(): React.JSX.Element {
   const deleteBlockMutation = useDeleteBlock()
   const [range, setRange] = useState<DateRangeValue>(defaultRange)
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null)
-  const [editingBooking, setEditingBooking] = useState<BookingRow | null>(null)
+  const [editingBooking, setEditingBooking] = useState<BookingDetailItem | null>(null)
   const [blockModalOpen, setBlockModalOpen] = useState(false)
   const [blockPrefill, setBlockPrefill] = useState<{ roomId?: string; date?: string }>({})
 

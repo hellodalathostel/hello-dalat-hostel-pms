@@ -15,6 +15,7 @@ export type BookingDetailItem = BookingRow & {
 export type BookingRow = {
   id: string
   room_id: string
+  room_name?: string | null
   check_in: string
   check_out: string
   nights: number | null

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import dayjs from 'dayjs'
 import {
+  Alert,
   Badge,
   Button,
   Col,
@@ -70,7 +71,7 @@ interface Props {
 // Drawer chi tiết group booking: thông tin khách, danh sách phòng, thanh toán.
 export default function BookingDetailDrawer({ groupId = null, bookingId = null, open, onClose, onEditBooking }: Props) {
   const queryClient = useQueryClient()
-  const { data: resolvedGroupId, isLoading: isResolvingGroupId } = useQuery({
+  const { data: resolvedGroupId, isLoading: isResolvingGroupId, isError: isResolvingError } = useQuery({
     queryKey: ['booking-group-id', bookingId],
     enabled: open && !groupId && Boolean(bookingId),
     staleTime: 30 * 1000,
@@ -94,8 +95,9 @@ export default function BookingDetailDrawer({ groupId = null, bookingId = null, 
   })
 
   const effectiveGroupId = groupId ?? resolvedGroupId ?? null
-  const { data, isLoading: isLoadingDetail } = useBookingDetail(effectiveGroupId)
+  const { data, isLoading: isLoadingDetail, isError: isDetailError } = useBookingDetail(effectiveGroupId)
   const isLoading = isResolvingGroupId || isLoadingDetail
+  const shouldShowResolveError = open && (isResolvingError || isDetailError || (!isLoading && !data))
   const [editingBooking, setEditingBooking] = useState<BookingDetailItem | null>(null)
   const [checkinImportOpen, setCheckinImportOpen] = useState(false)
   const [checkoutBookingId, setCheckoutBookingId] = useState<string | null>(null)
@@ -162,6 +164,16 @@ export default function BookingDetailDrawer({ groupId = null, bookingId = null, 
         destroyOnClose
       >
         {isLoading && <Skeleton active paragraph={{ rows: 8 }} />}
+
+        {shouldShowResolveError && (
+          <Alert
+            type="error"
+            showIcon
+            message="Không tìm thấy thông tin booking"
+            description="Vui lòng tải lại trang hoặc kiểm tra lại booking đã chọn."
+            style={{ marginBottom: 16 }}
+          />
+        )}
 
         {!isLoading && data && (
           <Space direction="vertical" size={24} style={{ width: '100%' }}>
@@ -241,14 +253,6 @@ export default function BookingDetailDrawer({ groupId = null, bookingId = null, 
                 )}
               </Col>
             </Row>
-      {/* Modal chỉnh sửa folio */}
-      <BookingFolioEditModal
-        open={folioEditOpen}
-        onClose={() => setFolioEditOpen(false)}
-        bookingId={folioEditBookingId || ''}
-        groupId={effectiveGroupId || ''}
-      />
-
             {/* Danh sách phòng */}
             <div>
               <Typography.Title level={5} style={{ marginBottom: 12 }}>
@@ -301,6 +305,14 @@ export default function BookingDetailDrawer({ groupId = null, bookingId = null, 
           </Space>
         )}
       </Drawer>
+
+      {/* Modal chỉnh sửa folio */}
+      <BookingFolioEditModal
+        open={folioEditOpen}
+        onClose={() => setFolioEditOpen(false)}
+        bookingId={folioEditBookingId || ''}
+        groupId={effectiveGroupId || ''}
+      />
 
       {/* Modal sửa/huỷ booking */}
       {editingBooking && effectiveGroupId && (
@@ -383,7 +395,7 @@ function BookingRoomCard({
         <Flex justify="space-between" align="flex-start">
           <div>
             <Typography.Text strong>
-              Phòng {booking.room_id}
+              Phòng {booking.room_name ?? booking.room_id}
               {booking.has_early_check_in && (
                 <Tag color="orange" style={{ marginLeft: 4, fontSize: 11 }}>🌅 Early</Tag>
               )}

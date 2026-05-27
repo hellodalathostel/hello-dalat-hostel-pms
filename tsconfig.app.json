@@ -31,7 +31,6 @@
   },
   "include": ["src"],
   "exclude": [
-    "src/components/booking/BookingDetailDrawer.tsx",
     "src/components/checkin/CheckInModal.tsx",
     "src/components/dashboard/RoomCard.tsx",
     "src/pages/RevenueDashboard.tsx"
