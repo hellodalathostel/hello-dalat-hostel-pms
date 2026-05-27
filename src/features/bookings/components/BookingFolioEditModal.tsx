@@ -5,11 +5,13 @@ import {
   Table, Popconfirm, Tag, Divider, Space, Typography, Spin,
 } from 'antd'
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons'
+import { useState } from 'react'
 import dayjs from 'dayjs'
 import { useBookingFolio } from '@/features/bookings/hooks/useBookingFolio'
 import { useDepositActions } from '@/features/bookings/hooks/useDepositActions'
 import { useServiceActions } from '@/features/bookings/hooks/useServiceActions'
 import { useDiscountActions } from '@/features/bookings/hooks/useDiscountActions'
+import { useVoidPayment } from '@/features/bookings/hooks/useVoidPayment'
 
 const { Text } = Typography
 
@@ -40,15 +42,37 @@ interface Props {
   groupId: string
 }
 
+type FolioPaymentRow = {
+  id: string
+  amount: number
+  method: string
+  date: string
+  note: string | null
+  isVoid: boolean
+  voidedPaymentId: string | null
+  updatedAt: string
+}
+
 export default function BookingFolioEditModal({ open, onClose, bookingId, groupId }: Props) {
   const { data: folio, isLoading } = useBookingFolio(bookingId)
-  const { addDeposit, deleteDeposit } = useDepositActions(bookingId, groupId)
+  const { addDeposit } = useDepositActions(bookingId, groupId)
   const { addService, deleteService } = useServiceActions(bookingId, groupId)
   const { addDiscount, deleteDiscount } = useDiscountActions(bookingId, groupId)
+  const voidPaymentMutation = useVoidPayment(bookingId, groupId)
 
   const [depositForm] = Form.useForm()
   const [serviceForm] = Form.useForm()
   const [discountForm] = Form.useForm()
+  const [pendingVoidPaymentId, setPendingVoidPaymentId] = useState<string | null>(null)
+
+  const handleVoidPayment = async (paymentId: string) => {
+    setPendingVoidPaymentId(paymentId)
+    try {
+      await voidPaymentMutation.mutateAsync({ paymentId })
+    } finally {
+      setPendingVoidPaymentId(null)
+    }
+  }
 
   // Khi chọn service từ catalog → tự điền price
   const handleServiceSelect = (serviceId: string) => {
@@ -128,7 +152,7 @@ export default function BookingFolioEditModal({ open, onClose, bookingId, groupI
       </Form>
 
       {/* Danh sách cọc đã ghi */}
-      <Table
+      <Table<FolioPaymentRow>
         dataSource={folio?.payments ?? []}
         rowKey="id"
         size="small"
@@ -136,22 +160,79 @@ export default function BookingFolioEditModal({ open, onClose, bookingId, groupI
         columns={[
           { title: 'Ngày', dataIndex: 'date', width: 100,
             render: (d: string) => dayjs(d).format('DD/MM/YYYY') },
-          { title: 'Số tiền', dataIndex: 'amount', width: 120, align: 'right',
-            render: fmt },
+          {
+            title: 'Số tiền',
+            dataIndex: 'amount',
+            width: 140,
+            align: 'right',
+            render: (amount: number, row) => {
+              const isReverseEntry = row.isVoid && Boolean(row.voidedPaymentId)
+              const isVoidedOrigin = row.isVoid && !row.voidedPaymentId
+
+              if (isVoidedOrigin) {
+                return <Text style={{ color: '#cf1322', textDecoration: 'line-through' }}>{fmt(amount)}</Text>
+              }
+
+              if (isReverseEntry) {
+                return <Text type="secondary">{fmt(amount)}</Text>
+              }
+
+              return fmt(amount)
+            },
+          },
           { title: 'Phương thức', dataIndex: 'method', width: 120,
             render: (m: string) => METHOD_OPTIONS.find(o => o.value === m)?.label ?? m },
-          { title: 'Ghi chú', dataIndex: 'note', ellipsis: true },
           {
-            title: '', width: 50, align: 'center',
-            render: (_: unknown, row: { id: string }) => (
-              <Popconfirm
-                title="Xóa khoản cọc này?"
-                onConfirm={() => deleteDeposit.mutate(row.id)}
-                okText="Xóa" cancelText="Huỷ" okType="danger"
-              >
-                <Button type="text" danger icon={<DeleteOutlined />} size="small" />
-              </Popconfirm>
-            ),
+            title: 'Ghi chú',
+            dataIndex: 'note',
+            ellipsis: true,
+            render: (note: string | null, row) => {
+              const isReverseEntry = row.isVoid && Boolean(row.voidedPaymentId)
+              if (isReverseEntry) {
+                return <Tag color="default">Void entry</Tag>
+              }
+
+              return note || <Text type="secondary">—</Text>
+            },
+          },
+          {
+            title: '',
+            width: 210,
+            align: 'right',
+            render: (_: unknown, row) => {
+              const isReverseEntry = row.isVoid && Boolean(row.voidedPaymentId)
+              const isVoidedOrigin = row.isVoid && !row.voidedPaymentId
+              const isRowPending = pendingVoidPaymentId === row.id
+
+              if (isReverseEntry) {
+                return <Tag color="default">Void entry</Tag>
+              }
+
+              if (isVoidedOrigin) {
+                return (
+                  <Space size={8}>
+                    <Tag color="red">Đã void</Tag>
+                    <Button size="small" type="text" danger disabled>
+                      Void
+                    </Button>
+                  </Space>
+                )
+              }
+
+              return (
+                <Popconfirm
+                  title={`Void payment ${row.amount.toLocaleString('vi-VN')}đ — không thể hoàn tác`}
+                  onConfirm={() => handleVoidPayment(row.id)}
+                  okText="Xác nhận Void"
+                  cancelText="Huỷ"
+                  okButtonProps={{ danger: true, loading: isRowPending }}
+                >
+                  <Button size="small" danger type="text" loading={isRowPending}>
+                    Void
+                  </Button>
+                </Popconfirm>
+              )
+            },
           },
         ]}
         summary={() => {

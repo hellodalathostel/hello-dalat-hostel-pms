@@ -45,6 +45,9 @@ type PaymentRow = {
   method: string | null
   date: string
   note: string | null
+  is_void: boolean
+  voided_payment_id: string | null
+  updated_at: string
 }
 
 export interface BookingFolio {
@@ -80,6 +83,9 @@ export interface BookingFolio {
     method: string
     date: string
     note: string | null
+    isVoid: boolean
+    voidedPaymentId: string | null
+    updatedAt: string
   }>
   group: {
     id: string
@@ -127,7 +133,7 @@ export function useBookingFolio(bookingId: string | null) {
             .eq('booking_id', bookingId),
           supabase
             .from('payment_history')
-            .select('id, amount, method, date, note')
+            .select('id, amount, method, date, note, is_void, voided_payment_id, updated_at')
             .eq('group_id', booking.group_id)
             .order('date', { ascending: false }),
         ])
@@ -193,6 +199,9 @@ export function useBookingFolio(bookingId: string | null) {
             method: payment.method ?? 'other',
             date: payment.date,
             note: payment.note,
+            isVoid: payment.is_void,
+            voidedPaymentId: payment.voided_payment_id,
+            updatedAt: payment.updated_at,
           })),
           group: {
             id: group.id,
