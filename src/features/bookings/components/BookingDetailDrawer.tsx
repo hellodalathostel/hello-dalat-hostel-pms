@@ -132,7 +132,8 @@ export default function BookingDetailDrawer({ groupId = null, bookingId = null, 
   const effectiveGroupId = groupId ?? resolvedGroupId ?? null
   const { data, isLoading: isLoadingDetail, isError: isDetailError } = useBookingDetail(effectiveGroupId)
   const isLoading = isResolvingGroupId || isLoadingDetail
-  const shouldShowResolveError = open && (isResolvingError || isDetailError || (!isLoading && !data))
+  const hasNoInput = !groupId && !bookingId
+  const shouldShowResolveError = open && !hasNoInput && !isLoading && (isResolvingError || isDetailError || !data)
   const [editingBooking, setEditingBooking] = useState<BookingDetailItem | null>(null)
   const [checkinImportOpen, setCheckinImportOpen] = useState(false)
   const [checkoutBookingId, setCheckoutBookingId] = useState<string | null>(null)
