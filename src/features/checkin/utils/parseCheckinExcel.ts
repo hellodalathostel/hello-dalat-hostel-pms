@@ -134,7 +134,7 @@ function mapResidencyType(raw: string | null): GuestImportRow['residencyType'] {
   return 'Địa chỉ khác'
 }
 
-function detectFormat(headers: string[]): ExcelFormat {
+export function detectFormat(headers: string[]): ExcelFormat {
   const isExport =
     hasAnyHeader(headers, HEADER_ALIASES.export.fullName) &&
     hasAnyHeader(headers, HEADER_ALIASES.export.gender) &&
