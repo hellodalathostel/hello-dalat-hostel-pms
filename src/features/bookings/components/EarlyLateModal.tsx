@@ -165,7 +165,7 @@ export function EarlyLateModal({
             min={0}
             step={50000}
             formatter={(value) => `${value ?? ''}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-            parser={(value) => Number((value ?? '').replace(/,/g, ''))}
+            parser={(value): 0 => parseInt(value?.replace(/[^\d]/g, '') || '0', 10) as 0}
             addonAfter="đ"
           />
         </Form.Item>
