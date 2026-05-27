@@ -53,7 +53,7 @@ function SourceTag({ source }: { source: string | null }): React.JSX.Element {
 
 export function BookingDetailDrawer({ bookingId, open, onClose }: Props): React.JSX.Element {
   const { data, isLoading, error } = useBookingDetail(open ? bookingId : null)
-  const balanceDue = data ? data.grand_total - data.group.paid : 0
+  const balanceDue = data?.balance_due ?? 0
 
   const guestColumns: TableColumnsType<BookingGuest> = [
     {

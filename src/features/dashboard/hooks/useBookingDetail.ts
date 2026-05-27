@@ -64,6 +64,7 @@ export interface BookingDetail {
   guests: BookingGuest[]
   services: BookingService[]
   discounts: BookingDiscount[]
+  balance_due: number
 }
 
 type BookingRow = {
@@ -284,6 +285,7 @@ export function useBookingDetail(bookingId: string | null) {
           guests,
           services,
           discounts,
+          balance_due: (bookingData.grand_total ?? 0) - (group.paid ?? 0),
         }
       } catch (error) {
         throw normalizeError(error)

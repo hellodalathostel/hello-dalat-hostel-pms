@@ -33,7 +33,7 @@ export default function RoomCalendar(): React.JSX.Element {
   const { notification } = useAppFeedback()
   const deleteBlockMutation = useDeleteBlock()
   const [range, setRange] = useState<DateRangeValue>(defaultRange)
-  const [detailGroupId, setDetailGroupId] = useState<string | null>(null)
+  const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null)
   const [editingBooking, setEditingBooking] = useState<BookingRow | null>(null)
   const [blockModalOpen, setBlockModalOpen] = useState(false)
   const [blockPrefill, setBlockPrefill] = useState<{ roomId?: string; date?: string }>({})
@@ -58,8 +58,8 @@ export default function RoomCalendar(): React.JSX.Element {
       return
     }
 
-    if (event.entry_type === 'booking' && event.group_id) {
-      setDetailGroupId(event.group_id)
+    if (event.entry_type === 'booking' && event.booking_id) {
+      setSelectedBookingId(event.booking_id)
       return
     }
 
@@ -144,9 +144,9 @@ export default function RoomCalendar(): React.JSX.Element {
       </Spin>
 
       <BookingDetailDrawer
-        groupId={detailGroupId}
-        open={!!detailGroupId}
-        onClose={() => setDetailGroupId(null)}
+        bookingId={selectedBookingId}
+        open={!!selectedBookingId}
+        onClose={() => setSelectedBookingId(null)}
         onEditBooking={(booking) => setEditingBooking(booking)}
       />
       <EditBookingModal

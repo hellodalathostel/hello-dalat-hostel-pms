@@ -8,7 +8,7 @@ import { CheckinImportModal } from '@/features/checkin/components/CheckinImportM
 import { QuickCheckoutModal, type CheckoutTarget } from '@/features/checkout/components/QuickCheckoutModal'
 import { RoomCard } from '@/features/dashboard/components/RoomCard'
 import { BlockedRoomDrawer } from '@/features/dashboard/components/BlockedRoomDrawer'
-import { BookingDetailDrawer } from '@/features/dashboard/components/BookingDetailDrawer'
+import BookingDetailDrawer from '@/features/bookings/components/BookingDetailDrawer'
 import { PaymentModal } from '@/features/payment/components/PaymentModal'
 import { StatsBar } from '@/features/dashboard/components/StatsBar'
 import { getRoomStatus, useDashboard } from '@/features/dashboard/hooks/useDashboard'
@@ -31,7 +31,7 @@ export default function Dashboard(): React.JSX.Element {
   const { data: rooms = [], isLoading, isFetching, error } = useDashboard()
   const [selectedRoom, setSelectedRoom] = useState<DashboardRoom | null>(null)
   const [blockedDetailsRoom, setBlockedDetailsRoom] = useState<DashboardRoom | null>(null)
-  const [detailBookingId, setDetailBookingId] = useState<string | null>(null)
+  const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null)
   const [isCheckInVisible, setIsCheckInVisible] = useState(false)
   const [isPaymentVisible, setIsPaymentVisible] = useState(false)
   const [checkoutTarget, setCheckoutTarget] = useState<CheckoutTarget | null>(null)
@@ -82,12 +82,12 @@ export default function Dashboard(): React.JSX.Element {
     }
 
     if ((room.status === 'booked' || room.status === 'checked-in') && room.booking_id) {
-      setDetailBookingId(room.booking_id)
+      setSelectedBookingId(room.booking_id)
       return
     }
 
     if (room.booking_id) {
-      setDetailBookingId(room.booking_id)
+      setSelectedBookingId(room.booking_id)
     }
   }, [])
 
@@ -215,9 +215,9 @@ export default function Dashboard(): React.JSX.Element {
       />
 
       <BookingDetailDrawer
-        bookingId={detailBookingId}
-        open={Boolean(detailBookingId)}
-        onClose={() => setDetailBookingId(null)}
+        bookingId={selectedBookingId}
+        open={Boolean(selectedBookingId)}
+        onClose={() => setSelectedBookingId(null)}
       />
     </div>
   )

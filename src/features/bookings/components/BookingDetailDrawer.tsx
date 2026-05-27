@@ -24,7 +24,8 @@ import {
   PhoneOutlined,
   UserOutlined,
 } from '@ant-design/icons'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { supabase } from '@/api/supabase'
 import { useBookingDetail } from '@/features/bookings/hooks/useBookingDetail'
 import type { BookingDetailItem } from '@/features/bookings/hooks/useBookingDetail'
 // BookingDetailItem được export từ useBookingDetail
@@ -59,16 +60,42 @@ function formatVND(amount: number | null | undefined): string {
 }
 
 interface Props {
-  groupId: string | null
+  groupId?: string | null
+  bookingId?: string | null
   open: boolean
   onClose: () => void
   onEditBooking?: (booking: BookingDetailItem) => void
 }
 
 // Drawer chi tiết group booking: thông tin khách, danh sách phòng, thanh toán.
-export default function BookingDetailDrawer({ groupId, open, onClose, onEditBooking }: Props) {
+export default function BookingDetailDrawer({ groupId = null, bookingId = null, open, onClose, onEditBooking }: Props) {
   const queryClient = useQueryClient()
-  const { data, isLoading } = useBookingDetail(groupId)
+  const { data: resolvedGroupId, isLoading: isResolvingGroupId } = useQuery({
+    queryKey: ['booking-group-id', bookingId],
+    enabled: open && !groupId && Boolean(bookingId),
+    staleTime: 30 * 1000,
+    queryFn: async (): Promise<string | null> => {
+      if (!bookingId) {
+        return null
+      }
+
+      const { data: bookingRow, error } = await supabase
+        .from('bookings')
+        .select('group_id')
+        .eq('id', bookingId)
+        .single()
+
+      if (error) {
+        throw error
+      }
+
+      return bookingRow.group_id ?? null
+    },
+  })
+
+  const effectiveGroupId = groupId ?? resolvedGroupId ?? null
+  const { data, isLoading: isLoadingDetail } = useBookingDetail(effectiveGroupId)
+  const isLoading = isResolvingGroupId || isLoadingDetail
   const [editingBooking, setEditingBooking] = useState<BookingDetailItem | null>(null)
   const [checkinImportOpen, setCheckinImportOpen] = useState(false)
   const [checkoutBookingId, setCheckoutBookingId] = useState<string | null>(null)
@@ -80,12 +107,8 @@ export default function BookingDetailDrawer({ groupId, open, onClose, onEditBook
   const [earlyLateDefaultType, setEarlyLateDefaultType] = useState<EarlyLateType>('early')
   const [earlyLateBooking, setEarlyLateBooking] = useState<BookingDetailItem | null>(null)
 
-  // Tổng grand_total tất cả bookings chưa cancelled
-  const totalGrandTotal = (data?.bookings ?? [])
-    .filter((b) => b.status !== 'cancelled')
-    .reduce((sum, b) => sum + (b.grand_total ?? 0), 0)
-
-  const balanceDue = totalGrandTotal - (data?.paid ?? 0)
+  const totalGrandTotal = data?.grand_total ?? 0
+  const balanceDue = data?.balance_due ?? 0
 
   const paymentColumns = [
     {
@@ -123,7 +146,7 @@ export default function BookingDetailDrawer({ groupId, open, onClose, onEditBook
         open={open}
         onClose={onClose}
         extra={
-          data && groupId ? (
+          data && effectiveGroupId ? (
             <Space size={8}>
               <Button
                 icon={<HistoryOutlined />}
@@ -132,7 +155,7 @@ export default function BookingDetailDrawer({ groupId, open, onClose, onEditBook
               >
                 Lịch sử
               </Button>
-              <DocumentActionsMenu groupId={groupId} remaining={Math.max(0, balanceDue)} />
+              <DocumentActionsMenu groupId={effectiveGroupId} remaining={Math.max(0, balanceDue)} />
             </Space>
           ) : null
         }
@@ -223,7 +246,7 @@ export default function BookingDetailDrawer({ groupId, open, onClose, onEditBook
         open={folioEditOpen}
         onClose={() => setFolioEditOpen(false)}
         bookingId={folioEditBookingId || ''}
-        groupId={groupId || ''}
+        groupId={effectiveGroupId || ''}
       />
 
             {/* Danh sách phòng */}
@@ -280,7 +303,7 @@ export default function BookingDetailDrawer({ groupId, open, onClose, onEditBook
       </Drawer>
 
       {/* Modal sửa/huỷ booking */}
-      {editingBooking && groupId && (
+      {editingBooking && effectiveGroupId && (
         <EditBookingModal
           booking={editingBooking}
           onClose={() => setEditingBooking(null)}
@@ -294,8 +317,8 @@ export default function BookingDetailDrawer({ groupId, open, onClose, onEditBook
         onSuccess={() => {
           setCheckinImportOpen(false)
 
-          if (groupId) {
-            void queryClient.invalidateQueries({ queryKey: ['booking-detail', groupId] })
+          if (effectiveGroupId) {
+            void queryClient.invalidateQueries({ queryKey: ['booking-detail', effectiveGroupId] })
           }
         }}
       />
@@ -307,7 +330,7 @@ export default function BookingDetailDrawer({ groupId, open, onClose, onEditBook
       />
 
       <DocumentHistoryDrawer
-        groupId={groupId}
+        groupId={effectiveGroupId}
         open={historyOpen}
         onClose={() => setHistoryOpen(false)}
       />
@@ -321,8 +344,8 @@ export default function BookingDetailDrawer({ groupId, open, onClose, onEditBook
           setEarlyLateBooking(null)
         }}
         onSuccess={() => {
-          if (groupId) {
-            void queryClient.invalidateQueries({ queryKey: ['booking-detail', groupId] })
+          if (effectiveGroupId) {
+            void queryClient.invalidateQueries({ queryKey: ['booking-detail', effectiveGroupId] })
           }
         }}
       />
