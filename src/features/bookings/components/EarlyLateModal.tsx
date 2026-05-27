@@ -46,24 +46,19 @@ export function EarlyLateModal({
     ? Math.round((booking.price_per_night * 0.5) / 1000) * 1000
     : 0
 
-  const isBlockedStatus = booking?.status === 'checked-out' || booking?.status === 'cancelled'
-  const isBookedStatus = booking?.status === 'booked'
+  const isBlocked = booking?.status === 'checked-out' || booking?.status === 'cancelled'
 
-  const earlyDisabled = !booking || isBlockedStatus || booking.has_early_check_in
-  const lateDisabled = !booking || isBlockedStatus || isBookedStatus || booking.has_late_check_out
-  const bothApplied = Boolean(booking?.has_early_check_in && booking?.has_late_check_out)
+  const earlyDisabled = !booking || booking.has_early_check_in || isBlocked
+  const lateDisabled = !booking || booking.has_late_check_out || isBlocked
 
   useEffect(() => {
     if (open && booking) {
-      const initialType: EarlyLateType =
-        defaultType === 'late' && isBookedStatus ? 'early' : defaultType
-
       form.setFieldsValue({
-        type: initialType,
+        type: defaultType,
         fee: suggestedFee,
       })
     }
-  }, [open, booking, defaultType, suggestedFee, form, isBookedStatus])
+  }, [open, booking, defaultType, suggestedFee, form])
 
   if (!booking) return null
 
@@ -74,11 +69,10 @@ export function EarlyLateModal({
     ? `Đêm ${newCheckIn.format('DD/MM')} -> ${dayjs(booking.check_in).format('DD/MM')}`
     : `Đêm ${dayjs(booking.check_out).format('DD/MM')} -> ${newCheckOut.format('DD/MM')}`
 
-  const canSubmitType = currentType === 'early' ? !earlyDisabled : !lateDisabled
-  const submitDisabled = isBlockedStatus || bothApplied || !canSubmitType
+  const submitDisabled = Boolean(isBlocked)
 
   const handleOk = () => {
-    if (submitDisabled) {
+    if (isBlocked) {
       return
     }
 
@@ -124,21 +118,12 @@ export function EarlyLateModal({
         </Descriptions.Item>
       </Descriptions>
 
-      {isBlockedStatus && (
+      {isBlocked && (
         <Alert
           type="error"
           showIcon
           style={{ marginBottom: 16 }}
           message="Booking đã checked-out hoặc cancelled, không thể áp dụng early/late."
-        />
-      )}
-
-      {bothApplied && (
-        <Alert
-          type="info"
-          showIcon
-          style={{ marginBottom: 16 }}
-          message="Booking này đã áp dụng cả Early check-in và Late check-out."
         />
       )}
 
@@ -151,7 +136,6 @@ export function EarlyLateModal({
             </Radio>
             <Radio value="late" disabled={lateDisabled}>
               Late Check-out
-              {isBookedStatus && <Text type="secondary"> (chỉ áp dụng sau khi check-in)</Text>}
               {booking.has_late_check_out && <Text type="secondary"> (đã áp dụng)</Text>}
             </Radio>
           </Radio.Group>

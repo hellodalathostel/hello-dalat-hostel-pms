@@ -359,7 +359,15 @@ function BookingRoomCard({
       >
         <Flex justify="space-between" align="flex-start">
           <div>
-            <Typography.Text strong>Phòng {booking.room_id}</Typography.Text>
+            <Typography.Text strong>
+              Phòng {booking.room_id}
+              {booking.has_early_check_in && (
+                <Tag color="orange" style={{ marginLeft: 4, fontSize: 11 }}>🌅 Early</Tag>
+              )}
+              {booking.has_late_check_out && (
+                <Tag color="purple" style={{ marginLeft: 4, fontSize: 11 }}>🌙 Late</Tag>
+              )}
+            </Typography.Text>
             {booking.guest_name && (
               <Typography.Text type="secondary" style={{ marginLeft: 8 }}>
                 — {booking.guest_name}
