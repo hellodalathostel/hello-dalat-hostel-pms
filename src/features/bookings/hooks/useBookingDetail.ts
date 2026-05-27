@@ -121,10 +121,12 @@ export async function fetchGroupDetail(groupId: string): Promise<GroupDetail> {
     }
 
     const bookingRows = (bookings ?? []).map((booking) => {
-      const rawGuests = Array.isArray(booking.booking_guests) ? booking.booking_guests : []
+      const rawGuests: Array<{ is_primary?: unknown; customers?: unknown }> = Array.isArray(booking.booking_guests)
+        ? booking.booking_guests
+        : []
       const bookingGuests = rawGuests.map((guest) => {
         const rawCustomer = guest.customers
-        const customer = Array.isArray(rawCustomer) ? rawCustomer[0] ?? null : rawCustomer ?? null
+        const customer = (Array.isArray(rawCustomer) ? rawCustomer[0] ?? null : rawCustomer ?? null) as BookingPrimaryCustomer | null
 
         return {
           is_primary: Boolean(guest.is_primary),

@@ -8,21 +8,27 @@ import {
   Descriptions,
   Drawer,
   Flex,
+  Popconfirm,
   Row,
   Skeleton,
   Space,
   Statistic,
   Table,
   Tag,
+  Tooltip,
   Typography,
 } from 'antd'
 import {
   CalendarOutlined,
+  ClockCircleOutlined,
   CreditCardOutlined,
   EditOutlined,
   HistoryOutlined,
   LoginOutlined,
+  LogoutOutlined,
   PhoneOutlined,
+  PlusOutlined,
+  StopOutlined,
   UserOutlined,
 } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -34,11 +40,12 @@ import { EditBookingModal } from '@/features/bookings/components/EditBookingModa
 import BookingFolioEditModal from '@/features/bookings/components/BookingFolioEditModal'
 import { CheckinImportModal } from '@/features/checkin/components/CheckinImportModal'
 import { CheckoutModal } from '@/features/checkout/components/CheckoutModal'
-import { BookingActionButtons } from '@/features/bookings/components/BookingActionButtons'
 import { DocumentActionsMenu } from '@/features/documents/DocumentActionsMenu'
 import { DocumentHistoryDrawer } from '@/features/documents/DocumentHistoryDrawer'
 import { EarlyLateModal } from '@/features/bookings/components/EarlyLateModal'
+import { useCancelBooking } from '@/features/bookings/hooks/useUpdateBooking'
 import type { EarlyLateType } from '@/hooks/useAddEarlyLate'
+import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
 
 // Map trạng thái sang màu Ant Design Tag
 const STATUS_COLOR: Record<string, string> = {
@@ -58,6 +65,16 @@ const STATUS_LABEL: Record<string, string> = {
 // PII chỉ hiển thị khi khách đã check-in hoặc đã check-out
 const PII_VISIBLE_STATUSES = ['checked-in', 'checked-out'] as const
 
+type BookingStatus = 'booked' | 'checked-in' | 'checked-out' | 'cancelled'
+
+const ACTION_STATUSES = {
+  canCheckin: ['booked'] as BookingStatus[],
+  canCheckout: ['checked-in'] as BookingStatus[],
+  canAddService: ['checked-in'] as BookingStatus[],
+  canEarlyLate: ['checked-in'] as BookingStatus[],
+  canCancel: ['booked'] as BookingStatus[],
+} as const
+
 function formatVND(amount: number | null | undefined): string {
   if (amount == null) return '—'
   return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount)
@@ -71,9 +88,23 @@ interface Props {
   onEditBooking?: (booking: BookingDetailItem) => void
 }
 
+interface BookingRoomCardProps {
+  booking: BookingDetailItem
+  groupId: string
+  onCheckin?: (bookingId: string) => void
+  onCheckout?: (bookingId: string) => void
+  onAddService?: (bookingId: string) => void
+  onEarlyLate?: (bookingId: string) => void
+  onCancel?: (bookingId: string) => void
+  onEdit?: () => void
+  isCancelling?: boolean
+}
+
 // Drawer chi tiết group booking: thông tin khách, danh sách phòng, thanh toán.
 export default function BookingDetailDrawer({ groupId = null, bookingId = null, open, onClose, onEditBooking }: Props) {
   const queryClient = useQueryClient()
+  const { message } = useAppFeedback()
+  const cancelBookingMutation = useCancelBooking()
   const { data: resolvedGroupId, isLoading: isResolvingGroupId, isError: isResolvingError } = useQuery({
     queryKey: ['booking-group-id', bookingId],
     enabled: open && !groupId && Boolean(bookingId),
@@ -111,6 +142,21 @@ export default function BookingDetailDrawer({ groupId = null, bookingId = null, 
   const [earlyLateOpen, setEarlyLateOpen] = useState(false)
   const [earlyLateDefaultType, setEarlyLateDefaultType] = useState<EarlyLateType>('early')
   const [earlyLateBooking, setEarlyLateBooking] = useState<BookingDetailItem | null>(null)
+
+  const handleCancelBooking = (bookingIdToCancel: string) => {
+    cancelBookingMutation.mutate(bookingIdToCancel, {
+      onSuccess: () => {
+        message.success('Đã huỷ booking')
+        if (effectiveGroupId) {
+          void queryClient.invalidateQueries({ queryKey: ['booking-detail', effectiveGroupId] })
+        }
+      },
+      onError: (error) => {
+        const errorMessage = error instanceof Error ? error.message : 'Không thể huỷ booking'
+        message.error(`Huỷ thất bại: ${errorMessage}`)
+      },
+    })
+  }
 
   const totalGrandTotal = data?.grand_total ?? 0
   const balanceDue = data?.balance_due ?? 0
@@ -267,11 +313,24 @@ export default function BookingDetailDrawer({ groupId = null, bookingId = null, 
                   <BookingRoomCard
                     key={booking.id}
                     booking={{ ...booking, services: [], discounts: [] }}
+                    groupId={effectiveGroupId ?? ''}
+                    isCancelling={cancelBookingMutation.isPending}
                     onCheckin={() => setCheckinImportOpen(true)}
-                    onOpenEarlyLate={(type) => {
-                      setEarlyLateBooking({ ...booking, services: [], discounts: [] })
-                      setEarlyLateDefaultType(type)
+                    onCheckout={(bookingIdToCheckout) => {
+                      setCheckoutBookingId(bookingIdToCheckout)
+                    }}
+                    onAddService={(bookingIdToEditFolio) => {
+                      setFolioEditBookingId(bookingIdToEditFolio)
+                      setFolioEditOpen(true)
+                    }}
+                    onEarlyLate={(bookingIdForEarlyLate) => {
+                      const matchedBooking = data.bookings.find((item) => item.id === bookingIdForEarlyLate) ?? booking
+                      setEarlyLateBooking({ ...matchedBooking, services: [], discounts: [] })
+                      setEarlyLateDefaultType('early')
                       setEarlyLateOpen(true)
+                    }}
+                    onCancel={(bookingIdToCancel) => {
+                      handleCancelBooking(bookingIdToCancel)
                     }}
                     onEdit={() => {
                       const bookingItem = { ...booking, services: [], discounts: [] }
@@ -371,18 +430,25 @@ export default function BookingDetailDrawer({ groupId = null, bookingId = null, 
 // Card hiển thị một booking trong group
 function BookingRoomCard({
   booking,
+  groupId: _groupId,
   onCheckin,
-  onOpenEarlyLate,
+  onCheckout,
+  onAddService,
+  onEarlyLate,
+  onCancel,
   onEdit,
-}: {
-  booking: BookingDetailItem
-  onCheckin: () => void
-  onOpenEarlyLate: (type: EarlyLateType) => void
-  onEdit: () => void
-}) {
+  isCancelling = false,
+}: BookingRoomCardProps) {
   const nights = booking.nights ?? dayjs(booking.check_out).diff(dayjs(booking.check_in), 'day')
   const isPiiVisible = (PII_VISIBLE_STATUSES as readonly string[]).includes(booking.status)
   const primaryGuest = booking.booking_guests?.find((guest) => guest.is_primary)?.customers ?? null
+  const status = booking.status as BookingStatus
+  const canCheckin = ACTION_STATUSES.canCheckin.includes(status)
+  const canCheckout = ACTION_STATUSES.canCheckout.includes(status)
+  const canAddService = ACTION_STATUSES.canAddService.includes(status)
+  const canEarlyLate = ACTION_STATUSES.canEarlyLate.includes(status)
+  const canCancel = ACTION_STATUSES.canCancel.includes(status)
+  const isReadOnly = status === 'checked-out' || status === 'cancelled'
 
   return (
     <Badge.Ribbon
@@ -435,60 +501,7 @@ function BookingRoomCard({
             <div style={{ textAlign: 'right' }}>
               <Typography.Text strong>{formatVND(booking.grand_total)}</Typography.Text>
             </div>
-
-            {booking.status === 'booked' && (
-              <>
-                <Button
-                  size="small"
-                  onClick={() => onOpenEarlyLate('early')}
-                >
-                  Early Check-in
-                </Button>
-                <Button
-                  type="primary"
-                  size="small"
-                  icon={<LoginOutlined />}
-                  onClick={onCheckin}
-                >
-                  Check-in
-                </Button>
-                <Button
-                  size="small"
-                  icon={<EditOutlined />}
-                  onClick={onEdit}
-                >
-                  Sửa
-                </Button>
-              </>
-            )}
-
-            {booking.status === 'checked-in' && (
-              <>
-                <Button
-                  size="small"
-                  onClick={() => onOpenEarlyLate('early')}
-                >
-                  Early Check-in
-                </Button>
-                <Button
-                  size="small"
-                  onClick={() => onOpenEarlyLate('late')}
-                >
-                  Late Check-out
-                </Button>
-                <BookingActionButtons
-                  bookingId={booking.id}
-                  status={booking.status}
-                  size="small"
-                  showDetails={false}
-                />
-              </>
-            )}
-
-            {booking.status !== 'checked-out' &&
-              booking.status !== 'cancelled' &&
-              booking.status !== 'booked' &&
-              booking.status !== 'checked-in' && (
+            {onEdit && !isReadOnly && (
               <Button
                 size="small"
                 icon={<EditOutlined />}
@@ -524,6 +537,68 @@ function BookingRoomCard({
           <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 4 }}>
             📝 {booking.note}
           </Typography.Text>
+        )}
+
+        {/* Action buttons — hiển thị có điều kiện theo status */}
+        {!isReadOnly && (
+          <div style={{ marginTop: 12, borderTop: '1px solid #f0f0f0', paddingTop: 12 }}>
+            <Space wrap size="small">
+              {/* Check-in */}
+              {canCheckin && (
+                <Button type="primary" size="small" icon={<LoginOutlined />} onClick={() => onCheckin?.(booking.id)}>
+                  Check-in
+                </Button>
+              )}
+
+              {/* Check-out */}
+              {canCheckout && (
+                <Button type="primary" size="small" icon={<LogoutOutlined />} onClick={() => onCheckout?.(booking.id)}>
+                  Check-out
+                </Button>
+              )}
+
+              {/* Thêm dịch vụ */}
+              {canAddService && (
+                <Button size="small" icon={<PlusOutlined />} onClick={() => onAddService?.(booking.id)}>
+                  Dịch vụ
+                </Button>
+              )}
+
+              {/* Early / Late */}
+              {canEarlyLate && (
+                <Tooltip title="Mở modal Early/Late cho booking này">
+                  <Button size="small" icon={<ClockCircleOutlined />} onClick={() => onEarlyLate?.(booking.id)}>
+                    Early/Late
+                  </Button>
+                </Tooltip>
+              )}
+
+              {/* Huỷ booking */}
+              {canCancel && (
+                <Popconfirm
+                  title="Huỷ booking này?"
+                  description="Thao tác này không thể hoàn tác."
+                  okText="Huỷ booking"
+                  cancelText="Đóng"
+                  okButtonProps={{ danger: true, loading: isCancelling }}
+                  onConfirm={() => onCancel?.(booking.id)}
+                >
+                  <Button size="small" danger icon={<StopOutlined />}>
+                    Huỷ
+                  </Button>
+                </Popconfirm>
+              )}
+            </Space>
+          </div>
+        )}
+
+        {/* Badge trạng thái khi read-only */}
+        {isReadOnly && (
+          <div style={{ marginTop: 8 }}>
+            <Tag color={status === 'checked-out' ? 'default' : 'red'}>
+              {status === 'checked-out' ? 'Đã trả phòng' : 'Đã huỷ'}
+            </Tag>
+          </div>
         )}
       </div>
     </Badge.Ribbon>
