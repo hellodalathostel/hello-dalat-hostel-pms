@@ -38,6 +38,7 @@ import type { BookingDetailItem } from '@/features/bookings/hooks/useBookingDeta
 // BookingDetailItem được export từ useBookingDetail
 import { EditBookingModal } from '@/features/bookings/components/EditBookingModal'
 import BookingFolioEditModal from '@/features/bookings/components/BookingFolioEditModal'
+import { QuickAddServiceModal } from '@/features/bookings/components/QuickAddServiceModal'
 import { CheckinImportModal } from '@/features/checkin/components/CheckinImportModal'
 import { CheckoutModal } from '@/features/checkout/components/CheckoutModal'
 import { DocumentActionsMenu } from '@/features/documents/DocumentActionsMenu'
@@ -142,6 +143,7 @@ export default function BookingDetailDrawer({ groupId = null, bookingId = null, 
   const [earlyLateOpen, setEarlyLateOpen] = useState(false)
   const [earlyLateDefaultType, setEarlyLateDefaultType] = useState<EarlyLateType>('early')
   const [earlyLateBooking, setEarlyLateBooking] = useState<BookingDetailItem | null>(null)
+  const [serviceBooking, setServiceBooking] = useState<{ id: string; roomName?: string } | null>(null)
 
   const handleCancelBooking = (bookingIdToCancel: string) => {
     cancelBookingMutation.mutate(bookingIdToCancel, {
@@ -320,8 +322,11 @@ export default function BookingDetailDrawer({ groupId = null, bookingId = null, 
                       setCheckoutBookingId(bookingIdToCheckout)
                     }}
                     onAddService={(bookingIdToEditFolio) => {
-                      setFolioEditBookingId(bookingIdToEditFolio)
-                      setFolioEditOpen(true)
+                      const selectedBooking = data.bookings.find((item) => item.id === bookingIdToEditFolio)
+                      setServiceBooking({
+                        id: bookingIdToEditFolio,
+                        roomName: selectedBooking?.room_name ?? undefined,
+                      })
                     }}
                     onEarlyLate={(bookingIdForEarlyLate) => {
                       const matchedBooking = data.bookings.find((item) => item.id === bookingIdForEarlyLate) ?? booking
@@ -375,6 +380,16 @@ export default function BookingDetailDrawer({ groupId = null, bookingId = null, 
         bookingId={folioEditBookingId || ''}
         groupId={effectiveGroupId || ''}
       />
+
+      {serviceBooking && (
+        <QuickAddServiceModal
+          open={Boolean(serviceBooking)}
+          bookingId={serviceBooking.id}
+          groupId={effectiveGroupId || ''}
+          roomName={serviceBooking.roomName}
+          onClose={() => setServiceBooking(null)}
+        />
+      )}
 
       {/* Modal sửa/huỷ booking */}
       {editingBooking && effectiveGroupId && (
