@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/api/supabase'
 import { normalizeError } from '@/shared/utils/normalizeError'
 import type { CalendarEvent, RoomRow } from '@/types/calendar'
+import type { HousekeepingStatus } from '@/types/database'
 
 // Thứ tự mặc định chỉ dùng khi chưa có dữ liệu phòng từ DB
 const DEFAULT_ROOM_ORDER = ['101', '102', '103', '201', '202', '203', '301', '302']
@@ -10,6 +11,8 @@ const DEFAULT_ROOM_ORDER = ['101', '102', '103', '201', '202', '203', '301', '30
 interface BaseRoom {
   id: string
   name: string
+  housekeeping_status?: HousekeepingStatus
+  housekeeping_note?: string | null
 }
 
 interface UseRoomCalendarParams {
@@ -92,12 +95,24 @@ function transformCalendarRows(
     }
   }
 
-  const orderedRooms: { id: string; name: string }[] =
+  const orderedRooms: {
+    id: string
+    name: string
+    housekeeping_status: HousekeepingStatus
+    housekeeping_note: string | null
+  }[] =
     baseRooms && baseRooms.length > 0
-      ? baseRooms.map((r) => ({ id: r.id, name: r.name }))
+      ? baseRooms.map((r) => ({
+          id: r.id,
+          name: r.name,
+          housekeeping_status: r.housekeeping_status ?? 'clean',
+          housekeeping_note: r.housekeeping_note ?? null,
+        }))
       : DEFAULT_ROOM_ORDER.map((id) => ({
           id,
           name: roomNameFromCalendar.get(id) ?? `Phòng ${id}`,
+          housekeeping_status: 'clean' as HousekeepingStatus,
+          housekeeping_note: null,
         }))
 
   // Bước 2: group calendar events theo room_id → merge vào từng hàng phòng
@@ -110,9 +125,10 @@ function transformCalendarRows(
   }
 
   // Bước 3: render row cho mỗi phòng — phòng không có event vẫn xuất hiện (vacant)
-  const rooms: RoomRow[] = orderedRooms.map(({ id: roomId, name: roomName }) => {
-    const roomEvents = eventsByRoom.get(roomId) ?? new Map<string, CalendarEvent>()
-    const days: RoomRow['days'] = []
+  const rooms: RoomRow[] = orderedRooms.map(
+    ({ id: roomId, name: roomName, housekeeping_status, housekeeping_note }) => {
+      const roomEvents = eventsByRoom.get(roomId) ?? new Map<string, CalendarEvent>()
+      const days: RoomRow['days'] = []
 
     let dateIndex = 0
     while (dateIndex < dates.length) {
@@ -172,12 +188,15 @@ function transformCalendarRows(
       dateIndex += span
     }
 
-    return {
-      room_id: roomId,
-      room_name: roomName,
-      days,
-    }
-  })
+      return {
+        room_id: roomId,
+        room_name: roomName,
+        housekeeping_status,
+        housekeeping_note,
+        days,
+      }
+    },
+  )
 
   return { dates, rooms }
 }

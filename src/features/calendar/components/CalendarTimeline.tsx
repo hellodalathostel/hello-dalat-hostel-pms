@@ -4,6 +4,7 @@ import dayjs from 'dayjs'
 import type { JSX } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { CalendarEvent, RoomRow } from '@/types/calendar'
+import { HousekeepingBadge } from './HousekeepingBadge'
 
 interface CalendarTimelineProps {
   dates: string[]
@@ -70,7 +71,14 @@ export function CalendarTimeline({ dates, rooms, onBookingClick }: CalendarTimel
             {rooms.map((room) => (
               <tr key={room.room_id}>
                 <th className="calendar-room-cell">
-                  <div className="calendar-room-name">{room.room_name}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span className="calendar-room-name">{room.room_name}</span>
+                    <HousekeepingBadge
+                      roomId={room.room_id}
+                      status={room.housekeeping_status}
+                      note={room.housekeeping_note}
+                    />
+                  </div>
                   <Typography.Text type="secondary">Mã {room.room_id}</Typography.Text>
                 </th>
                 {room.days.map((day) => {
