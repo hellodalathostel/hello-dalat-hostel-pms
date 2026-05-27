@@ -16,7 +16,7 @@ import type { BookingRow } from '@/features/bookings/hooks/useBookingDetail'
 
 type DateRangeValue = [Dayjs, Dayjs]
 
-const defaultRange: DateRangeValue = [dayjs().startOf('day'), dayjs().add(14, 'day').startOf('day')]
+const defaultRange: DateRangeValue = [dayjs().subtract(2, 'day').startOf('day'), dayjs().add(14, 'day').startOf('day')]
 
 function formatDate(date: string | null): string {
   if (!date) {
