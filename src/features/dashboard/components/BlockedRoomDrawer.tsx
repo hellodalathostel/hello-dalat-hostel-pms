@@ -1,12 +1,13 @@
 // Drawer hiển thị OTA block active và hỗ trợ tạo booking nội bộ cho phòng đang blocked
-import { CalendarOutlined, LinkOutlined, PlusOutlined } from '@ant-design/icons'
-import { Alert, Button, Descriptions, Divider, Drawer, Form, Input, InputNumber, Space, Spin, Tag } from 'antd'
+import { CalendarOutlined, ExclamationCircleOutlined, LinkOutlined, PlusOutlined } from '@ant-design/icons'
+import { Alert, Button, Descriptions, Divider, Drawer, Form, Input, InputNumber, Modal, Space, Spin, Tag } from 'antd'
 import { useQuery } from '@tanstack/react-query'
 import dayjs from 'dayjs'
 import { useState } from 'react'
 import { supabase } from '@/api/supabase'
 import type { DashboardRoom } from '@/types/dashboard'
 import { useCreateBookingFromOtaBlock } from '../hooks/useCreateBookingFromOtaBlock'
+import { useCancelOtaBlock } from '../hooks/useCancelOtaBlock'
 
 interface BlockedRoomDrawerProps {
   room: DashboardRoom | null
@@ -22,6 +23,7 @@ interface OtaBlock {
   check_out: string
   summary: string | null
   linked_group_id: string | null
+  is_cancelled: boolean
 }
 
 interface CreateBookingFormValues {
@@ -54,6 +56,28 @@ export function BlockedRoomDrawer({ room, open, onClose }: BlockedRoomDrawerProp
 
   const [form] = Form.useForm<CreateBookingFormValues>()
   const createBooking = useCreateBookingFromOtaBlock()
+  const cancelBlock = useCancelOtaBlock()
+
+  const handleCancelBlock = () => {
+    if (!block) return
+
+    const hasLinkedBooking = !!block.linked_group_id
+
+    Modal.confirm({
+      title: 'Đánh dấu hủy OTA block?',
+      icon: <ExclamationCircleOutlined />,
+      content: hasLinkedBooking
+        ? 'Block này đã có booking nội bộ. Hủy block sẽ KHÔNG tự hủy booking — bạn cần xử lý booking riêng. Tiếp tục?'
+        : 'Block sẽ được đánh dấu đã hủy và không hiển thị trên dashboard nữa.',
+      okText: 'Xác nhận hủy',
+      okButtonProps: { danger: true },
+      cancelText: 'Không',
+      onOk: async () => {
+        await cancelBlock.mutateAsync(block.id)
+        onClose()
+      },
+    })
+  }
 
   const { data: block, isLoading } = useQuery<OtaBlock | null>({
     queryKey: ['ota-blocks', roomId, 'active'],
@@ -65,7 +89,7 @@ export function BlockedRoomDrawer({ room, open, onClose }: BlockedRoomDrawerProp
       const today = dayjs().format('YYYY-MM-DD')
       const { data, error } = await supabase
         .from('ota_calendar_feed')
-        .select('id, ical_uid, ota_source, check_in, check_out, summary, linked_group_id')
+        .select('id, ical_uid, ota_source, check_in, check_out, summary, linked_group_id, is_cancelled')
         .eq('room_id', roomId)
         .lte('check_in', today)
         .gt('check_out', today)
@@ -180,6 +204,23 @@ export function BlockedRoomDrawer({ room, open, onClose }: BlockedRoomDrawerProp
 
           {block.linked_group_id ? (
             <Alert style={{ marginTop: 16 }} type="success" message="Block này đã có booking nội bộ." />
+          ) : null}
+
+          {/* Nút hủy block — hiện khi chưa cancel, bất kể linked hay không */}
+          {!block.is_cancelled ? (
+            <Button
+              danger
+              style={{ marginTop: 12, width: '100%' }}
+              loading={cancelBlock.isPending}
+              onClick={handleCancelBlock}
+            >
+              Đánh dấu đã hủy
+            </Button>
+          ) : null}
+
+          {/* Block đã cancel */}
+          {block.is_cancelled ? (
+            <Alert style={{ marginTop: 16 }} type="error" message="Block này đã được đánh dấu hủy." />
           ) : null}
 
           {!block.linked_group_id && !showForm ? (
