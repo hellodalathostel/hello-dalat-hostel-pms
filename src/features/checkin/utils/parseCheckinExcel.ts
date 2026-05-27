@@ -256,7 +256,7 @@ export function parseCheckinExcel(file: File): Promise<GuestImportRow[]> {
         })
 
         if (result.length === 0) {
-          reject(new Error('File không có dữ liệu khách.'))
+          resolve([])
           return
         }
 

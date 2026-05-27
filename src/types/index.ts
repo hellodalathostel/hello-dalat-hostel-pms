@@ -1,7 +1,6 @@
 export * from './database'
 export * from './calendar'
 export * from './dashboard'
-export * from './room'
 
 // Chỉ export những gì checkin.ts có mà database.ts không có
 // (DocumentType và ResidencyType đã có trong database.ts — bỏ qua để tránh conflict)
