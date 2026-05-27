@@ -171,6 +171,21 @@ export function parseCheckinExcel(file: File): Promise<GuestImportRow[]> {
         const data = new Uint8Array(event.target?.result as ArrayBuffer)
         const workbook = XLSX.read(data, { type: 'array', cellDates: false })
         const worksheet = workbook.Sheets[workbook.SheetNames[0]]
+
+        // Fix: KBTT export file có !ref sai (thiếu data rows) — decode_range + expand
+        const range = XLSX.utils.decode_range(worksheet['!ref'] ?? 'A1:N10')
+        // Scan toàn bộ cell thực tế để tìm row cuối cùng có data
+        let maxRow = range.e.r
+        Object.keys(worksheet).forEach((key) => {
+          if (key.startsWith('!')) return
+          const cellRef = XLSX.utils.decode_cell(key)
+          if (cellRef.r > maxRow) maxRow = cellRef.r
+        })
+        if (maxRow > range.e.r) {
+          range.e.r = maxRow
+          worksheet['!ref'] = XLSX.utils.encode_range(range)
+        }
+
         const rows: unknown[][] = XLSX.utils.sheet_to_json(worksheet, {
           header: 1,
           defval: null,

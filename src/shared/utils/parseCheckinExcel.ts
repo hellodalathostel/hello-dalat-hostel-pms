@@ -124,8 +124,22 @@ export function parseCheckinExcel(file: File): Promise<ExcelGuestRow[]> {
     reader.onload = (e) => {
       try {
         const data = new Uint8Array(e.target?.result as ArrayBuffer);
-        const wb = XLSX.read(data, { type: 'array' });
+        const wb = XLSX.read(data, { type: 'array', cellDates: false });
         const ws = wb.Sheets[wb.SheetNames[0]];
+
+        // Fix: KBTT export file có !ref sai (thiếu data rows) — decode_range + expand
+        const range = XLSX.utils.decode_range(ws['!ref'] ?? 'A1:N10');
+        // Scan toàn bộ cell thực tế để tìm row cuối cùng có data
+        let maxRow = range.e.r;
+        Object.keys(ws).forEach((key) => {
+          if (key.startsWith('!')) return;
+          const cellRef = XLSX.utils.decode_cell(key);
+          if (cellRef.r > maxRow) maxRow = cellRef.r;
+        });
+        if (maxRow > range.e.r) {
+          range.e.r = maxRow;
+          ws['!ref'] = XLSX.utils.encode_range(range);
+        }
 
         // raw: false để lấy text đã render từ Excel, giữ ổn định cho tiếng Việt/ngày
         const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, {
