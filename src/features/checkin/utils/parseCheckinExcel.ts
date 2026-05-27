@@ -20,7 +20,7 @@ const NATIONALITY_MAP: Record<string, string> = {
   'HÀN QUỐC': 'KOR', 'HAN QUOC': 'KOR', KOREA: 'KOR',
   'SOUTH KOREA': 'KOR', 'TRUNG QUỐC': 'CHN', 'TRUNG QUOC': 'CHN',
   CHINA: 'CHN', 'ĐÀI LOAN': 'TWN', 'DAI LOAN': 'TWN', TAIWAN: 'TWN',
-  'MỸ': 'USA', MY: 'USA', 'UNITED STATES': 'USA', AMERICA: 'USA',
+  'MỸ': 'USA', 'UNITED STATES': 'USA', AMERICA: 'USA',
   ANH: 'GBR', 'UNITED KINGDOM': 'GBR', UK: 'GBR',
   'PHÁP': 'FRA', PHAP: 'FRA', FRANCE: 'FRA',
   'ĐỨC': 'DEU', DUC: 'DEU', GERMANY: 'DEU',
