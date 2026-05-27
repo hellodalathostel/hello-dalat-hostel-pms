@@ -35,6 +35,8 @@ import { CheckoutModal } from '@/features/checkout/components/CheckoutModal'
 import { BookingActionButtons } from '@/features/bookings/components/BookingActionButtons'
 import { DocumentActionsMenu } from '@/features/documents/DocumentActionsMenu'
 import { DocumentHistoryDrawer } from '@/features/documents/DocumentHistoryDrawer'
+import { EarlyLateModal } from '@/features/bookings/components/EarlyLateModal'
+import type { EarlyLateType } from '@/hooks/useAddEarlyLate'
 
 // Map trạng thái sang màu Ant Design Tag
 const STATUS_COLOR: Record<string, string> = {
@@ -74,6 +76,9 @@ export default function BookingDetailDrawer({ groupId, open, onClose, onEditBook
   // State for folio edit modal
   const [folioEditOpen, setFolioEditOpen] = useState(false)
   const [folioEditBookingId, setFolioEditBookingId] = useState<string | null>(null)
+  const [earlyLateOpen, setEarlyLateOpen] = useState(false)
+  const [earlyLateDefaultType, setEarlyLateDefaultType] = useState<EarlyLateType>('early')
+  const [earlyLateBooking, setEarlyLateBooking] = useState<BookingDetailItem | null>(null)
 
   // Tổng grand_total tất cả bookings chưa cancelled
   const totalGrandTotal = (data?.bookings ?? [])
@@ -233,6 +238,11 @@ export default function BookingDetailDrawer({ groupId, open, onClose, onEditBook
                     key={booking.id}
                     booking={{ ...booking, services: [], discounts: [] }}
                     onCheckin={() => setCheckinImportOpen(true)}
+                    onOpenEarlyLate={(type) => {
+                      setEarlyLateBooking({ ...booking, services: [], discounts: [] })
+                      setEarlyLateDefaultType(type)
+                      setEarlyLateOpen(true)
+                    }}
                     onEdit={() => {
                       const bookingItem = { ...booking, services: [], discounts: [] }
                       if (onEditBooking) {
@@ -301,6 +311,21 @@ export default function BookingDetailDrawer({ groupId, open, onClose, onEditBook
         open={historyOpen}
         onClose={() => setHistoryOpen(false)}
       />
+
+      <EarlyLateModal
+        open={earlyLateOpen}
+        booking={earlyLateBooking}
+        defaultType={earlyLateDefaultType}
+        onClose={() => {
+          setEarlyLateOpen(false)
+          setEarlyLateBooking(null)
+        }}
+        onSuccess={() => {
+          if (groupId) {
+            void queryClient.invalidateQueries({ queryKey: ['booking-detail', groupId] })
+          }
+        }}
+      />
     </>
   )
 }
@@ -309,10 +334,12 @@ export default function BookingDetailDrawer({ groupId, open, onClose, onEditBook
 function BookingRoomCard({
   booking,
   onCheckin,
+  onOpenEarlyLate,
   onEdit,
 }: {
   booking: BookingDetailItem
   onCheckin: () => void
+  onOpenEarlyLate: (type: EarlyLateType) => void
   onEdit: () => void
 }) {
   const nights = booking.nights ?? dayjs(booking.check_out).diff(dayjs(booking.check_in), 'day')
@@ -354,6 +381,12 @@ function BookingRoomCard({
             {booking.status === 'booked' && (
               <>
                 <Button
+                  size="small"
+                  onClick={() => onOpenEarlyLate('early')}
+                >
+                  Early Check-in
+                </Button>
+                <Button
                   type="primary"
                   size="small"
                   icon={<LoginOutlined />}
@@ -372,12 +405,26 @@ function BookingRoomCard({
             )}
 
             {booking.status === 'checked-in' && (
-              <BookingActionButtons
-                bookingId={booking.id}
-                status={booking.status}
-                size="small"
-                showDetails={false}
-              />
+              <>
+                <Button
+                  size="small"
+                  onClick={() => onOpenEarlyLate('early')}
+                >
+                  Early Check-in
+                </Button>
+                <Button
+                  size="small"
+                  onClick={() => onOpenEarlyLate('late')}
+                >
+                  Late Check-out
+                </Button>
+                <BookingActionButtons
+                  bookingId={booking.id}
+                  status={booking.status}
+                  size="small"
+                  showDetails={false}
+                />
+              </>
             )}
 
             {booking.status !== 'checked-out' &&

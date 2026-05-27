@@ -24,6 +24,8 @@ export type BookingRow = {
   guest_name: string | null
   guests_count: number
   status: 'booked' | 'checked-in' | 'checked-out' | 'cancelled'
+  has_early_check_in: boolean
+  has_late_check_out: boolean
   note: string | null
   created_at: string
 }
