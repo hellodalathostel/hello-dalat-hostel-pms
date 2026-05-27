@@ -55,6 +55,9 @@ const STATUS_LABEL: Record<string, string> = {
   cancelled: 'Đã huỷ',
 }
 
+// PII chỉ hiển thị khi khách đã check-in hoặc đã check-out
+const PII_VISIBLE_STATUSES = ['checked-in', 'checked-out'] as const
+
 function formatVND(amount: number | null | undefined): string {
   if (amount == null) return '—'
   return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount)
@@ -378,6 +381,8 @@ function BookingRoomCard({
   onEdit: () => void
 }) {
   const nights = booking.nights ?? dayjs(booking.check_out).diff(dayjs(booking.check_in), 'day')
+  const isPiiVisible = (PII_VISIBLE_STATUSES as readonly string[]).includes(booking.status)
+  const primaryGuest = booking.booking_guests?.find((guest) => guest.is_primary)?.customers ?? null
 
   return (
     <Badge.Ribbon
@@ -407,6 +412,16 @@ function BookingRoomCard({
               <Typography.Text type="secondary" style={{ marginLeft: 8 }}>
                 — {booking.guest_name}
               </Typography.Text>
+            )}
+            {primaryGuest && (
+              <div style={{ marginTop: 4 }}>
+                <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block' }}>
+                  Loại giấy tờ: {primaryGuest.id_type ?? '—'}
+                </Typography.Text>
+                <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block' }}>
+                  Số giấy tờ: {isPiiVisible ? (primaryGuest.id_number ?? '—') : '—'}
+                </Typography.Text>
+              </div>
             )}
             <div style={{ marginTop: 4 }}>
               <Typography.Text type="secondary" style={{ fontSize: 12 }}>
