@@ -2,6 +2,57 @@ import * as XLSX from 'xlsx'
 import dayjs from 'dayjs'
 import customParseFormat from 'dayjs/plugin/customParseFormat'
 
+// Map quốc tịch từ KBTT export (tên tiếng Việt/ISO-2/ISO-3) -> ISO-3
+const NATIONALITY_MAP: Record<string, string> = {
+  VN: 'VNM', JP: 'JPN', KR: 'KOR', CN: 'CHN', TW: 'TWN',
+  US: 'USA', GB: 'GBR', FR: 'FRA', DE: 'DEU', AU: 'AUS',
+  CA: 'CAN', SG: 'SGP', TH: 'THA', MY: 'MYS', ID: 'IDN',
+  PH: 'PHL', IN: 'IND', RU: 'RUS', IT: 'ITA', ES: 'ESP',
+  NL: 'NLD', CH: 'CHE', SE: 'SWE', NO: 'NOR', DK: 'DNK',
+  NZ: 'NZL', HK: 'HKG', MO: 'MAC', IL: 'ISR', BR: 'BRA',
+  MX: 'MEX', AR: 'ARG', ZA: 'ZAF', EG: 'EGY', NG: 'NGA',
+  PL: 'POL', CZ: 'CZE', HU: 'HUN', RO: 'ROU', PT: 'PRT',
+  BE: 'BEL', AT: 'AUT', FI: 'FIN', GR: 'GRC', TR: 'TUR',
+  UA: 'UKR', IR: 'IRN', SA: 'SAU', AE: 'ARE', MM: 'MMR',
+  KH: 'KHM', LA: 'LAO', BD: 'BGD', LK: 'LKA', NP: 'NPL',
+  'VIỆT NAM': 'VNM', 'VIET NAM': 'VNM', VIETNAM: 'VNM',
+  'NHẬT BẢN': 'JPN', 'NHAT BAN': 'JPN', JAPAN: 'JPN',
+  'HÀN QUỐC': 'KOR', 'HAN QUOC': 'KOR', KOREA: 'KOR',
+  'SOUTH KOREA': 'KOR', 'TRUNG QUỐC': 'CHN', 'TRUNG QUOC': 'CHN',
+  CHINA: 'CHN', 'ĐÀI LOAN': 'TWN', 'DAI LOAN': 'TWN', TAIWAN: 'TWN',
+  'MỸ': 'USA', MY: 'USA', 'UNITED STATES': 'USA', AMERICA: 'USA',
+  ANH: 'GBR', 'UNITED KINGDOM': 'GBR', UK: 'GBR',
+  'PHÁP': 'FRA', PHAP: 'FRA', FRANCE: 'FRA',
+  'ĐỨC': 'DEU', DUC: 'DEU', GERMANY: 'DEU',
+  'ÚC': 'AUS', UC: 'AUS', AUSTRALIA: 'AUS',
+  CANADA: 'CAN', SINGAPORE: 'SGP',
+  'THÁI LAN': 'THA', 'THAI LAN': 'THA', THAILAND: 'THA',
+  MALAYSIA: 'MYS', INDONESIA: 'IDN', PHILIPPINES: 'PHL',
+  'ẤN ĐỘ': 'IND', 'AN DO': 'IND', INDIA: 'IND',
+  NGA: 'RUS', RUSSIA: 'RUS',
+  'Ý': 'ITA', ITALY: 'ITA', 'TÂY BAN NHA': 'ESP', SPAIN: 'ESP',
+  'HÀ LAN': 'NLD', NETHERLANDS: 'NLD', 'THỤY SĨ': 'CHE', SWITZERLAND: 'CHE',
+  'THỤY ĐIỂN': 'SWE', SWEDEN: 'SWE', 'NA UY': 'NOR', NORWAY: 'NOR',
+  'ĐAN MẠCH': 'DNK', DENMARK: 'DNK', 'NEW ZEALAND': 'NZL',
+  'HỒNG KÔNG': 'HKG', 'HONG KONG': 'HKG', 'MA CAO': 'MAC', MACAO: 'MAC',
+  ISRAEL: 'ISR', MYANMAR: 'MMR', CAMPUCHIA: 'KHM', CAMBODIA: 'KHM',
+  'LÀO': 'LAO', LAOS: 'LAO', BANGLADESH: 'BGD',
+}
+
+function normalizeNationality(raw: unknown): string {
+  if (raw === null || raw === undefined) return 'VNM'
+
+  const normalized = String(raw).trim().toUpperCase().replace(/\s+/g, ' ')
+  if (!normalized) return 'VNM'
+
+  if (/^[A-Z]{3}$/.test(normalized)) return normalized
+
+  return NATIONALITY_MAP[normalized] ?? 'XXX'
+}
+
+const KBTT_NATIONALITY_ALIASES = ['nationality', 'quoc_tich', 'qt', 'Quốc tịch'] as const
+const KBTT_COUNTRY_ALIASES = ['country', 'quoc_gia', 'quốc gia', 'qt', 'Quốc tịch'] as const
+
 dayjs.extend(customParseFormat)
 
 type FileType = 'VN' | 'NNN' | 'UNKNOWN'
@@ -229,7 +280,12 @@ export function parseCheckinExcel(file: File): Promise<GuestImportRow[]> {
           if (Number.isNaN(stt)) return
 
           if (format === 'template') {
-            const nationality = toNullableString(findCellValue(row, headers, HEADER_ALIASES.template.nationality))
+            const nationality = normalizeNationality(
+              findCellValue(row, headers, [...HEADER_ALIASES.template.nationality, ...KBTT_NATIONALITY_ALIASES]),
+            )
+            const country = normalizeNationality(
+              findCellValue(row, headers, [...KBTT_COUNTRY_ALIASES, ...HEADER_ALIASES.template.nationality, ...HEADER_ALIASES.export.nationality]),
+            )
             result.push({
               rowIndex: index + 1,
               fileType: 'VN',
@@ -245,7 +301,7 @@ export function parseCheckinExcel(file: File): Promise<GuestImportRow[]> {
               province: toNullableString(findCellValue(row, headers, HEADER_ALIASES.template.province)),
               ward: toNullableString(findCellValue(row, headers, HEADER_ALIASES.template.ward)),
               addressDetail: toNullableString(findCellValue(row, headers, HEADER_ALIASES.template.addressDetail)),
-              country: nationality ?? 'VNM',
+              country,
             })
             return
           }
@@ -253,7 +309,12 @@ export function parseCheckinExcel(file: File): Promise<GuestImportRow[]> {
           const passportNumber = toNullableString(findCellValue(row, headers, HEADER_ALIASES.export.passportNumber))
           const idNumberFallback = toNullableString(findCellValue(row, headers, HEADER_ALIASES.export.documentNumber))
           const documentTypeRaw = toNullableString(findCellValue(row, headers, HEADER_ALIASES.export.documentType))
-          const nationality = toNullableString(findCellValue(row, headers, HEADER_ALIASES.export.nationality))
+          const nationality = normalizeNationality(
+            findCellValue(row, headers, [...HEADER_ALIASES.export.nationality, ...KBTT_NATIONALITY_ALIASES]),
+          )
+          const country = normalizeNationality(
+            findCellValue(row, headers, [...KBTT_COUNTRY_ALIASES, ...HEADER_ALIASES.export.nationality]),
+          )
 
           result.push({
             rowIndex: index + 1,
@@ -270,7 +331,7 @@ export function parseCheckinExcel(file: File): Promise<GuestImportRow[]> {
             province: toNullableString(findCellValue(row, headers, HEADER_ALIASES.export.province)),
             ward: toNullableString(findCellValue(row, headers, HEADER_ALIASES.export.ward)),
             addressDetail: toNullableString(findCellValue(row, headers, HEADER_ALIASES.export.addressDetail)),
-            country: nationality ?? 'XXX',
+            country,
           })
         })
 
