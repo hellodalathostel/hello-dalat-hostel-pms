@@ -189,7 +189,10 @@ export interface PaymentHistory {
 	method: PaymentMethod | null
 	date: string // date
 	note: string | null
+	is_void: boolean
+	voided_payment_id: string | null
 	created_at: string
+	updated_at: string
 }
 
 export interface Expense {

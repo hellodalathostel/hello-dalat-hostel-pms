@@ -12,11 +12,11 @@ import { useRooms } from '@/features/bookings/hooks/useRooms'
 import { useDeleteBlock } from '@/features/calendar/hooks/useRoomBlocks'
 import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
 import type { CalendarEvent } from '@/types/calendar'
-import type { BookingRow } from '@/features/bookings/hooks/useBookingDetail'
+import type { BookingDetailItem } from '@/features/bookings/hooks/useBookingDetail'
 
 type DateRangeValue = [Dayjs, Dayjs]
 
-const defaultRange: DateRangeValue = [dayjs().startOf('day'), dayjs().add(14, 'day').startOf('day')]
+const defaultRange: DateRangeValue = [dayjs().subtract(2, 'day').startOf('day'), dayjs().add(14, 'day').startOf('day')]
 
 function formatDate(date: string | null): string {
   if (!date) {
@@ -33,8 +33,8 @@ export default function RoomCalendar(): React.JSX.Element {
   const { notification } = useAppFeedback()
   const deleteBlockMutation = useDeleteBlock()
   const [range, setRange] = useState<DateRangeValue>(defaultRange)
-  const [detailGroupId, setDetailGroupId] = useState<string | null>(null)
-  const [editingBooking, setEditingBooking] = useState<BookingRow | null>(null)
+  const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null)
+  const [editingBooking, setEditingBooking] = useState<BookingDetailItem | null>(null)
   const [blockModalOpen, setBlockModalOpen] = useState(false)
   const [blockPrefill, setBlockPrefill] = useState<{ roomId?: string; date?: string }>({})
 
@@ -58,8 +58,8 @@ export default function RoomCalendar(): React.JSX.Element {
       return
     }
 
-    if (event.entry_type === 'booking' && event.group_id) {
-      setDetailGroupId(event.group_id)
+    if (event.entry_type === 'booking' && event.booking_id) {
+      setSelectedBookingId(event.booking_id)
       return
     }
 
@@ -144,9 +144,9 @@ export default function RoomCalendar(): React.JSX.Element {
       </Spin>
 
       <BookingDetailDrawer
-        groupId={detailGroupId}
-        open={!!detailGroupId}
-        onClose={() => setDetailGroupId(null)}
+        bookingId={selectedBookingId}
+        open={!!selectedBookingId}
+        onClose={() => setSelectedBookingId(null)}
         onEditBooking={(booking) => setEditingBooking(booking)}
       />
       <EditBookingModal

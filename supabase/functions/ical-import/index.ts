@@ -98,10 +98,21 @@ async function sha256(text: string): Promise<string> {
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
+}
+
 serve(async (req) => {
-  // Chỉ chấp nhận POST (từ pg_net cron hoặc UI)
+  // Preflight CORS — browser gửi OPTIONS trước khi POST
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { status: 204, headers: CORS_HEADERS })
+  }
+
+  // Chỉ chấp nhận POST/GET (từ pg_net cron hoặc UI)
   if (req.method !== 'POST' && req.method !== 'GET') {
-    return new Response('Method not allowed', { status: 405 })
+    return new Response('Method not allowed', { status: 405, headers: CORS_HEADERS })
   }
 
   // Dùng service_role để bypass RLS — function này chỉ chạy server-side
@@ -120,13 +131,13 @@ serve(async (req) => {
   if (roomsError) {
     return new Response(JSON.stringify({ error: roomsError.message }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
     })
   }
 
   if (!rooms || rooms.length === 0) {
     return new Response(JSON.stringify({ message: 'Không có phòng nào có OTA feed', results: [] }), {
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
     })
   }
 
@@ -246,6 +257,6 @@ serve(async (req) => {
 
   return new Response(
     JSON.stringify({ totalUpserted, totalConflicts, totalSkipped, errors: errors.length, results }),
-    { headers: { 'Content-Type': 'application/json' } }
+    { headers: { 'Content-Type': 'application/json', ...CORS_HEADERS } }
   )
 })

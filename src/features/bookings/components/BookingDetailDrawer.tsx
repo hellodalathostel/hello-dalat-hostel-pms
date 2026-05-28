@@ -1,40 +1,52 @@
 import { useState } from 'react'
 import dayjs from 'dayjs'
 import {
+  Alert,
   Badge,
   Button,
   Col,
   Descriptions,
   Drawer,
   Flex,
+  Popconfirm,
   Row,
   Skeleton,
   Space,
   Statistic,
   Table,
   Tag,
+  Tooltip,
   Typography,
 } from 'antd'
 import {
   CalendarOutlined,
+  ClockCircleOutlined,
   CreditCardOutlined,
   EditOutlined,
   HistoryOutlined,
   LoginOutlined,
+  LogoutOutlined,
   PhoneOutlined,
+  PlusOutlined,
+  StopOutlined,
   UserOutlined,
 } from '@ant-design/icons'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { supabase } from '@/api/supabase'
 import { useBookingDetail } from '@/features/bookings/hooks/useBookingDetail'
 import type { BookingDetailItem } from '@/features/bookings/hooks/useBookingDetail'
 // BookingDetailItem được export từ useBookingDetail
 import { EditBookingModal } from '@/features/bookings/components/EditBookingModal'
 import BookingFolioEditModal from '@/features/bookings/components/BookingFolioEditModal'
+import { AddServiceModal } from '@/features/bookings/components/AddServiceModal'
 import { CheckinImportModal } from '@/features/checkin/components/CheckinImportModal'
 import { CheckoutModal } from '@/features/checkout/components/CheckoutModal'
-import { BookingActionButtons } from '@/features/bookings/components/BookingActionButtons'
 import { DocumentActionsMenu } from '@/features/documents/DocumentActionsMenu'
 import { DocumentHistoryDrawer } from '@/features/documents/DocumentHistoryDrawer'
+import { EarlyLateModal } from '@/features/bookings/components/EarlyLateModal'
+import { useCancelBooking } from '@/features/bookings/hooks/useUpdateBooking'
+import type { EarlyLateType } from '@/hooks/useAddEarlyLate'
+import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
 
 // Map trạng thái sang màu Ant Design Tag
 const STATUS_COLOR: Record<string, string> = {
@@ -51,22 +63,77 @@ const STATUS_LABEL: Record<string, string> = {
   cancelled: 'Đã huỷ',
 }
 
+// PII chỉ hiển thị khi khách đã check-in hoặc đã check-out
+const PII_VISIBLE_STATUSES = ['checked-in', 'checked-out'] as const
+
+type BookingStatus = 'booked' | 'checked-in' | 'checked-out' | 'cancelled'
+
+const ACTION_STATUSES = {
+  canCheckin: ['booked'] as BookingStatus[],
+  canCheckout: ['checked-in'] as BookingStatus[],
+  canAddService: ['checked-in'] as BookingStatus[],
+  canEarlyLate: ['checked-in'] as BookingStatus[],
+  canCancel: ['booked'] as BookingStatus[],
+} as const
+
 function formatVND(amount: number | null | undefined): string {
   if (amount == null) return '—'
   return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount)
 }
 
 interface Props {
-  groupId: string | null
+  groupId?: string | null
+  bookingId?: string | null
   open: boolean
   onClose: () => void
   onEditBooking?: (booking: BookingDetailItem) => void
 }
 
+interface BookingRoomCardProps {
+  booking: BookingDetailItem
+  groupId: string
+  onCheckin?: (bookingId: string) => void
+  onCheckout?: (bookingId: string) => void
+  onAddService?: (bookingId: string) => void
+  onEarlyLate?: (bookingId: string) => void
+  onCancel?: (bookingId: string) => void
+  onEdit?: () => void
+  isCancelling?: boolean
+}
+
 // Drawer chi tiết group booking: thông tin khách, danh sách phòng, thanh toán.
-export default function BookingDetailDrawer({ groupId, open, onClose, onEditBooking }: Props) {
+export default function BookingDetailDrawer({ groupId = null, bookingId = null, open, onClose, onEditBooking }: Props) {
   const queryClient = useQueryClient()
-  const { data, isLoading } = useBookingDetail(groupId)
+  const { message } = useAppFeedback()
+  const cancelBookingMutation = useCancelBooking()
+  const { data: resolvedGroupId, isLoading: isResolvingGroupId, isError: isResolvingError } = useQuery({
+    queryKey: ['booking-group-id', bookingId],
+    enabled: open && !groupId && Boolean(bookingId),
+    staleTime: 30 * 1000,
+    queryFn: async (): Promise<string | null> => {
+      if (!bookingId) {
+        return null
+      }
+
+      const { data: bookingRow, error } = await supabase
+        .from('bookings')
+        .select('group_id')
+        .eq('id', bookingId)
+        .single()
+
+      if (error) {
+        throw error
+      }
+
+      return bookingRow.group_id ?? null
+    },
+  })
+
+  const effectiveGroupId = groupId ?? resolvedGroupId ?? null
+  const { data, isLoading: isLoadingDetail, isError: isDetailError } = useBookingDetail(effectiveGroupId)
+  const isLoading = isResolvingGroupId || isLoadingDetail
+  const hasNoInput = !groupId && !bookingId
+  const shouldShowResolveError = open && !hasNoInput && !isLoading && (isResolvingError || isDetailError || !data)
   const [editingBooking, setEditingBooking] = useState<BookingDetailItem | null>(null)
   const [checkinImportOpen, setCheckinImportOpen] = useState(false)
   const [checkoutBookingId, setCheckoutBookingId] = useState<string | null>(null)
@@ -74,13 +141,29 @@ export default function BookingDetailDrawer({ groupId, open, onClose, onEditBook
   // State for folio edit modal
   const [folioEditOpen, setFolioEditOpen] = useState(false)
   const [folioEditBookingId, setFolioEditBookingId] = useState<string | null>(null)
+  const [earlyLateOpen, setEarlyLateOpen] = useState(false)
+  const [earlyLateDefaultType, setEarlyLateDefaultType] = useState<EarlyLateType>('early')
+  const [earlyLateBooking, setEarlyLateBooking] = useState<BookingDetailItem | null>(null)
+  const [addServiceOpen, setAddServiceOpen] = useState(false)
+  const [addServiceBookingId, setAddServiceBookingId] = useState<string | null>(null)
 
-  // Tổng grand_total tất cả bookings chưa cancelled
-  const totalGrandTotal = (data?.bookings ?? [])
-    .filter((b) => b.status !== 'cancelled')
-    .reduce((sum, b) => sum + (b.grand_total ?? 0), 0)
+  const handleCancelBooking = (bookingIdToCancel: string) => {
+    cancelBookingMutation.mutate(bookingIdToCancel, {
+      onSuccess: () => {
+        message.success('Đã huỷ booking')
+        if (effectiveGroupId) {
+          void queryClient.invalidateQueries({ queryKey: ['booking-detail', effectiveGroupId] })
+        }
+      },
+      onError: (error) => {
+        const errorMessage = error instanceof Error ? error.message : 'Không thể huỷ booking'
+        message.error(`Huỷ thất bại: ${errorMessage}`)
+      },
+    })
+  }
 
-  const balanceDue = totalGrandTotal - (data?.paid ?? 0)
+  const totalGrandTotal = data?.grand_total ?? 0
+  const balanceDue = data?.balance_due ?? 0
 
   const paymentColumns = [
     {
@@ -118,7 +201,7 @@ export default function BookingDetailDrawer({ groupId, open, onClose, onEditBook
         open={open}
         onClose={onClose}
         extra={
-          data && groupId ? (
+          data && effectiveGroupId ? (
             <Space size={8}>
               <Button
                 icon={<HistoryOutlined />}
@@ -127,13 +210,23 @@ export default function BookingDetailDrawer({ groupId, open, onClose, onEditBook
               >
                 Lịch sử
               </Button>
-              <DocumentActionsMenu groupId={groupId} remaining={Math.max(0, balanceDue)} />
+              <DocumentActionsMenu groupId={effectiveGroupId} remaining={Math.max(0, balanceDue)} />
             </Space>
           ) : null
         }
         destroyOnClose
       >
         {isLoading && <Skeleton active paragraph={{ rows: 8 }} />}
+
+        {shouldShowResolveError && (
+          <Alert
+            type="error"
+            showIcon
+            message="Không tìm thấy thông tin booking"
+            description="Vui lòng tải lại trang hoặc kiểm tra lại booking đã chọn."
+            style={{ marginBottom: 16 }}
+          />
+        )}
 
         {!isLoading && data && (
           <Space direction="vertical" size={24} style={{ width: '100%' }}>
@@ -213,14 +306,6 @@ export default function BookingDetailDrawer({ groupId, open, onClose, onEditBook
                 )}
               </Col>
             </Row>
-      {/* Modal chỉnh sửa folio */}
-      <BookingFolioEditModal
-        open={folioEditOpen}
-        onClose={() => setFolioEditOpen(false)}
-        bookingId={folioEditBookingId || ''}
-        groupId={groupId || ''}
-      />
-
             {/* Danh sách phòng */}
             <div>
               <Typography.Title level={5} style={{ marginBottom: 12 }}>
@@ -232,7 +317,25 @@ export default function BookingDetailDrawer({ groupId, open, onClose, onEditBook
                   <BookingRoomCard
                     key={booking.id}
                     booking={{ ...booking, services: [], discounts: [] }}
+                    groupId={effectiveGroupId ?? ''}
+                    isCancelling={cancelBookingMutation.isPending}
                     onCheckin={() => setCheckinImportOpen(true)}
+                    onCheckout={(bookingIdToCheckout) => {
+                      setCheckoutBookingId(bookingIdToCheckout)
+                    }}
+                    onAddService={(bookingIdToEditFolio) => {
+                      setAddServiceBookingId(bookingIdToEditFolio)
+                      setAddServiceOpen(true)
+                    }}
+                    onEarlyLate={(bookingIdForEarlyLate) => {
+                      const matchedBooking = data.bookings.find((item) => item.id === bookingIdForEarlyLate) ?? booking
+                      setEarlyLateBooking({ ...matchedBooking, services: [], discounts: [] })
+                      setEarlyLateDefaultType('early')
+                      setEarlyLateOpen(true)
+                    }}
+                    onCancel={(bookingIdToCancel) => {
+                      handleCancelBooking(bookingIdToCancel)
+                    }}
                     onEdit={() => {
                       const bookingItem = { ...booking, services: [], discounts: [] }
                       if (onEditBooking) {
@@ -269,8 +372,32 @@ export default function BookingDetailDrawer({ groupId, open, onClose, onEditBook
         )}
       </Drawer>
 
+      {/* Modal chỉnh sửa folio */}
+      <BookingFolioEditModal
+        open={folioEditOpen}
+        onClose={() => setFolioEditOpen(false)}
+        bookingId={folioEditBookingId || ''}
+        groupId={effectiveGroupId || ''}
+      />
+
+      {addServiceBookingId && (
+        <AddServiceModal
+          open={addServiceOpen}
+          bookingId={addServiceBookingId}
+          onClose={() => {
+            setAddServiceOpen(false)
+            setAddServiceBookingId(null)
+          }}
+          onSuccess={() => {
+            // folio query đã được invalidate trong useAddService
+            setAddServiceOpen(false)
+            setAddServiceBookingId(null)
+          }}
+        />
+      )}
+
       {/* Modal sửa/huỷ booking */}
-      {editingBooking && groupId && (
+      {editingBooking && effectiveGroupId && (
         <EditBookingModal
           booking={editingBooking}
           onClose={() => setEditingBooking(null)}
@@ -284,8 +411,8 @@ export default function BookingDetailDrawer({ groupId, open, onClose, onEditBook
         onSuccess={() => {
           setCheckinImportOpen(false)
 
-          if (groupId) {
-            void queryClient.invalidateQueries({ queryKey: ['booking-detail', groupId] })
+          if (effectiveGroupId) {
+            void queryClient.invalidateQueries({ queryKey: ['booking-detail', effectiveGroupId] })
           }
         }}
       />
@@ -297,9 +424,24 @@ export default function BookingDetailDrawer({ groupId, open, onClose, onEditBook
       />
 
       <DocumentHistoryDrawer
-        groupId={groupId}
+        groupId={effectiveGroupId}
         open={historyOpen}
         onClose={() => setHistoryOpen(false)}
+      />
+
+      <EarlyLateModal
+        open={earlyLateOpen}
+        booking={earlyLateBooking}
+        defaultType={earlyLateDefaultType}
+        onClose={() => {
+          setEarlyLateOpen(false)
+          setEarlyLateBooking(null)
+        }}
+        onSuccess={() => {
+          if (effectiveGroupId) {
+            void queryClient.invalidateQueries({ queryKey: ['booking-detail', effectiveGroupId] })
+          }
+        }}
       />
     </>
   )
@@ -308,14 +450,25 @@ export default function BookingDetailDrawer({ groupId, open, onClose, onEditBook
 // Card hiển thị một booking trong group
 function BookingRoomCard({
   booking,
+  groupId: _groupId,
   onCheckin,
+  onCheckout,
+  onAddService,
+  onEarlyLate,
+  onCancel,
   onEdit,
-}: {
-  booking: BookingDetailItem
-  onCheckin: () => void
-  onEdit: () => void
-}) {
+  isCancelling = false,
+}: BookingRoomCardProps) {
   const nights = booking.nights ?? dayjs(booking.check_out).diff(dayjs(booking.check_in), 'day')
+  const isPiiVisible = (PII_VISIBLE_STATUSES as readonly string[]).includes(booking.status)
+  const primaryGuest = booking.booking_guests?.find((guest) => guest.is_primary)?.customers ?? null
+  const status = booking.status as BookingStatus
+  const canCheckin = ACTION_STATUSES.canCheckin.includes(status)
+  const canCheckout = ACTION_STATUSES.canCheckout.includes(status)
+  const canAddService = ACTION_STATUSES.canAddService.includes(status)
+  const canEarlyLate = ACTION_STATUSES.canEarlyLate.includes(status)
+  const canCancel = ACTION_STATUSES.canCancel.includes(status)
+  const isReadOnly = status === 'checked-out' || status === 'cancelled'
 
   return (
     <Badge.Ribbon
@@ -332,11 +485,29 @@ function BookingRoomCard({
       >
         <Flex justify="space-between" align="flex-start">
           <div>
-            <Typography.Text strong>Phòng {booking.room_id}</Typography.Text>
+            <Typography.Text strong>
+              Phòng {booking.room_name ?? booking.room_id}
+              {booking.has_early_check_in && (
+                <Tag color="orange" style={{ marginLeft: 4, fontSize: 11 }}>🌅 Early</Tag>
+              )}
+              {booking.has_late_check_out && (
+                <Tag color="purple" style={{ marginLeft: 4, fontSize: 11 }}>🌙 Late</Tag>
+              )}
+            </Typography.Text>
             {booking.guest_name && (
               <Typography.Text type="secondary" style={{ marginLeft: 8 }}>
                 — {booking.guest_name}
               </Typography.Text>
+            )}
+            {primaryGuest && (
+              <div style={{ marginTop: 4 }}>
+                <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block' }}>
+                  Loại giấy tờ: {primaryGuest.document_type ?? '—'}
+                </Typography.Text>
+                <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block' }}>
+                  Số giấy tờ: {isPiiVisible ? (primaryGuest.document_number ?? '—') : '—'}
+                </Typography.Text>
+              </div>
             )}
             <div style={{ marginTop: 4 }}>
               <Typography.Text type="secondary" style={{ fontSize: 12 }}>
@@ -350,40 +521,7 @@ function BookingRoomCard({
             <div style={{ textAlign: 'right' }}>
               <Typography.Text strong>{formatVND(booking.grand_total)}</Typography.Text>
             </div>
-
-            {booking.status === 'booked' && (
-              <>
-                <Button
-                  type="primary"
-                  size="small"
-                  icon={<LoginOutlined />}
-                  onClick={onCheckin}
-                >
-                  Check-in
-                </Button>
-                <Button
-                  size="small"
-                  icon={<EditOutlined />}
-                  onClick={onEdit}
-                >
-                  Sửa
-                </Button>
-              </>
-            )}
-
-            {booking.status === 'checked-in' && (
-              <BookingActionButtons
-                bookingId={booking.id}
-                status={booking.status}
-                size="small"
-                showDetails={false}
-              />
-            )}
-
-            {booking.status !== 'checked-out' &&
-              booking.status !== 'cancelled' &&
-              booking.status !== 'booked' &&
-              booking.status !== 'checked-in' && (
+            {onEdit && !isReadOnly && (
               <Button
                 size="small"
                 icon={<EditOutlined />}
@@ -419,6 +557,68 @@ function BookingRoomCard({
           <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 4 }}>
             📝 {booking.note}
           </Typography.Text>
+        )}
+
+        {/* Action buttons — hiển thị có điều kiện theo status */}
+        {!isReadOnly && (
+          <div style={{ marginTop: 12, borderTop: '1px solid #f0f0f0', paddingTop: 12 }}>
+            <Space wrap size="small">
+              {/* Check-in */}
+              {canCheckin && (
+                <Button type="primary" size="small" icon={<LoginOutlined />} onClick={() => onCheckin?.(booking.id)}>
+                  Check-in
+                </Button>
+              )}
+
+              {/* Check-out */}
+              {canCheckout && (
+                <Button type="primary" size="small" icon={<LogoutOutlined />} onClick={() => onCheckout?.(booking.id)}>
+                  Check-out
+                </Button>
+              )}
+
+              {/* Thêm dịch vụ */}
+              {canAddService && (
+                <Button size="small" icon={<PlusOutlined />} onClick={() => onAddService?.(booking.id)}>
+                  Dịch vụ
+                </Button>
+              )}
+
+              {/* Early / Late */}
+              {canEarlyLate && (
+                <Tooltip title="Mở modal Early/Late cho booking này">
+                  <Button size="small" icon={<ClockCircleOutlined />} onClick={() => onEarlyLate?.(booking.id)}>
+                    Early/Late
+                  </Button>
+                </Tooltip>
+              )}
+
+              {/* Huỷ booking */}
+              {canCancel && (
+                <Popconfirm
+                  title="Huỷ booking này?"
+                  description="Thao tác này không thể hoàn tác."
+                  okText="Huỷ booking"
+                  cancelText="Đóng"
+                  okButtonProps={{ danger: true, loading: isCancelling }}
+                  onConfirm={() => onCancel?.(booking.id)}
+                >
+                  <Button size="small" danger icon={<StopOutlined />}>
+                    Huỷ
+                  </Button>
+                </Popconfirm>
+              )}
+            </Space>
+          </div>
+        )}
+
+        {/* Badge trạng thái khi read-only */}
+        {isReadOnly && (
+          <div style={{ marginTop: 8 }}>
+            <Tag color={status === 'checked-out' ? 'default' : 'red'}>
+              {status === 'checked-out' ? 'Đã trả phòng' : 'Đã huỷ'}
+            </Tag>
+          </div>
         )}
       </div>
     </Badge.Ribbon>

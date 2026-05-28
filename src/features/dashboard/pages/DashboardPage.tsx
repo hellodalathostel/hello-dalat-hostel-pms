@@ -7,6 +7,8 @@ import { useNavigate } from 'react-router-dom'
 import { CheckinImportModal } from '@/features/checkin/components/CheckinImportModal'
 import { QuickCheckoutModal, type CheckoutTarget } from '@/features/checkout/components/QuickCheckoutModal'
 import { RoomCard } from '@/features/dashboard/components/RoomCard'
+import { BlockedRoomDrawer } from '@/features/dashboard/components/BlockedRoomDrawer'
+import BookingDetailDrawer from '@/features/bookings/components/BookingDetailDrawer'
 import { PaymentModal } from '@/features/payment/components/PaymentModal'
 import { StatsBar } from '@/features/dashboard/components/StatsBar'
 import { getRoomStatus, useDashboard } from '@/features/dashboard/hooks/useDashboard'
@@ -28,6 +30,8 @@ export default function Dashboard(): React.JSX.Element {
   const { notification } = useAppFeedback()
   const { data: rooms = [], isLoading, isFetching, error } = useDashboard()
   const [selectedRoom, setSelectedRoom] = useState<DashboardRoom | null>(null)
+  const [blockedDetailsRoom, setBlockedDetailsRoom] = useState<DashboardRoom | null>(null)
+  const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null)
   const [isCheckInVisible, setIsCheckInVisible] = useState(false)
   const [isPaymentVisible, setIsPaymentVisible] = useState(false)
   const [checkoutTarget, setCheckoutTarget] = useState<CheckoutTarget | null>(null)
@@ -69,6 +73,22 @@ export default function Dashboard(): React.JSX.Element {
   const handlePaymentClick = useCallback((room: DashboardRoom) => {
     setSelectedRoom(room)
     setIsPaymentVisible(true)
+  }, [])
+
+  const handleDetailsClick = useCallback((room: DashboardRoom) => {
+    if (room.is_blocked) {
+      setBlockedDetailsRoom(room)
+      return
+    }
+
+    if ((room.status === 'booked' || room.status === 'checked-in') && room.booking_id) {
+      setSelectedBookingId(room.booking_id)
+      return
+    }
+
+    if (room.booking_id) {
+      setSelectedBookingId(room.booking_id)
+    }
   }, [])
 
   const handleRoomClick = (room: DashboardRoom) => {
@@ -161,6 +181,7 @@ export default function Dashboard(): React.JSX.Element {
                 onPaymentClick={handlePaymentClick}
                 onCheckinClick={handleRoomClick}
                 onCheckoutClick={handleRoomClick}
+                onDetailsClick={handleDetailsClick}
               />
             </Col>
           ))}
@@ -186,6 +207,18 @@ export default function Dashboard(): React.JSX.Element {
           onCancel={handleClosePaymentModal}
         />
       ) : null}
+
+      <BlockedRoomDrawer
+        room={blockedDetailsRoom}
+        open={Boolean(blockedDetailsRoom)}
+        onClose={() => setBlockedDetailsRoom(null)}
+      />
+
+      <BookingDetailDrawer
+        bookingId={selectedBookingId}
+        open={Boolean(selectedBookingId)}
+        onClose={() => setSelectedBookingId(null)}
+      />
     </div>
   )
 }

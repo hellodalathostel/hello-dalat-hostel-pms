@@ -1,3 +1,5 @@
+import type { HousekeepingStatus } from './database'
+
 // Dữ liệu một ô lịch lấy từ view room_calendar.
 export interface CalendarEvent {
   room_id: string
@@ -23,6 +25,8 @@ export interface CalendarEvent {
 export interface RoomRow {
   room_id: string
   room_name: string
+  housekeeping_status: HousekeepingStatus
+  housekeeping_note: string | null
   days: Array<{
     date: string
     event: CalendarEvent | null
