@@ -9,9 +9,8 @@ export type BookingDiscountItem = { id: string; amount: number; description: str
 export type BookingPrimaryCustomer = {
   full_name: string | null
   phone: string | null
-  email: string | null
-  id_type: string | null
-  id_number: string | null
+  document_type: string | null
+  document_number: string | null
   nationality: string | null
 }
 
@@ -86,9 +85,8 @@ export async function fetchGroupDetail(groupId: string): Promise<GroupDetail> {
               customers (
                 full_name,
                 phone,
-                email,
-                id_type,
-                id_number,
+                document_type,
+                document_number,
                 nationality
               )
             )

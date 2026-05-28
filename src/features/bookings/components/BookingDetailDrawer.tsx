@@ -498,10 +498,10 @@ function BookingRoomCard({
             {primaryGuest && (
               <div style={{ marginTop: 4 }}>
                 <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block' }}>
-                  Loại giấy tờ: {primaryGuest.id_type ?? '—'}
+                  Loại giấy tờ: {primaryGuest.document_type ?? '—'}
                 </Typography.Text>
                 <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block' }}>
-                  Số giấy tờ: {isPiiVisible ? (primaryGuest.id_number ?? '—') : '—'}
+                  Số giấy tờ: {isPiiVisible ? (primaryGuest.document_number ?? '—') : '—'}
                 </Typography.Text>
               </div>
             )}
