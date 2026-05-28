@@ -3,7 +3,6 @@ import { Alert, Button, Card, Descriptions, Flex, Space, Tag, Typography } from 
 import dayjs from 'dayjs'
 import { getRoomStatus } from '@/features/dashboard/hooks/useDashboard'
 import type { DashboardRoom, RoomStatus } from '@/types/dashboard'
-import { BookingActionButtons } from '@/features/bookings/components/BookingActionButtons'
 
 interface RoomCardProps {
   room: DashboardRoom
@@ -196,18 +195,6 @@ export function RoomCard({
           {actionButtons}
         </Flex>
       ) : null}
-
-      {/* BookingActionButtons — dùng khi có booking ở trạng thái booked hoặc checked-in */}
-      {room.booking_id && (room.status === 'booked' || room.status === 'checked-in') && (
-        <div style={{ marginTop: 8 }}>
-          <BookingActionButtons
-            bookingId={room.booking_id}
-            status={room.status}
-            onDetails={() => onDetailsClick?.(room)}
-            size="small"
-          />
-        </div>
-      )}
     </Card>
   )
 }
