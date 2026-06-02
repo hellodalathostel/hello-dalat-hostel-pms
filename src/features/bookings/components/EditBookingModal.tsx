@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import dayjs, { type Dayjs } from 'dayjs'
-import { Alert, Button, DatePicker, Form, Input, InputNumber, Modal, Popconfirm, Select } from 'antd'
+import { Button, DatePicker, Form, Input, InputNumber, Modal, Popconfirm, Select } from 'antd'
 import { useEffect } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { z } from 'zod'
@@ -49,7 +49,7 @@ function getDefaultValues(): FormValues {
 export function EditBookingModal({ booking, onClose, onSuccess }: EditBookingModalProps) {
   const updateMutation = useUpdateBooking()
   const cancelMutation = useCancelBooking()
-  const { message } = useAppFeedback()
+  const { message, modal } = useAppFeedback()
   const { data: rooms = [], isLoading: roomsLoading } = useRooms()
 
   const { control, handleSubmit, reset } = useForm<FormValues>({
@@ -75,27 +75,42 @@ export function EditBookingModal({ booking, onClose, onSuccess }: EditBookingMod
   }, [booking, reset])
 
   const onSubmit = async (values: FormValues) => {
-    if (!booking) {
+    if (!booking) return
+
+    const doUpdate = async (override: boolean) => {
+      try {
+        await updateMutation.mutateAsync({
+          bookingId: booking.id,
+          roomId: values.room_id,
+          checkIn: values.check_in,
+          checkOut: values.check_out,
+          pricePerNight: values.price_per_night,
+          guestsCount: values.guests_count,
+          guestName: values.guest_name,
+          note: values.note,
+          overrideCheckin: override,
+        })
+        message.success('Cap nhat booking thanh cong')
+        onSuccess()
+      } catch {
+        // Loi da duoc hook mutation xu ly bang notification.
+      }
+    }
+
+    // Flow A: booking checked-in -> confirm truoc khi override
+    if (booking.status === 'checked-in') {
+      modal.confirm({
+        title: 'Xac nhan chinh sua booking dang Dang o',
+        content: 'Booking nay dang check-in. Ban co chac muon luu thay doi?',
+        okText: 'Xac nhan luu',
+        cancelText: 'Huy',
+        okButtonProps: { danger: true },
+        onOk: () => doUpdate(true),
+      })
       return
     }
 
-    try {
-      await updateMutation.mutateAsync({
-        bookingId: booking.id,
-        roomId: values.room_id,
-        checkIn: values.check_in,
-        checkOut: values.check_out,
-        pricePerNight: values.price_per_night,
-        guestsCount: values.guests_count,
-        guestName: values.guest_name,
-        note: values.note,
-        overrideCheckin: booking.status === 'checked-in',
-      })
-      message.success('Cap nhat booking thanh cong')
-      onSuccess()
-    } catch {
-      // Loi da duoc hook mutation xu ly bang notification.
-    }
+    await doUpdate(false)
   }
 
   return (
@@ -136,16 +151,6 @@ export function EditBookingModal({ booking, onClose, onSuccess }: EditBookingMod
         </>
       }
     >
-      {booking?.status === 'checked-in' ? (
-        <Alert
-          type='warning'
-          showIcon
-          message='Booking đang trong trạng thái Đang ở'
-          description='Lưu thay đổi sẽ ghi đè dữ liệu booking đang check-in.'
-          style={{ marginBottom: 16 }}
-        />
-      ) : null}
-
       <Form layout='vertical' onFinish={handleSubmit(onSubmit)}>
         <Controller
           control={control}

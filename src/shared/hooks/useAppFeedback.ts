@@ -1,7 +1,7 @@
 import { App } from 'antd'
 
 export function useAppFeedback() {
-  const { message, notification } = App.useApp()
+  const { message, notification, modal } = App.useApp()
 
-  return { message, notification }
+  return { message, notification, modal }
 }
