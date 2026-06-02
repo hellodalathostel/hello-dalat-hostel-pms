@@ -7,15 +7,17 @@ export interface Breakpoints {
 	isMobile: boolean
 	isTablet: boolean
 	isDesktop: boolean
+	initialized: boolean
 	screens: ScreenMap | Partial<Record<'xs' | 'sm' | 'md' | 'lg' | 'xl' | 'xxl', boolean>>
 }
 
 export function useBreakpoint(): Breakpoints {
 	const screens = useAntdBreakpoint()
+	const initialized = Object.keys(screens).length > 0
 
 	const isMobile = !screens.md
 	const isTablet = !!screens.md && !screens.lg
 	const isDesktop = !!screens.lg
 
-	return { isMobile, isTablet, isDesktop, screens }
+	return { isMobile, isTablet, isDesktop, initialized, screens }
 }

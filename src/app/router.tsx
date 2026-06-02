@@ -27,6 +27,7 @@ export const appRouter = createBrowserRouter([
       { path: 'dashboard', element: <Suspense fallback={null}><DashboardPage /></Suspense> },
       { path: 'new-booking', element: <Suspense fallback={null}><NewBookingPage /></Suspense> },
       { path: 'calendar', element: <Suspense fallback={null}><RoomCalendarPage /></Suspense> },
+      { path: 'housekeeping', element: <Suspense fallback={null}><RoomCalendarPage /></Suspense> },
       { path: 'revenue', element: <Suspense fallback={null}><RevenueDashboardPage /></Suspense> },
       { path: 'finance', element: <Suspense fallback={null}><FinancePage /></Suspense> },
       { path: 'orevenue', element: <Suspense fallback={null}><RevenueDashboardPage /></Suspense> },

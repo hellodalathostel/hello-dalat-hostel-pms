@@ -1,133 +1,71 @@
 import {
+  CalendarOutlined,
+  CheckSquareOutlined,
+  DollarOutlined,
   FileExcelOutlined,
   FormOutlined,
   HomeOutlined,
   LinkOutlined,
   RiseOutlined,
-  TableOutlined,
   TeamOutlined,
   UnorderedListOutlined,
   UserAddOutlined,
-  DollarOutlined,
-  CalendarOutlined,
 } from '@ant-design/icons'
 import { Layout, Menu, Space, Typography } from 'antd'
 import { useMemo } from 'react'
 import type { JSX } from 'react'
 import type { ItemType } from 'antd/es/menu/interface'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { BottomNav } from '@/features/layout/components/BottomNav'
+import { useBreakpoint } from '@/shared/hooks/useBreakpoint'
 
 const { Header, Content } = Layout
 
 const menuItems: ItemType[] = [
-  {
-    key: '/',
-    icon: <HomeOutlined />,
-    label: 'Tổng quan',
-  },
-  {
-    key: '/new-booking',
-    icon: <FormOutlined />,
-    label: 'Tạo đặt phòng mới',
-  },
-  {
-    key: '/calendar',
-    icon: <TableOutlined />,
-    label: 'Lịch phòng',
-  },
-  {
-    key: '/bookings',
-    icon: <UnorderedListOutlined />,
-    label: 'Đặt phòng',
-  },
-  {
-    key: '/guests',
-    icon: <TeamOutlined />,
-    label: 'Khách',
-  },
-  {
-    key: '/finance',
-    icon: <DollarOutlined />,
-    label: 'Tài chính',
-  },
-  {
-    key: '/revenue',
-    icon: <RiseOutlined />,
-    label: 'Doanh thu',
-  },
-  {
-    key: '/dk14-report',
-    icon: <FileExcelOutlined />,
-    label: 'Báo cáo ĐK14',
-  },
-  {
-    key: '/checkin-import',
-    icon: <UserAddOutlined />,
-    label: 'Import Check-in (Excel)',
-  },
-  {
-    key: '/settings/ical',
-    icon: <LinkOutlined />,
-    label: 'iCal Feed',
-  },
-  {
-    key: '/ota-calendar',
-    icon: <CalendarOutlined />,
-    label: 'OTA Calendar',
-  },
+  { key: '/', icon: <HomeOutlined />, label: 'Tổng quan' },
+  { key: '/new-booking', icon: <FormOutlined />, label: 'Tạo đặt phòng mới' },
+  { key: '/calendar', icon: <CalendarOutlined />, label: 'Lịch phòng' },
+  { key: '/bookings', icon: <UnorderedListOutlined />, label: 'Đặt phòng' },
+  { key: '/guests', icon: <TeamOutlined />, label: 'Khách' },
+  { key: '/housekeeping', icon: <CheckSquareOutlined />, label: 'Housekeeping' },
+  { key: '/finance', icon: <DollarOutlined />, label: 'Tài chính' },
+  { key: '/revenue', icon: <RiseOutlined />, label: 'Doanh thu' },
+  { key: '/dk14-report', icon: <FileExcelOutlined />, label: 'Báo cáo ĐK14' },
+  { key: '/checkin-import', icon: <UserAddOutlined />, label: 'Import Check-in (Excel)' },
+  { key: '/settings/ical', icon: <LinkOutlined />, label: 'iCal Feed' },
 ]
+
+function resolveSelectedKeys(pathname: string): string[] {
+  const prefixMap: [string, string][] = [
+    ['/new-booking', '/new-booking'],
+    ['/calendar', '/calendar'],
+    ['/bookings', '/bookings'],
+    ['/guests', '/guests'],
+    ['/housekeeping', '/housekeeping'],
+    ['/finance', '/finance'],
+    ['/revenue', '/revenue'],
+    ['/orevenue', '/revenue'],
+    ['/dk14-report', '/dk14-report'],
+    ['/checkin-import', '/checkin-import'],
+    ['/settings', '/settings/ical'],
+    ['/dashboard', '/'],
+  ]
+
+  for (const [prefix, key] of prefixMap) {
+    if (pathname.startsWith(prefix)) {
+      return [key]
+    }
+  }
+
+  return ['/']
+}
 
 export function MainLayout(): JSX.Element {
   const navigate = useNavigate()
   const location = useLocation()
+  const { isMobile } = useBreakpoint()
 
-  const selectedKeys = useMemo(() => {
-    if (location.pathname.startsWith('/new-booking')) {
-      return ['/new-booking']
-    }
-
-    if (location.pathname.startsWith('/calendar')) {
-      return ['/calendar']
-    }
-
-    if (location.pathname.startsWith('/bookings')) {
-      return ['/bookings']
-    }
-
-    if (location.pathname.startsWith('/guests')) {
-      return ['/guests']
-    }
-
-    if (location.pathname.startsWith('/finance')) {
-      return ['/finance']
-    }
-
-    if (location.pathname.startsWith('/revenue') || location.pathname.startsWith('/orevenue')) {
-      return ['/revenue']
-    }
-
-    if (location.pathname.startsWith('/dk14-report')) {
-      return ['/dk14-report']
-    }
-
-    if (location.pathname.startsWith('/checkin-import')) {
-      return ['/checkin-import']
-    }
-
-    if (location.pathname.startsWith('/ota-calendar')) {
-      return ['/ota-calendar']
-    }
-
-    if (location.pathname.startsWith('/settings')) {
-      return ['/settings/ical']
-    }
-
-    if (location.pathname.startsWith('/dashboard')) {
-      return ['/']
-    }
-
-    return ['/']
-  }, [location.pathname])
+  const selectedKeys = useMemo(() => resolveSelectedKeys(location.pathname), [location.pathname])
 
   return (
     <Layout className="main-layout">
@@ -135,20 +73,26 @@ export function MainLayout(): JSX.Element {
         <Space direction="vertical" size={2}>
           <Typography.Text className="brand-kicker">Hello Dalat Hostel</Typography.Text>
           <Typography.Title level={4} className="brand-title">
-            Hệ thống PMS / CRM
+            {isMobile ? 'PMS' : 'Hệ thống PMS / CRM'}
           </Typography.Title>
         </Space>
-        <Menu
-          mode="horizontal"
-          items={menuItems}
-          selectedKeys={selectedKeys}
-          onClick={(event) => navigate(event.key)}
-          className="main-menu"
-        />
+        {!isMobile && (
+          <Menu
+            mode="horizontal"
+            items={menuItems}
+            selectedKeys={selectedKeys}
+            onClick={(event) => navigate(event.key)}
+            className="main-menu"
+          />
+        )}
       </Header>
-      <Content className="main-content">
+      <Content
+        className="main-content"
+        style={isMobile ? { paddingBottom: 'calc(56px + env(safe-area-inset-bottom, 0px))' } : undefined}
+      >
         <Outlet />
       </Content>
+      <BottomNav />
     </Layout>
   )
 }
