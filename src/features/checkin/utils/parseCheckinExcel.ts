@@ -101,12 +101,12 @@ const HEADER_ALIASES = {
     gender: ['gt', 'giới tính'],
     nationality: ['qt', 'quốc tịch'],
     passportNumber: ['số hộ chiếu'],
-    documentNumber: ['số cmnd/cccd', 'số giấy tờ'],
+    documentNumber: ['số cmnd/cccd', 'số giấy tờ', 'số giấy tờ '],
     documentType: ['loại giấy tờ', 'loại giấy tờ (*)'],
-    checkIn: ['ngày đến'],
+    checkIn: ['ngày đến', 'ngày đến '],
     checkOut: ['ngày đi dự kiến', 'ngày đi thực tế', 'ngày đi'],
-    roomNumber: ['số phòng', 'tên phòng / khoa'],
-    residencyType: ['loại cư trú'],
+    roomNumber: ['số phòng', 'số phòng ', 'tên phòng / khoa'],
+    residencyType: ['loại cư trú', 'lý do cư trú'],
     province: ['tỉnh/tp'],
     ward: ['phường/xã'],
     addressDetail: ['địa chỉ', 'địa chỉ chi tiết'],
@@ -189,8 +189,13 @@ export function detectFormat(headers: string[]): ExcelFormat {
   const isExport =
     hasAnyHeader(headers, HEADER_ALIASES.export.fullName) &&
     hasAnyHeader(headers, HEADER_ALIASES.export.gender) &&
-    (hasAnyHeader(headers, HEADER_ALIASES.export.nationality) ||
-      hasAnyHeader(headers, HEADER_ALIASES.export.passportNumber))
+    (
+      hasAnyHeader(headers, HEADER_ALIASES.export.nationality) ||
+      hasAnyHeader(headers, HEADER_ALIASES.export.passportNumber) ||
+      // KBTT VN export: có thể không có quốc tịch/hộ chiếu
+      (hasAnyHeader(headers, HEADER_ALIASES.export.documentType) &&
+        hasAnyHeader(headers, HEADER_ALIASES.export.roomNumber))
+    )
 
   if (isExport) return 'export'
 
