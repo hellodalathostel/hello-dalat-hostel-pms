@@ -26,6 +26,7 @@ import {
   DeleteOutlined,
   EditOutlined,
   ExclamationCircleOutlined,
+  FileExcelOutlined,
   HistoryOutlined,
   LoginOutlined,
   LogoutOutlined,
@@ -601,9 +602,14 @@ function BookingRoomCard({
             <Space wrap size="small">
               {/* Check-in */}
               {canCheckin && (
-                <Button type="primary" size="small" icon={<LoginOutlined />} onClick={() => onCheckin?.(booking.id)}>
-                  Check-in
-                </Button>
+                <>
+                  <Button type="primary" size="small" icon={<LoginOutlined />} onClick={() => onCheckin?.(booking.id)}>
+                    Check-in
+                  </Button>
+                  <Button size="small" icon={<FileExcelOutlined />} onClick={() => onCheckin?.(booking.id)}>
+                    Nhập Excel
+                  </Button>
+                </>
               )}
 
               {/* Check-out */}
