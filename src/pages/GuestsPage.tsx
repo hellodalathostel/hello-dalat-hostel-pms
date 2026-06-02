@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Button, Input, Space, Table, Tag, Typography } from 'antd'
+import { Button, Input, Table, Tag, Typography } from 'antd'
 import { SearchOutlined, UserOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
@@ -79,9 +79,18 @@ export default function GuestsPage() {
   ]
 
   return (
-    <div style={{ padding: 24 }}>
-      <Space style={{ marginBottom: 16, width: '100%', justifyContent: 'space-between' }}>
-        <Title level={4} style={{ margin: 0 }}>
+    <div style={{ padding: '16px 12px' }}>
+      <div
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          gap: 12,
+          marginBottom: 16,
+          justifyContent: 'space-between',
+        }}
+      >
+        <Title level={4} style={{ margin: 0, whiteSpace: 'nowrap' }}>
           Khách ({guests?.length ?? 0})
         </Title>
         <Input
@@ -90,9 +99,9 @@ export default function GuestsPage() {
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           allowClear
-          style={{ width: 320 }}
+          style={{ flex: '1 1 200px', maxWidth: 320 }}
         />
-      </Space>
+      </div>
 
       <Table
         columns={columns}
@@ -100,6 +109,7 @@ export default function GuestsPage() {
         rowKey="id"
         loading={isLoading}
         size="small"
+        scroll={{ x: true }}
         pagination={{ pageSize: 20, showSizeChanger: false }}
       />
 
