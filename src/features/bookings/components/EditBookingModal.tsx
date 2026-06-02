@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import dayjs, { type Dayjs } from 'dayjs'
-import { Button, DatePicker, Form, Input, InputNumber, Modal, Popconfirm, Select } from 'antd'
+import { Alert, Button, DatePicker, Form, Input, InputNumber, Modal, Popconfirm, Select } from 'antd'
 import { useEffect } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { z } from 'zod'
@@ -89,6 +89,7 @@ export function EditBookingModal({ booking, onClose, onSuccess }: EditBookingMod
         guestsCount: values.guests_count,
         guestName: values.guest_name,
         note: values.note,
+        overrideCheckin: booking.status === 'checked-in',
       })
       message.success('Cap nhat booking thanh cong')
       onSuccess()
@@ -135,6 +136,16 @@ export function EditBookingModal({ booking, onClose, onSuccess }: EditBookingMod
         </>
       }
     >
+      {booking?.status === 'checked-in' ? (
+        <Alert
+          type='warning'
+          showIcon
+          message='Booking đang trong trạng thái Đang ở'
+          description='Lưu thay đổi sẽ ghi đè dữ liệu booking đang check-in.'
+          style={{ marginBottom: 16 }}
+        />
+      ) : null}
+
       <Form layout='vertical' onFinish={handleSubmit(onSubmit)}>
         <Controller
           control={control}
