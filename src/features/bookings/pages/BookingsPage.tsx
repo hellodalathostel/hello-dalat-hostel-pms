@@ -4,6 +4,7 @@ import dayjs from 'dayjs'
 import {
   Badge,
   Button,
+  Flex,
   Input,
   Select,
   Space,
@@ -152,7 +153,7 @@ export function BookingsPage(): JSX.Element {
 
   return (
     <div className="page-grid">
-      <Space style={{ width: '100%', justifyContent: 'space-between' }}>
+      <Flex justify="space-between" align="center" gap={12} wrap>
         <Typography.Title level={2} style={{ margin: 0 }}>
           Quản lý đặt phòng
         </Typography.Title>
@@ -163,7 +164,7 @@ export function BookingsPage(): JSX.Element {
         >
           Tạo booking mới
         </Button>
-      </Space>
+      </Flex>
 
       <Space wrap style={{ marginTop: 16, marginBottom: 8 }}>
         <Input
