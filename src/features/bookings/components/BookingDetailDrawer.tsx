@@ -8,6 +8,7 @@ import {
   Descriptions,
   Drawer,
   Flex,
+  Modal,
   Popconfirm,
   Row,
   Skeleton,
@@ -22,7 +23,9 @@ import {
   CalendarOutlined,
   ClockCircleOutlined,
   CreditCardOutlined,
+  DeleteOutlined,
   EditOutlined,
+  ExclamationCircleOutlined,
   HistoryOutlined,
   LoginOutlined,
   LogoutOutlined,
@@ -41,6 +44,7 @@ import BookingFolioEditModal from '@/features/bookings/components/BookingFolioEd
 import { AddServiceModal } from '@/features/bookings/components/AddServiceModal'
 import { CheckinImportModal } from '@/features/checkin/components/CheckinImportModal'
 import { CheckoutModal } from '@/features/checkout/components/CheckoutModal'
+import { useVoidBooking } from '@/features/bookings/hooks/useVoidBooking'
 import { DocumentActionsMenu } from '@/features/documents/DocumentActionsMenu'
 import { DocumentHistoryDrawer } from '@/features/documents/DocumentHistoryDrawer'
 import { EarlyLateModal } from '@/features/bookings/components/EarlyLateModal'
@@ -450,7 +454,7 @@ export default function BookingDetailDrawer({ groupId = null, bookingId = null, 
 // Card hiển thị một booking trong group
 function BookingRoomCard({
   booking,
-  groupId: _groupId,
+  groupId,
   onCheckin,
   onCheckout,
   onAddService,
@@ -469,6 +473,38 @@ function BookingRoomCard({
   const canEarlyLate = ACTION_STATUSES.canEarlyLate.includes(status)
   const canCancel = ACTION_STATUSES.canCancel.includes(status)
   const isReadOnly = status === 'checked-out' || status === 'cancelled'
+  const { mutate: voidBooking, isPending: isVoiding } = useVoidBooking()
+
+  const handleVoidBooking = () => {
+    if (!groupId) {
+      return
+    }
+
+    Modal.confirm({
+      title: 'Xóa booking đã trả phòng',
+      icon: <ExclamationCircleOutlined />,
+      content: (
+        <div>
+          <p>
+            Booking <strong>{booking.guest_name ?? 'Khách chưa xác định'}</strong> — Phòng {booking.room_id} sẽ bị xóa.
+          </p>
+          <p style={{ color: '#ff4d4f' }}>
+            Doanh thu sẽ được hoàn lại tự động. Hành động này không thể khôi phục.
+          </p>
+        </div>
+      ),
+      okText: 'Xác nhận xóa',
+      okType: 'danger',
+      cancelText: 'Hủy',
+      onOk: () => {
+        voidBooking({
+          bookingId: booking.id,
+          groupId,
+          reason: 'Xóa thủ công bởi owner',
+        })
+      },
+    })
+  }
 
   return (
     <Badge.Ribbon
@@ -560,7 +596,7 @@ function BookingRoomCard({
         )}
 
         {/* Action buttons — hiển thị có điều kiện theo status */}
-        {!isReadOnly && (
+        {(status !== 'cancelled') && (
           <div style={{ marginTop: 12, borderTop: '1px solid #f0f0f0', paddingTop: 12 }}>
             <Space wrap size="small">
               {/* Check-in */}
@@ -607,6 +643,19 @@ function BookingRoomCard({
                     Huỷ
                   </Button>
                 </Popconfirm>
+              )}
+
+              {/* Xoá booking checked-out — destructive action luôn đặt cuối cùng */}
+              {status === 'checked-out' && (
+                <Button
+                  size="small"
+                  danger
+                  icon={<DeleteOutlined />}
+                  loading={isVoiding}
+                  onClick={handleVoidBooking}
+                >
+                  Xóa booking
+                </Button>
               )}
             </Space>
           </div>

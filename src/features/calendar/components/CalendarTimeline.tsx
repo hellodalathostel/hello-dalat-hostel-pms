@@ -3,6 +3,8 @@ import { Button, Card, Tag, Tooltip, Typography } from 'antd'
 import dayjs from 'dayjs'
 import type { JSX } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { getBookingStatusLabel } from '@/features/bookings/utils/bookingLabel'
+import type { BookingStatus } from '@/features/bookings/types'
 import type { CalendarEvent, RoomRow } from '@/types/calendar'
 import { HousekeepingBadge } from './HousekeepingBadge'
 
@@ -169,7 +171,10 @@ export function CalendarTimeline({ dates, rooms, onBookingClick }: CalendarTimel
                           <div className="calendar-slot__title-row">
                             <span className="calendar-slot__title">{day.shortLabel}</span>
                             <Tag color={day.variant === 'checked-in' ? 'purple' : 'blue'}>
-                              {day.variant === 'checked-in' ? 'Đang ở' : 'Sắp đến'}
+                              {getBookingStatusLabel(
+                                ((event?.status ?? day.variant) as BookingStatus),
+                                event?.check_in ?? day.date,
+                              )}
                             </Tag>
                           </div>
                           <Typography.Text className="calendar-slot__meta">
