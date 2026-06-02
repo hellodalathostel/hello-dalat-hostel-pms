@@ -107,6 +107,31 @@ body {
 
 .calendar-table-wrapper {
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  cursor: grab;
+}
+
+.calendar-table-wrapper:active {
+  cursor: grabbing;
+}
+
+.calendar-table-wrapper::-webkit-scrollbar {
+  height: 4px;
+}
+
+.calendar-table-wrapper::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.calendar-table-wrapper::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 2px;
+}
+
+.calendar-table-wrapper--dragging {
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .calendar-table {
