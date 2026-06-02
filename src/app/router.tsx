@@ -15,7 +15,7 @@ const CheckinImportPage = lazy(() => import('@/features/checkin/pages/CheckinImp
 const SettingsPage = lazy(() => import('@/features/settings/pages/SettingsPage'))
 const BookingsPage = lazy(() => import('@/features/bookings/pages/BookingsPage').then((m) => ({ default: m.BookingsPage })))
 const GuestsPage = lazy(() => import('@/pages/GuestsPage'))
-const OtaCalendarPage = lazy(() => import('@/features/ota-calendar').then((m) => ({ default: m.OtaCalendarPage })))
+const HousekeepingPage = lazy(() => import('@/features/housekeeping/pages/HousekeepingPage'))
 
 export const appRouter = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
@@ -27,7 +27,7 @@ export const appRouter = createBrowserRouter([
       { path: 'dashboard', element: <Suspense fallback={null}><DashboardPage /></Suspense> },
       { path: 'new-booking', element: <Suspense fallback={null}><NewBookingPage /></Suspense> },
       { path: 'calendar', element: <Suspense fallback={null}><RoomCalendarPage /></Suspense> },
-      { path: 'housekeeping', element: <Suspense fallback={null}><RoomCalendarPage /></Suspense> },
+      { path: 'housekeeping', element: <Suspense fallback={null}><HousekeepingPage /></Suspense> },
       { path: 'revenue', element: <Suspense fallback={null}><RevenueDashboardPage /></Suspense> },
       { path: 'finance', element: <Suspense fallback={null}><FinancePage /></Suspense> },
       { path: 'orevenue', element: <Suspense fallback={null}><RevenueDashboardPage /></Suspense> },
@@ -35,7 +35,6 @@ export const appRouter = createBrowserRouter([
       { path: 'checkin-import', element: <Suspense fallback={null}><CheckinImportPage /></Suspense> },
       { path: 'bookings', element: <Suspense fallback={null}><BookingsPage /></Suspense> },
       { path: 'guests', element: <Suspense fallback={null}><GuestsPage /></Suspense> },
-      { path: 'ota-calendar', element: <Suspense fallback={null}><OtaCalendarPage /></Suspense> },
       {
         path: 'settings',
         element: <Suspense fallback={null}><SettingsPage /></Suspense>,
