@@ -4,8 +4,6 @@ import { useQueryClient } from '@tanstack/react-query'
 import { Button, Col, Flex, Row, Spin, Typography } from 'antd'
 import { ReloadOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { CheckinImportModal } from '@/features/checkin/components/CheckinImportModal'
 import { CheckInModal } from '@/features/checkin/components/CheckInModal'
 import { QuickCheckoutModal, type CheckoutTarget } from '@/features/checkout/components/QuickCheckoutModal'
 import { RoomCard } from '@/features/dashboard/components/RoomCard'
@@ -35,8 +33,6 @@ export default function Dashboard(): React.JSX.Element {
   const [blockedDetailsRoom, setBlockedDetailsRoom] = useState<DashboardRoom | null>(null)
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null)
   const [isCheckInVisible, setIsCheckInVisible] = useState(false)
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [isManualCheckinVisible, setIsManualCheckinVisible] = useState(false)
   const [isPaymentVisible, setIsPaymentVisible] = useState(false)
   const [checkoutTarget, setCheckoutTarget] = useState<CheckoutTarget | null>(null)
 

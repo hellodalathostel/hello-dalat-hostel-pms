@@ -35,27 +35,36 @@ export function CheckInModal({ open, room, onClose, onSuccess }: Props) {
   const handleSubmit = async (values: ManualCheckinFormValues) => {
     if (!room?.booking_id) return
 
-    await checkIn.mutateAsync({
-      booking_id: room.booking_id,
-      guests: [
-        {
-          full_name: values.full_name.trim(),
-          document_type: values.document_type,
-          document_number: values.document_number.trim(),
-          date_of_birth: values.date_of_birth,
-          gender: values.gender ?? '',
-          nationality: values.nationality.trim(),
-          residency_type: null,
-          province: null,
-          district: null,
-          ward: null,
-          address_detail: null,
-        },
-      ],
-    })
+    try {
+      const rawDateOfBirth = form.getFieldValue('date_of_birth')
+      const dateOfBirth = rawDateOfBirth
+        ? dayjs(rawDateOfBirth).format('YYYY-MM-DD')
+        : ''
 
-    onSuccess?.()
-    onClose()
+      await checkIn.mutateAsync({
+        booking_id: room.booking_id,
+        guests: [
+          {
+            full_name: values.full_name.trim(),
+            document_type: values.document_type,
+            document_number: values.document_number.trim(),
+            date_of_birth: dateOfBirth,
+            gender: values.gender ?? '',
+            nationality: values.nationality.trim(),
+            residency_type: null,
+            province: null,
+            district: null,
+            ward: null,
+            address_detail: null,
+          },
+        ],
+      })
+
+      onSuccess?.()
+      onClose()
+    } catch {
+      // useCheckIn.onError da handle toast
+    }
   }
 
   return (
@@ -136,12 +145,6 @@ export function CheckInModal({ open, room, onClose, onSuccess }: Props) {
               style={{ width: '100%' }}
               placeholder="Chọn ngày sinh"
               disabledDate={(d) => d.isAfter(dayjs())}
-              onChange={(_, dateStr) =>
-                form.setFieldValue(
-                  'date_of_birth',
-                  typeof dateStr === 'string' ? dateStr : ''
-                )
-              }
             />
           </Form.Item>
 
