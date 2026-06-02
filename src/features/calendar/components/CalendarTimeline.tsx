@@ -132,7 +132,13 @@ export function CalendarTimeline({ dates, rooms, onBookingClick }: CalendarTimel
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
       >
-        <table className="calendar-table">
+        <table
+          className="calendar-table"
+          style={{
+            tableLayout: 'fixed',
+            width: `${116 + dates.length * 92}px`,
+          }}
+        >
           <thead>
             <tr>
               <th className="calendar-room-header">Phòng</th>
