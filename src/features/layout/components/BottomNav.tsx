@@ -63,7 +63,10 @@ export function BottomNav() {
     return null
   }
 
-  const visibleItems = NAV_ITEMS.filter((item) => !item.ownerOnly || role === 'owner')
+  // Khi role chua load (undefined), hien thi tat ca tab de tranh flash an.
+  const visibleItems = NAV_ITEMS.filter(
+    (item) => !item.ownerOnly || role === undefined || role === 'owner'
+  )
 
   return (
     <nav className={styles.bottomNav} aria-label="Điều hướng nhanh">
