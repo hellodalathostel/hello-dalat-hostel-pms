@@ -3,7 +3,7 @@ import {
   DollarOutlined,
   HomeOutlined,
   UnorderedListOutlined,
-  AppstoreOutlined,
+  UserOutlined,
 } from '@ant-design/icons'
 import type { JSX } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -39,10 +39,10 @@ const NAV_ITEMS: NavItem[] = [
     label: 'Booking',
   },
   {
-    key: 'housekeeping',
-    path: '/housekeeping',
-    icon: <AppstoreOutlined />,
-    label: 'Phòng',
+    key: 'guests',
+    path: '/guests',
+    icon: <UserOutlined />,
+    label: 'Khách',
   },
   {
     key: 'finance',
