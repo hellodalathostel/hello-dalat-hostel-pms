@@ -154,7 +154,7 @@ export function BookingsPage(): JSX.Element {
   return (
     <div className="page-grid">
       <Flex justify="space-between" align="center" gap={12} wrap>
-        <Typography.Title level={2} style={{ margin: 0 }}>
+        <Typography.Title level={4} style={{ margin: 0 }}>
           Quản lý đặt phòng
         </Typography.Title>
         <Button
@@ -196,7 +196,7 @@ export function BookingsPage(): JSX.Element {
         dataSource={filtered}
         rowKey="group_id"
         loading={isLoading}
-        size="middle"
+        size="small"
         pagination={{ pageSize: 20, showSizeChanger: false }}
         onRow={(record) => ({
           onClick: () => {
