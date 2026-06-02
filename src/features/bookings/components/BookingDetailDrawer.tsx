@@ -52,6 +52,7 @@ import { EarlyLateModal } from '@/features/bookings/components/EarlyLateModal'
 import { useCancelBooking } from '@/features/bookings/hooks/useUpdateBooking'
 import type { EarlyLateType } from '@/hooks/useAddEarlyLate'
 import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
+import { useBreakpoint } from '@/shared/hooks/useBreakpoint'
 
 // Map trạng thái sang màu Ant Design Tag
 const STATUS_COLOR: Record<string, string> = {
@@ -110,6 +111,7 @@ interface BookingRoomCardProps {
 export default function BookingDetailDrawer({ groupId = null, bookingId = null, open, onClose, onEditBooking }: Props) {
   const queryClient = useQueryClient()
   const { message } = useAppFeedback()
+  const { isMobile } = useBreakpoint()
   const cancelBookingMutation = useCancelBooking()
   const { data: resolvedGroupId, isLoading: isResolvingGroupId, isError: isResolvingError } = useQuery({
     queryKey: ['booking-group-id', bookingId],
@@ -202,7 +204,7 @@ export default function BookingDetailDrawer({ groupId = null, bookingId = null, 
       <Drawer
         title="Chi tiết Booking"
         placement="right"
-        width={680}
+        width={isMobile ? '100%' : 680}
         open={open}
         onClose={onClose}
         extra={
@@ -248,7 +250,7 @@ export default function BookingDetailDrawer({ groupId = null, bookingId = null, 
               }
               bordered
               size="small"
-              column={2}
+              column={isMobile ? 1 : 2}
             >
               {data.customer_phone && (
                 <Descriptions.Item label={<><PhoneOutlined /> SĐT</>}>
@@ -271,15 +273,15 @@ export default function BookingDetailDrawer({ groupId = null, bookingId = null, 
             </Descriptions>
 
             {/* Tổng quan tài chính */}
-            <Row gutter={16} align="middle">
-              <Col span={8}>
+            <Row gutter={[16, 16]} align="middle">
+              <Col xs={24} md={8}>
                 <Statistic
                   title="Tổng hoá đơn"
                   value={totalGrandTotal}
                   formatter={(v) => formatVND(v as number)}
                 />
               </Col>
-              <Col span={8}>
+              <Col xs={24} md={8}>
                 <Statistic
                   title="Đã thanh toán"
                   value={data.paid}
@@ -287,7 +289,16 @@ export default function BookingDetailDrawer({ groupId = null, bookingId = null, 
                   formatter={(v) => formatVND(v as number)}
                 />
               </Col>
-              <Col span={8} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Col
+                xs={24}
+                md={8}
+                style={{
+                  display: 'flex',
+                  alignItems: isMobile ? 'stretch' : 'center',
+                  gap: 8,
+                  flexDirection: isMobile ? 'column' : 'row',
+                }}
+              >
                 <Statistic
                   title="Còn lại"
                   value={balanceDue}
@@ -301,6 +312,7 @@ export default function BookingDetailDrawer({ groupId = null, bookingId = null, 
                     size="small"
                     type="primary"
                     icon={<EditOutlined />}
+                    block={isMobile}
                     onClick={() => {
                       setFolioEditBookingId(data.bookings[0].id)
                       setFolioEditOpen(true)
@@ -518,9 +530,10 @@ function BookingRoomCard({
           borderRadius: 8,
           padding: '12px 16px',
           background: booking.status === 'cancelled' ? '#fafafa' : '#fff',
+          overflowX: 'hidden',
         }}
       >
-        <Flex justify="space-between" align="flex-start">
+        <Flex justify="space-between" align="flex-start" wrap>
           <div>
             <Typography.Text strong>
               Phòng {booking.room_name ?? booking.room_id}
