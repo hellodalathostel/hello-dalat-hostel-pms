@@ -6,6 +6,7 @@ export interface CalendarEvent {
   room_name: string | null
   date: string
   booking_id: string | null
+  code: string | null
   block_id: string | null
   entry_type: 'booking' | 'block' | null
   group_id: string | null

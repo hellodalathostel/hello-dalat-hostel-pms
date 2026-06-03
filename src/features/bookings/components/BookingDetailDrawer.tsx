@@ -549,6 +549,11 @@ function BookingRoomCard({
                 — {booking.guest_name}
               </Typography.Text>
             )}
+            {booking.code && (
+              <Tag color="geekblue" style={{ marginLeft: 8 }}>
+                {booking.code}
+              </Tag>
+            )}
             {primaryGuest && (
               <div style={{ marginTop: 4 }}>
                 <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block' }}>

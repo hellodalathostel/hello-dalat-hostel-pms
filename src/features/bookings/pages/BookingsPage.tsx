@@ -63,6 +63,7 @@ export function BookingsPage(): JSX.Element {
       const q = search.trim().toLowerCase()
       result = result.filter(
         (item) =>
+          (item.first_booking_code ?? '').toLowerCase().includes(q) ||
           item.customer_name.toLowerCase().includes(q) ||
           (item.customer_phone ?? '').toLowerCase().includes(q) ||
           item.rooms.some((room) => room.toLowerCase().includes(q))
@@ -77,6 +78,14 @@ export function BookingsPage(): JSX.Element {
   }, [data, search, statusFilter])
 
   const columns: ColumnsType<BookingsListItem> = [
+    {
+      title: 'Mã',
+      dataIndex: 'first_booking_code',
+      key: 'first_booking_code',
+      width: 130,
+      render: (code: string | null) =>
+        code ? <Typography.Text copyable>{code}</Typography.Text> : '—',
+    },
     {
       title: 'Khách hàng',
       dataIndex: 'customer_name',
@@ -205,7 +214,7 @@ export function BookingsPage(): JSX.Element {
           },
           style: { cursor: 'pointer' },
         })}
-        scroll={{ x: 800 }}
+        scroll={{ x: 930 }}
       />
 
       <BookingDetailDrawer

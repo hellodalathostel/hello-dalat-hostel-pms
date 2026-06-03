@@ -4,6 +4,7 @@ import { normalizeError } from '@/shared/utils/normalizeError'
 
 export interface BookingsListItem {
   group_id: string
+  first_booking_code: string | null
   customer_name: string
   customer_phone: string | null
   source: string
@@ -27,6 +28,7 @@ type GroupBookingRow = {
   bookings: {
     id: string
     room_id: string
+    code: string | null
     check_in: string
     check_out: string
     grand_total: number | null
@@ -49,6 +51,7 @@ async function fetchBookingsList(): Promise<BookingsListItem[]> {
         bookings (
           id,
           room_id,
+          code,
           check_in,
           check_out,
           grand_total,
@@ -65,12 +68,14 @@ async function fetchBookingsList(): Promise<BookingsListItem[]> {
     return ((data ?? []) as GroupBookingRow[]).map((group) => {
       const nonDeletedBookings = (group.bookings ?? []).filter((booking) => !booking.is_deleted)
       const activeBookings = nonDeletedBookings.filter((booking) => booking.status !== 'cancelled')
+      const firstBookingCode = activeBookings[0]?.code ?? nonDeletedBookings[0]?.code ?? null
       const grandTotal = activeBookings.reduce((sum, booking) => sum + (booking.grand_total ?? 0), 0)
       const checkIns = activeBookings.map((booking) => booking.check_in).filter(Boolean)
       const checkOuts = activeBookings.map((booking) => booking.check_out).filter(Boolean)
 
       return {
         group_id: group.id,
+        first_booking_code: firstBookingCode,
         customer_name: group.customer_name,
         customer_phone: group.customer_phone ?? null,
         source: group.source ?? 'walk-in',

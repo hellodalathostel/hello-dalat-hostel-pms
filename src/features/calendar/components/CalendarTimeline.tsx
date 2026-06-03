@@ -107,6 +107,7 @@ export function CalendarTimeline({ dates, rooms, onBookingClick }: CalendarTimel
     room_name: null,
     date,
     booking_id: null,
+    code: null,
     block_id: null,
     entry_type: null,
     group_id: null,
@@ -259,6 +260,7 @@ export function CalendarTimeline({ dates, rooms, onBookingClick }: CalendarTimel
                         title={
                           <div>
                             <div>{event?.guest_name ?? 'Khách chưa xác định'}</div>
+                            <div>Mã: {event?.code ?? '—'}</div>
                             <div>SĐT: {event?.guest_phone ?? 'Chưa có'}</div>
                             <div>Check-in: {formatEventTime(event?.checkin_at ?? null)}</div>
                             <div>Check-out: {formatEventTime(event?.checkout_at ?? null)}</div>
