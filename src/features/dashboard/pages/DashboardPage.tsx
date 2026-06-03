@@ -19,7 +19,7 @@ const initialStats: DashboardStats = {
   vacant: 0,
   arriving: 0,
   occupied: 0,
-  blocked: 0,
+  checkoutToday: 0,
   debt: 0,
 }
 
@@ -37,9 +37,17 @@ export default function Dashboard(): React.JSX.Element {
   const [checkoutTarget, setCheckoutTarget] = useState<CheckoutTarget | null>(null)
 
   const stats = useMemo<DashboardStats>(() => {
+    const today = dayjs().format('YYYY-MM-DD')
+
     return rooms.reduce<DashboardStats>((accumulator, room) => {
       const status = getRoomStatus(room)
-      accumulator[status] += 1
+
+      if (status !== 'blocked') {
+        accumulator[status] += 1
+      }
+
+      const checkoutTodayCount = room.check_out === today && room.status === 'checked-in' ? 1 : 0
+      accumulator.checkoutToday += checkoutTodayCount
 
       if (status === 'occupied' && (room.balance_due ?? 0) > 0) {
         accumulator.debt += 1

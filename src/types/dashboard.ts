@@ -33,6 +33,6 @@ export interface DashboardStats {
   vacant: number
   arriving: number
   occupied: number
-  blocked: number
+  checkoutToday: number
   debt: number
 }
