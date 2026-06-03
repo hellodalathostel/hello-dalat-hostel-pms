@@ -39,22 +39,30 @@ export default function Dashboard(): React.JSX.Element {
   const stats = useMemo<DashboardStats>(() => {
     const today = dayjs().format('YYYY-MM-DD')
 
-    return rooms.reduce<DashboardStats>((accumulator, room) => {
+    const checkoutTodayRooms = rooms.filter(
+      (room) => room.status === 'checked-in' && room.check_out?.startsWith(today),
+    )
+
+    const occupiedRooms = rooms.filter(
+      (room) => room.status === 'checked-in' && !room.check_out?.startsWith(today),
+    )
+
+    const vacantRooms = rooms.filter((room) => getRoomStatus(room) === 'vacant')
+    const arrivingRooms = rooms.filter((room) => getRoomStatus(room) === 'arriving')
+
+    const debt = rooms.filter((room) => {
       const status = getRoomStatus(room)
+      return status === 'occupied' && (room.balance_due ?? 0) > 0
+    }).length
 
-      if (status !== 'blocked') {
-        accumulator[status] += 1
-      }
-
-      const checkoutTodayCount = room.check_out === today && room.status === 'checked-in' ? 1 : 0
-      accumulator.checkoutToday += checkoutTodayCount
-
-      if (status === 'occupied' && (room.balance_due ?? 0) > 0) {
-        accumulator.debt += 1
-      }
-
-      return accumulator
-    }, { ...initialStats })
+    return {
+      ...initialStats,
+      vacant: vacantRooms.length,
+      arriving: arrivingRooms.length,
+      occupied: occupiedRooms.length,
+      checkoutToday: checkoutTodayRooms.length,
+      debt,
+    }
   }, [rooms])
 
   const handleCloseImportModal = useCallback(() => {
