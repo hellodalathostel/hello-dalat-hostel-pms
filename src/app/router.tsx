@@ -17,6 +17,7 @@ const SettingsPage = lazy(() => import('@/features/settings/pages/SettingsPage')
 const BookingsPage = lazy(() => import('@/features/bookings/pages/BookingsPage').then((m) => ({ default: m.BookingsPage })))
 const GuestsPage = lazy(() => import('@/pages/GuestsPage'))
 const HousekeepingPage = lazy(() => import('@/features/housekeeping/pages/HousekeepingPage'))
+const BookingRequestsPage = lazy(() => import('@/features/booking-requests/pages/BookingRequestsPage'))
 
 export const appRouter = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
@@ -36,6 +37,7 @@ export const appRouter = createBrowserRouter([
       { path: 'dk14-report', element: <Suspense fallback={null}><DK14ReportPage /></Suspense> },
       { path: 'checkin-import', element: <Suspense fallback={null}><CheckinImportPage /></Suspense> },
       { path: 'bookings', element: <Suspense fallback={null}><BookingsPage /></Suspense> },
+      { path: 'booking-requests', element: <Suspense fallback={null}><BookingRequestsPage /></Suspense> },
       { path: 'guests', element: <Suspense fallback={null}><GuestsPage /></Suspense> },
       {
         path: 'settings',
