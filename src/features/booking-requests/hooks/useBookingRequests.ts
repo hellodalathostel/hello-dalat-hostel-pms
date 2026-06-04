@@ -100,6 +100,31 @@ export function useRejectRequest() {
   })
 }
 
+export function useConfirmRequest() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('booking_requests')
+        .update({ status: 'confirmed' })
+        .eq('id', id)
+
+      if (error) {
+        throw error
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: bookingRequestKeys.all })
+      queryClient.invalidateQueries({ queryKey: bookingRequestKeys.pendingCount })
+      message.success('Đã xác nhận yêu cầu')
+    },
+    onError: () => {
+      message.error('Không thể cập nhật, thử lại')
+    },
+  })
+}
+
 export function useConvertRequest() {
   const queryClient = useQueryClient()
 

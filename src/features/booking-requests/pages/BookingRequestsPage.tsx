@@ -14,6 +14,7 @@ import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
 import {
   useBookingRequests,
+  useConfirmRequest,
   useConvertRequest,
   useRejectRequest,
   type BookingRequest,
@@ -36,6 +37,7 @@ const STATUS_LABEL: Record<BookingRequestStatus, string> = {
 
 export default function BookingRequestsPage() {
   const { data: requests = [], isLoading } = useBookingRequests()
+  const confirmMutation = useConfirmRequest()
   const rejectMutation = useRejectRequest()
   const convertMutation = useConvertRequest()
 
@@ -131,6 +133,14 @@ export default function BookingRequestsPage() {
         return (
           <Space>
             <Button
+              loading={confirmMutation.isPending && request.id === confirmMutation.variables}
+              onClick={() => {
+                confirmMutation.mutate(request.id)
+              }}
+            >
+              Xác nhận
+            </Button>
+            <Button
               type="primary"
               loading={convertMutation.isPending && convertModal.request?.id === request.id}
               onClick={() => {
@@ -154,7 +164,14 @@ export default function BookingRequestsPage() {
         )
       },
     },
-  ], [convertModal.request?.id, convertMutation.isPending, rejectModal.id, rejectMutation.isPending])
+  ], [
+    confirmMutation.isPending,
+    confirmMutation.variables,
+    convertModal.request?.id,
+    convertMutation.isPending,
+    rejectModal.id,
+    rejectMutation.isPending,
+  ])
 
   const handleReject = async () => {
     if (!rejectModal.id) {
