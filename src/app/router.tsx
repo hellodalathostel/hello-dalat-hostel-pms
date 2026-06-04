@@ -3,6 +3,7 @@ import { Navigate, createBrowserRouter } from 'react-router-dom'
 import { MainLayout } from '@/app/layouts/MainLayout'
 import AuthGuard from '@/shared/components/AuthGuard'
 import LoginPage from '@/pages/LoginPage'
+import BookPage from '@/pages/BookPage'
 import { ICalFeedPanel } from '@/features/settings/components/ICalFeedPanel'
 
 const DashboardPage = lazy(() => import('@/features/dashboard/pages/DashboardPage'))
@@ -19,6 +20,7 @@ const HousekeepingPage = lazy(() => import('@/features/housekeeping/pages/Housek
 
 export const appRouter = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
+  { path: '/book', element: <BookPage /> },
   {
     path: '/',
     element: (<AuthGuard><MainLayout /></AuthGuard>),
