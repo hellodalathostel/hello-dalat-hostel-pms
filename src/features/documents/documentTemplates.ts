@@ -124,44 +124,229 @@ const vietQrUrl = (amount: number, addInfo: string) => {
 
 const BASE_STYLE = `
   <style>
+    /* -- Reset -- */
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 13px; color: #222; background: #fff; padding: 24px; max-width: 640px; margin: 0 auto; }
-    .header { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; border-bottom: 2px solid #2d6a4f; padding-bottom: 12px; }
-    .header-logo { width: 64px; height: 64px; object-fit: contain; flex-shrink: 0; }
-    .header-info { flex: 1; }
-    .header-info h1 { font-size: 18px; color: #2d6a4f; font-weight: 700; }
-    .header-info .sub { font-size: 11px; color: #555; margin-top: 3px; line-height: 1.5; }
-    .doc-title { text-align: center; font-size: 16px; font-weight: 700; margin: 16px 0; text-transform: uppercase; letter-spacing: 1px; color: #1a1a1a; }
-    .doc-meta { text-align: right; font-size: 11px; color: #888; margin-bottom: 16px; }
+
+    /* -- A4 base -- */
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      font-size: 13px;
+      line-height: 1.6;
+      color: #1a1a1a;
+      background: #fff;
+      padding: 28px 32px;
+      width: 100%;
+      max-width: 680px;
+      margin: 0 auto;
+    }
+
+    /* -- Header -- */
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 18px;
+      padding-bottom: 14px;
+      border-bottom: 3px solid #2d6a4f;
+    }
+    .header-logo {
+      width: 56px;
+      height: 56px;
+      object-fit: contain;
+      flex-shrink: 0;
+    }
+    .header-info h1 {
+      font-size: 17px;
+      color: #2d6a4f;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+    }
+    .header-info .sub {
+      font-size: 11px;
+      color: #666;
+      margin-top: 3px;
+      line-height: 1.5;
+    }
+
+    /* -- Tieu de tai lieu -- */
+    .doc-title {
+      text-align: center;
+      font-size: 15px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: #1a1a1a;
+      margin: 14px 0 4px;
+    }
+    .doc-meta {
+      text-align: center;
+      font-size: 11px;
+      color: #999;
+      margin-bottom: 18px;
+    }
+
+    /* -- Section -- */
     .section { margin-bottom: 16px; }
-    .section-title { font-size: 12px; font-weight: 700; text-transform: uppercase; color: #2d6a4f; border-bottom: 1px solid #d4edda; padding-bottom: 4px; margin-bottom: 8px; }
+    .section-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: #2d6a4f;
+      border-bottom: 1px solid #c8e6c9;
+      padding-bottom: 4px;
+      margin-bottom: 8px;
+    }
+
+    /* -- Info table (label/value) -- */
     table { width: 100%; border-collapse: collapse; }
     td { padding: 5px 6px; vertical-align: top; }
-    td.label { width: 40%; color: #555; font-size: 12px; }
-    td.value { font-weight: 500; }
-    .line-table th, .line-table td { border: 1px solid #e0e0e0; padding: 6px 8px; }
-    .line-table th { background: #f5f5f5; font-size: 12px; font-weight: 600; }
-    .total-row td { background: #e8f5e9; font-size: 14px; font-weight: 700; color: #2d6a4f; }
-    .remaining-row td { background: #fff3cd; font-weight: 700; color: #856404; }
-    .paid-row td { background: #d1e7dd; font-weight: 700; color: #0a3622; }
-    .highlight { background: #fffde7; border: 1px solid #f9ca24; border-radius: 6px; padding: 10px 14px; margin-top: 12px; font-size: 13px; }
-    .highlight-green { background: #e8f5e9; border: 1px solid #2d6a4f; border-radius: 6px; padding: 10px 14px; margin-top: 12px; font-size: 13px; }
-    .highlight-red { background: #fff2f0; border: 1px solid #ffccc7; border-radius: 6px; padding: 10px 14px; margin-top: 12px; font-size: 13px; }
-    .footer { margin-top: 24px; padding-top: 12px; border-top: 1px solid #eee; font-size: 11px; color: #888; text-align: center; }
-    .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+    td.label {
+      width: 38%;
+      color: #666;
+      font-size: 12px;
+    }
+    td.value {
+      font-weight: 500;
+      font-size: 13px;
+    }
+
+    /* -- Line items table -- */
+    .line-table th,
+    .line-table td {
+      border: 1px solid #e8e8e8;
+      padding: 6px 10px;
+      font-size: 12px;
+    }
+    .line-table th {
+      background: #f5f5f5;
+      font-weight: 600;
+      color: #333;
+    }
+
+    /* -- Total rows -- */
+    .total-row td {
+      background: #e8f5e9;
+      font-size: 14px;
+      font-weight: 700;
+      color: #1b5e20;
+    }
+    .paid-row td {
+      background: #d1e7dd;
+      font-weight: 600;
+      color: #0a3622;
+      font-size: 13px;
+    }
+    .remaining-row td {
+      background: #fff8e1;
+      font-weight: 700;
+      color: #e65100;
+      font-size: 14px;
+    }
+
+    /* -- Highlight boxes -- */
+    .highlight {
+      background: #fffde7;
+      border-left: 4px solid #f9ca24;
+      border-radius: 4px;
+      padding: 10px 14px;
+      margin-top: 14px;
+      font-size: 13px;
+    }
+    .highlight-green {
+      background: #f1f8e9;
+      border-left: 4px solid #2d6a4f;
+      border-radius: 4px;
+      padding: 10px 14px;
+      margin-top: 14px;
+      font-size: 13px;
+    }
+    .highlight-red {
+      background: #fff2f0;
+      border-left: 4px solid #ff4d4f;
+      border-radius: 4px;
+      padding: 10px 14px;
+      margin-top: 14px;
+      font-size: 13px;
+    }
+
+    /* -- QR block -- */
+    .qr-block {
+      display: flex;
+      align-items: flex-start;
+      gap: 20px;
+      margin-top: 10px;
+    }
+    .qr-block img {
+      width: 160px;
+      height: 160px;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      flex-shrink: 0;
+    }
+    .qr-info .amount {
+      font-size: 22px;
+      font-weight: 700;
+      color: #1b5e20;
+      margin-bottom: 8px;
+    }
+    .qr-info table td { padding: 3px 6px; font-size: 12px; }
+
+    /* -- House rules -- */
+    .rules-list { padding-left: 0; list-style: none; }
+    .rules-list li {
+      padding: 5px 0;
+      font-size: 12px;
+      color: #444;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    .rules-list li:last-child { border-bottom: none; }
+
+    /* -- Cancel policy -- */
+    .cancel-table td,
+    .cancel-table th {
+      padding: 6px 10px;
+      font-size: 12px;
+      border: 1px solid #e0e0e0;
+    }
+    .cancel-table th {
+      background: #f5f5f5;
+      font-weight: 600;
+    }
+
+    /* -- Badge -- */
+    .badge {
+      display: inline-block;
+      padding: 1px 7px;
+      border-radius: 10px;
+      font-size: 10px;
+      font-weight: 600;
+    }
     .badge-green { background: #d1e7dd; color: #0a3622; }
     .badge-yellow { background: #fff3cd; color: #856404; }
-    .qr-block { display: flex; align-items: flex-start; gap: 16px; margin-top: 12px; }
-    .qr-block img { width: 200px; height: 200px; border: 1px solid #eee; border-radius: 8px; flex-shrink: 0; }
-    .qr-info { flex: 1; }
-    .qr-info .amount { font-size: 20px; font-weight: 700; color: #2d6a4f; margin-bottom: 6px; }
-    .qr-info table td { padding: 3px 6px; font-size: 12px; }
-    .rules-list { padding-left: 0; list-style: none; }
-    .rules-list li { padding: 4px 0; font-size: 12px; color: #444; border-bottom: 1px solid #f5f5f5; }
-    .rules-list li:last-child { border-bottom: none; }
-    .cancel-table td { padding: 5px 8px; font-size: 12px; border: 1px solid #e0e0e0; }
-    .cancel-table th { padding: 5px 8px; font-size: 12px; background: #f5f5f5; border: 1px solid #e0e0e0; font-weight: 600; }
-    @media print { body { padding: 12px; } .qr-block img { width: 180px; height: 180px; } }
+
+    /* -- Footer -- */
+    .footer {
+      margin-top: 24px;
+      padding-top: 10px;
+      border-top: 1px solid #eee;
+      font-size: 11px;
+      color: #aaa;
+      text-align: center;
+    }
+
+    /* -- Print -- */
+    @media print {
+      body {
+        padding: 16px 20px;
+        max-width: 100%;
+        font-size: 12px;
+      }
+      .qr-block img { width: 140px; height: 140px; }
+      .doc-title { font-size: 14px; }
+      .total-row td,
+      .remaining-row td { font-size: 13px; }
+    }
   </style>
 `;
 
