@@ -11,6 +11,7 @@ import { message } from 'antd';
 import dayjs from 'dayjs';
 import { supabase } from '@/api/supabase';
 import type { DocumentData, DepositRequestOptions } from './documentTemplates';
+import { DOC_KIND_LABELS } from './documentTemplates';
 import {
   renderBookingConfirmation,
   renderDepositRequest,
@@ -18,6 +19,7 @@ import {
   renderInvoice,
   renderArrivalNotice,
 } from './documentTemplates';
+import { openDocumentPreview } from './DocumentPreviewWindow';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -47,6 +49,15 @@ interface DocPayment {
   note: string | null;
 }
 
+interface DocumentPreviewData extends DocumentData {
+  group: {
+    guest_name: string | null;
+  };
+  bookings: Array<{
+    room_id: string;
+  }>;
+}
+
 const PAYMENT_METHOD_LABEL: Record<string, string> = {
   cash: 'Tiền mặt',
   transfer: 'Chuyển khoản',
@@ -62,7 +73,7 @@ const PAYMENT_METHOD_LABEL: Record<string, string> = {
 async function fetchDocumentData(
   bookingId: string,
   groupId: string
-): Promise<DocumentData> {
+): Promise<DocumentPreviewData> {
   // Booking + room (JOIN thủ công vì không có foreign key tới rooms table)
   const { data: booking, error: bErr } = await supabase
     .from('bookings')
@@ -160,35 +171,22 @@ async function fetchDocumentData(
       };
     }),
     generatedAt: new Date().toISOString(),
+    group: {
+      guest_name: group.customer_name ?? booking.guest_name ?? null,
+    },
+    bookings: [
+      {
+        room_id: booking.room_id,
+      },
+    ],
   };
 }
 
-// ─── Render HTML trong iframe ẩn → window.print() ─────────────────────────────
-
-function printHtml(html: string): void {
-  // Tạo iframe ẩn để print mà không rời trang
-  const iframe = document.createElement('iframe');
-  iframe.style.position = 'fixed';
-  iframe.style.right = '0';
-  iframe.style.bottom = '0';
-  iframe.style.width = '0';
-  iframe.style.height = '0';
-  iframe.style.border = 'none';
-  document.body.appendChild(iframe);
-
-  const doc = iframe.contentWindow?.document;
-  if (!doc) return;
-  doc.open();
-  doc.write(html);
-  doc.close();
-
-  // Đợi load xong mới print
-  iframe.onload = () => {
-    iframe.contentWindow?.focus();
-    iframe.contentWindow?.print();
-    // Xóa iframe sau khi print dialog đóng
-    setTimeout(() => document.body.removeChild(iframe), 1000);
-  };
+function buildPreviewTitle(kind: DocKind, docData: DocumentPreviewData): string {
+  const previewTitle = `${DOC_KIND_LABELS[kind]} — ${docData.group.guest_name ?? 'Khach'} | ${
+    docData.bookings.map(b => `P.${b.room_id}`).join(', ')
+  }`;
+  return previewTitle;
 }
 
 // ─── Copy Zalo text vào clipboard ─────────────────────────────────────────────
@@ -279,7 +277,8 @@ export function useDocumentGenerator(): UseDocumentGeneratorReturn {
 
       // 3. Output theo format
       if (opts.docFormat === 'pdf') {
-        printHtml(result.html);
+        const previewTitle = buildPreviewTitle(opts.docKind, docData);
+        openDocumentPreview(result.html, previewTitle);
         message.success('Đang mở cửa sổ in PDF…');
         await logDocument(opts, docData, 'print');
       } else {
@@ -427,7 +426,8 @@ export function useDocumentGeneratorByGroup(
       );
 
       if (format === 'pdf') {
-        printHtml(result.html);
+        const previewTitle = buildPreviewTitle(params.kind, docData);
+        openDocumentPreview(result.html, previewTitle);
         message.success('Đang mở cửa sổ in PDF…');
         return null;
       }
