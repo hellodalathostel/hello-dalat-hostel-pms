@@ -78,6 +78,7 @@ export interface Booking {
 	firebase_id: string | null
 	group_id: string
 	room_id: string
+	code: string | null
 	check_in: string // date
 	check_out: string // date
 	nights: number | null // GENERATED ALWAYS AS (check_out - check_in)

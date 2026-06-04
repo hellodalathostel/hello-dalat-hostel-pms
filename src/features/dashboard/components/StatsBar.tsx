@@ -9,7 +9,7 @@ const statStyles = {
   vacant: { color: '#2f9e44', title: 'Trống' },
   arriving: { color: '#1971c2', title: 'Sắp đến' },
   occupied: { color: '#7048e8', title: 'Đang ở' },
-  blocked: { color: '#e03131', title: 'Đóng phòng' },
+  checkoutToday: { color: '#e03131', title: 'Trả phòng hôm nay' },
   debt: { color: '#f08c00', title: 'Còn nợ' },
 } as const
 
@@ -34,7 +34,11 @@ export function StatsBar({ stats }: StatsBarProps): React.JSX.Element {
       </Col>
       <Col xs={24} sm={12} lg={5}>
         <Card>
-          <Statistic title={statStyles.blocked.title} value={stats.blocked} valueStyle={{ color: statStyles.blocked.color }} />
+          <Statistic
+            title={statStyles.checkoutToday.title}
+            value={stats.checkoutToday}
+            valueStyle={{ color: statStyles.checkoutToday.color }}
+          />
         </Card>
       </Col>
       <Col xs={24} sm={12} lg={5}>

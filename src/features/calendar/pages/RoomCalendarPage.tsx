@@ -135,13 +135,15 @@ export default function RoomCalendar(): React.JSX.Element {
         </Flex>
       </Flex>
 
-      <Spin spinning={isLoading || isFetching || roomsLoading}>
-        <CalendarTimeline
-          dates={data?.dates ?? []}
-          rooms={data?.rooms ?? []}
-          onBookingClick={handleBookingClick}
-        />
-      </Spin>
+      <div style={{ minWidth: 0, overflow: 'hidden' }}>
+        <Spin spinning={isLoading || isFetching || roomsLoading}>
+          <CalendarTimeline
+            dates={data?.dates ?? []}
+            rooms={data?.rooms ?? []}
+            onBookingClick={handleBookingClick}
+          />
+        </Spin>
+      </div>
 
       <BookingDetailDrawer
         bookingId={selectedBookingId}

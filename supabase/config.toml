@@ -62,3 +62,6 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/daily-room-report/deno.json"
 entrypoint = "./functions/daily-room-report/index.ts"
+
+[functions.submit-booking-request]
+verify_jwt = false

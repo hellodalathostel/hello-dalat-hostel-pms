@@ -105,7 +105,7 @@ export const KBTTImportModal: React.FC<Props> = ({ open, onClose, onSuccess }) =
   const [loading,      setLoading]      = useState(false);
   const [errorMsg,     setErrorMsg]     = useState<string | null>(null);
   const [successCount, setSuccessCount] = useState(0);
-  const { showSuccess, showError }      = useAppFeedback();
+  const { message }                     = useAppFeedback();
 
   const reset = () => {
     setStep(0); setParseResult(null); setGuestRows([]);
@@ -146,7 +146,7 @@ export const KBTTImportModal: React.FC<Props> = ({ open, onClose, onSuccess }) =
   const handleConfirm = async () => {
     const toImport = guestRows.filter(r => r.matchStatus === 'matched' && r.booking_id);
     if (!toImport.length) {
-      showError('Không có khách nào khớp booking để import.');
+      message.error('Không có khách nào khớp booking để import.');
       return;
     }
 
@@ -170,7 +170,7 @@ export const KBTTImportModal: React.FC<Props> = ({ open, onClose, onSuccess }) =
         ok += guests.length;
       } catch (err) {
         const names = guests.map(g => g.full_name).join(', ');
-        showError(`Lỗi phòng ${guests[0].room_id}: ${(err as Error).message} (${names})`);
+        message.error(`Lỗi phòng ${guests[0].room_id}: ${(err as Error).message} (${names})`);
       }
     }
 
@@ -178,7 +178,7 @@ export const KBTTImportModal: React.FC<Props> = ({ open, onClose, onSuccess }) =
     setStep(2);
     setLoading(false);
     if (ok > 0) {
-      showSuccess(`Đã import ${ok} khách thành công!`);
+      message.success(`Đã import ${ok} khách thành công!`);
       onSuccess?.();
     }
   };

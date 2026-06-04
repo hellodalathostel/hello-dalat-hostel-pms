@@ -4,7 +4,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { Button, Col, Flex, Row, Spin, Typography } from 'antd'
 import { ReloadOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
-import { CheckinImportModal } from '@/features/checkin/components/CheckinImportModal'
+import { CheckInModal } from '@/features/checkin/components/CheckInModal'
 import { QuickCheckoutModal, type CheckoutTarget } from '@/features/checkout/components/QuickCheckoutModal'
 import { RoomCard } from '@/features/dashboard/components/RoomCard'
 import { BlockedRoomDrawer } from '@/features/dashboard/components/BlockedRoomDrawer'
@@ -19,7 +19,7 @@ const initialStats: DashboardStats = {
   vacant: 0,
   arriving: 0,
   occupied: 0,
-  blocked: 0,
+  checkoutToday: 0,
   debt: 0,
 }
 
@@ -37,16 +37,32 @@ export default function Dashboard(): React.JSX.Element {
   const [checkoutTarget, setCheckoutTarget] = useState<CheckoutTarget | null>(null)
 
   const stats = useMemo<DashboardStats>(() => {
-    return rooms.reduce<DashboardStats>((accumulator, room) => {
+    const today = dayjs().format('YYYY-MM-DD')
+
+    const checkoutTodayRooms = rooms.filter(
+      (room) => room.status === 'checked-in' && room.check_out?.startsWith(today),
+    )
+
+    const occupiedRooms = rooms.filter(
+      (room) => room.status === 'checked-in' && !room.check_out?.startsWith(today),
+    )
+
+    const vacantRooms = rooms.filter((room) => getRoomStatus(room) === 'vacant')
+    const arrivingRooms = rooms.filter((room) => getRoomStatus(room) === 'arriving')
+
+    const debt = rooms.filter((room) => {
       const status = getRoomStatus(room)
-      accumulator[status] += 1
+      return status === 'occupied' && (room.balance_due ?? 0) > 0
+    }).length
 
-      if (status === 'occupied' && (room.balance_due ?? 0) > 0) {
-        accumulator.debt += 1
-      }
-
-      return accumulator
-    }, { ...initialStats })
+    return {
+      ...initialStats,
+      vacant: vacantRooms.length,
+      arriving: arrivingRooms.length,
+      occupied: occupiedRooms.length,
+      checkoutToday: checkoutTodayRooms.length,
+      debt,
+    }
   }, [rooms])
 
   const handleCloseImportModal = useCallback(() => {
@@ -189,10 +205,12 @@ export default function Dashboard(): React.JSX.Element {
       </Spin>
 
       {selectedRoom ? (
-        <CheckinImportModal
+        <CheckInModal
           open={isCheckInVisible}
+          room={selectedRoom}
           onClose={handleCloseImportModal}
           onSuccess={() => {
+            void queryClient.invalidateQueries({ queryKey: ['dashboard', 'today'] })
             void queryClient.invalidateQueries({ queryKey: ['bookings'] })
           }}
         />

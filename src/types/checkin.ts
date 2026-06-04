@@ -92,3 +92,13 @@ export interface ImportResult {
   guests_upserted: number;
   error?: string;
 }
+
+// Form data khi nhập tay thông tin khách check-in
+export interface ManualCheckinFormValues {
+  full_name: string
+  document_type: 'CCCD' | 'Hộ chiếu' | 'Giấy tờ khác'
+  document_number: string
+  date_of_birth: string // YYYY-MM-DD
+  gender: 'Nam' | 'Nữ' | ''
+  nationality: string
+}

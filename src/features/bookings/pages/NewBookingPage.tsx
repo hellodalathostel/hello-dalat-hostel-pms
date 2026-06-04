@@ -360,7 +360,7 @@ export default function NewBooking(): JSX.Element {
                             >
                               <Select
                                 {...bookingField}
-                                options={rooms.map((r) => ({ value: r.id, label: r.name }))}
+                                options={rooms.map((r) => ({ value: r.id, label: `${r.id} - ${r.name}` }))}
                                 loading={roomsLoading}
                                 placeholder="Chọn phòng"
                               />

@@ -8,6 +8,7 @@ import {
   Descriptions,
   Drawer,
   Flex,
+  Modal,
   Popconfirm,
   Row,
   Skeleton,
@@ -22,7 +23,10 @@ import {
   CalendarOutlined,
   ClockCircleOutlined,
   CreditCardOutlined,
+  DeleteOutlined,
   EditOutlined,
+  ExclamationCircleOutlined,
+  FileExcelOutlined,
   HistoryOutlined,
   LoginOutlined,
   LogoutOutlined,
@@ -41,12 +45,14 @@ import BookingFolioEditModal from '@/features/bookings/components/BookingFolioEd
 import { AddServiceModal } from '@/features/bookings/components/AddServiceModal'
 import { CheckinImportModal } from '@/features/checkin/components/CheckinImportModal'
 import { CheckoutModal } from '@/features/checkout/components/CheckoutModal'
+import { useVoidBooking } from '@/features/bookings/hooks/useVoidBooking'
 import { DocumentActionsMenu } from '@/features/documents/DocumentActionsMenu'
 import { DocumentHistoryDrawer } from '@/features/documents/DocumentHistoryDrawer'
 import { EarlyLateModal } from '@/features/bookings/components/EarlyLateModal'
 import { useCancelBooking } from '@/features/bookings/hooks/useUpdateBooking'
 import type { EarlyLateType } from '@/hooks/useAddEarlyLate'
 import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
+import { useBreakpoint } from '@/shared/hooks/useBreakpoint'
 
 // Map trạng thái sang màu Ant Design Tag
 const STATUS_COLOR: Record<string, string> = {
@@ -105,6 +111,7 @@ interface BookingRoomCardProps {
 export default function BookingDetailDrawer({ groupId = null, bookingId = null, open, onClose, onEditBooking }: Props) {
   const queryClient = useQueryClient()
   const { message } = useAppFeedback()
+  const { isMobile } = useBreakpoint()
   const cancelBookingMutation = useCancelBooking()
   const { data: resolvedGroupId, isLoading: isResolvingGroupId, isError: isResolvingError } = useQuery({
     queryKey: ['booking-group-id', bookingId],
@@ -197,7 +204,7 @@ export default function BookingDetailDrawer({ groupId = null, bookingId = null, 
       <Drawer
         title="Chi tiết Booking"
         placement="right"
-        width={680}
+        width={isMobile ? '100%' : 680}
         open={open}
         onClose={onClose}
         extra={
@@ -243,7 +250,7 @@ export default function BookingDetailDrawer({ groupId = null, bookingId = null, 
               }
               bordered
               size="small"
-              column={2}
+              column={isMobile ? 1 : 2}
             >
               {data.customer_phone && (
                 <Descriptions.Item label={<><PhoneOutlined /> SĐT</>}>
@@ -266,15 +273,15 @@ export default function BookingDetailDrawer({ groupId = null, bookingId = null, 
             </Descriptions>
 
             {/* Tổng quan tài chính */}
-            <Row gutter={16} align="middle">
-              <Col span={8}>
+            <Row gutter={[16, 16]} align="middle">
+              <Col xs={24} md={8}>
                 <Statistic
                   title="Tổng hoá đơn"
                   value={totalGrandTotal}
                   formatter={(v) => formatVND(v as number)}
                 />
               </Col>
-              <Col span={8}>
+              <Col xs={24} md={8}>
                 <Statistic
                   title="Đã thanh toán"
                   value={data.paid}
@@ -282,7 +289,16 @@ export default function BookingDetailDrawer({ groupId = null, bookingId = null, 
                   formatter={(v) => formatVND(v as number)}
                 />
               </Col>
-              <Col span={8} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Col
+                xs={24}
+                md={8}
+                style={{
+                  display: 'flex',
+                  alignItems: isMobile ? 'stretch' : 'center',
+                  gap: 8,
+                  flexDirection: isMobile ? 'column' : 'row',
+                }}
+              >
                 <Statistic
                   title="Còn lại"
                   value={balanceDue}
@@ -296,6 +312,7 @@ export default function BookingDetailDrawer({ groupId = null, bookingId = null, 
                     size="small"
                     type="primary"
                     icon={<EditOutlined />}
+                    block={isMobile}
                     onClick={() => {
                       setFolioEditBookingId(data.bookings[0].id)
                       setFolioEditOpen(true)
@@ -450,7 +467,7 @@ export default function BookingDetailDrawer({ groupId = null, bookingId = null, 
 // Card hiển thị một booking trong group
 function BookingRoomCard({
   booking,
-  groupId: _groupId,
+  groupId,
   onCheckin,
   onCheckout,
   onAddService,
@@ -469,6 +486,38 @@ function BookingRoomCard({
   const canEarlyLate = ACTION_STATUSES.canEarlyLate.includes(status)
   const canCancel = ACTION_STATUSES.canCancel.includes(status)
   const isReadOnly = status === 'checked-out' || status === 'cancelled'
+  const { mutate: voidBooking, isPending: isVoiding } = useVoidBooking()
+
+  const handleVoidBooking = () => {
+    if (!groupId) {
+      return
+    }
+
+    Modal.confirm({
+      title: 'Xóa booking đã trả phòng',
+      icon: <ExclamationCircleOutlined />,
+      content: (
+        <div>
+          <p>
+            Booking <strong>{booking.guest_name ?? 'Khách chưa xác định'}</strong> — Phòng {booking.room_id} sẽ bị xóa.
+          </p>
+          <p style={{ color: '#ff4d4f' }}>
+            Doanh thu sẽ được hoàn lại tự động. Hành động này không thể khôi phục.
+          </p>
+        </div>
+      ),
+      okText: 'Xác nhận xóa',
+      okType: 'danger',
+      cancelText: 'Hủy',
+      onOk: () => {
+        voidBooking({
+          bookingId: booking.id,
+          groupId,
+          reason: 'Xóa thủ công bởi owner',
+        })
+      },
+    })
+  }
 
   return (
     <Badge.Ribbon
@@ -481,9 +530,10 @@ function BookingRoomCard({
           borderRadius: 8,
           padding: '12px 16px',
           background: booking.status === 'cancelled' ? '#fafafa' : '#fff',
+          overflowX: 'hidden',
         }}
       >
-        <Flex justify="space-between" align="flex-start">
+        <Flex justify="space-between" align="flex-start" wrap>
           <div>
             <Typography.Text strong>
               Phòng {booking.room_name ?? booking.room_id}
@@ -498,6 +548,11 @@ function BookingRoomCard({
               <Typography.Text type="secondary" style={{ marginLeft: 8 }}>
                 — {booking.guest_name}
               </Typography.Text>
+            )}
+            {booking.code && (
+              <Tag color="geekblue" style={{ marginLeft: 8 }}>
+                {booking.code}
+              </Tag>
             )}
             {primaryGuest && (
               <div style={{ marginTop: 4 }}>
@@ -560,14 +615,19 @@ function BookingRoomCard({
         )}
 
         {/* Action buttons — hiển thị có điều kiện theo status */}
-        {!isReadOnly && (
+        {(status !== 'cancelled') && (
           <div style={{ marginTop: 12, borderTop: '1px solid #f0f0f0', paddingTop: 12 }}>
             <Space wrap size="small">
               {/* Check-in */}
               {canCheckin && (
-                <Button type="primary" size="small" icon={<LoginOutlined />} onClick={() => onCheckin?.(booking.id)}>
-                  Check-in
-                </Button>
+                <>
+                  <Button type="primary" size="small" icon={<LoginOutlined />} onClick={() => onCheckin?.(booking.id)}>
+                    Check-in
+                  </Button>
+                  <Button size="small" icon={<FileExcelOutlined />} onClick={() => onCheckin?.(booking.id)}>
+                    Nhập Excel
+                  </Button>
+                </>
               )}
 
               {/* Check-out */}
@@ -607,6 +667,19 @@ function BookingRoomCard({
                     Huỷ
                   </Button>
                 </Popconfirm>
+              )}
+
+              {/* Xoá booking checked-out — destructive action luôn đặt cuối cùng */}
+              {status === 'checked-out' && (
+                <Button
+                  size="small"
+                  danger
+                  icon={<DeleteOutlined />}
+                  loading={isVoiding}
+                  onClick={handleVoidBooking}
+                >
+                  Xóa booking
+                </Button>
               )}
             </Space>
           </div>

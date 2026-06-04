@@ -35,6 +35,7 @@ interface RoomCalendarRawRecord {
   start_date?: string | null
   end_date?: string | null
   booking_id?: string | null
+  code?: string | null
   block_id?: string | null
   entry_type?: 'booking' | 'block' | null
   group_id?: string | null
@@ -252,6 +253,7 @@ function expandRangeRecordToDailyEvents(
       room_name: roomName,
       date: currentDate,
       booking_id: record.booking_id ?? null,
+      code: record.code ?? null,
       block_id: record.block_id ?? null,
       entry_type: record.entry_type ?? (record.is_blocked ? 'block' : record.booking_id ? 'booking' : null),
       group_id: record.group_id ?? null,
@@ -283,6 +285,7 @@ function normalizeCalendarRecords(
         room_name: record.room_name ?? null,
         date: record.date,
         booking_id: record.booking_id ?? null,
+        code: record.code ?? null,
         block_id: record.block_id ?? null,
         entry_type: record.entry_type ?? (record.is_blocked ? 'block' : record.booking_id ? 'booking' : null),
         group_id: record.group_id ?? null,

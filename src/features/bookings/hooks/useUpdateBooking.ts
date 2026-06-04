@@ -13,12 +13,26 @@ export interface UpdateBookingPayload {
   guestsCount?: number
   guestName?: string
   note?: string
+  overrideCheckin?: boolean
+}
+
+type UpdateBookingRpcParams = {
+  p_booking_id: string
+  p_room_id?: string
+  p_check_in?: string
+  p_check_out?: string
+  p_price_per_night?: number
+  p_guests_count?: number
+  p_guest_name?: string
+  p_note?: string
+  p_override_checkin?: boolean
 }
 
 async function invalidateOperationalQueries(queryClient: ReturnType<typeof useQueryClient>): Promise<void> {
   await Promise.all([
     queryClient.invalidateQueries({ queryKey: ['booking-detail'] }),
     queryClient.invalidateQueries({ queryKey: ['room-calendar'] }),
+    queryClient.invalidateQueries({ queryKey: ['dashboard', 'today'] }),
   ])
 }
 
@@ -30,7 +44,7 @@ export function useUpdateBooking() {
     mutationKey: ['update-booking-txn'],
     mutationFn: async (payload: UpdateBookingPayload) => {
       try {
-        const { data, error } = await supabase.rpc('update_booking_txn', {
+        const params: UpdateBookingRpcParams = {
           p_booking_id: payload.bookingId,
           p_room_id: payload.roomId,
           p_check_in: payload.checkIn?.format('YYYY-MM-DD'),
@@ -39,7 +53,10 @@ export function useUpdateBooking() {
           p_guests_count: payload.guestsCount,
           p_guest_name: payload.guestName,
           p_note: payload.note,
-        })
+          p_override_checkin: payload.overrideCheckin ?? false,
+        }
+
+        const { data, error } = await supabase.rpc('update_booking_txn', params)
 
         if (error) {
           throw error
