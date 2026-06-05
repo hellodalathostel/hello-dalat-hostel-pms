@@ -120,6 +120,8 @@ const vietQrUrl = (amount: number, addInfo: string) => {
   return `https://img.vietqr.io/image/${VQR_BANK}-${VQR_ACCOUNT}-print.png?amount=${amount}&addInfo=${safeInfo}&accountName=${safeName}`;
 };
 
+
+
 // ─── CSS Base ─────────────────────────────────────────────────────────────────
 // Tất cả màu text trong callout/table dùng hardcode hex để đảm bảo đọc được
 // trên cả light mode và dark mode trong popup window.
