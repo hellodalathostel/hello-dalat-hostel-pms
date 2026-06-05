@@ -21,7 +21,6 @@ import {
 } from './documentTemplates';
 import { openDocumentPreview } from './DocumentPreviewWindow';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
 
 export type DocKind =
   | 'booking_confirmation'
@@ -37,6 +36,8 @@ export interface GenerateOptions {
   groupId: string;
   docKind: DocKind;
   docFormat: DocFormat;
+  /** Ngôn ngữ document: 'vi' (mặc định) | 'en' */
+  lang?: 'vi' | 'en';
   /** Chỉ cần khi docKind === 'deposit_request' */
   depositOptions?: DepositRequestOptions;
 }
@@ -53,9 +54,7 @@ interface DocumentPreviewData extends DocumentData {
   group: {
     guest_name: string | null;
   };
-  bookings: Array<{
-    room_id: string;
-  }>;
+  bookings: Array<any>;
 }
 
 const PAYMENT_METHOD_LABEL: Record<string, string> = {
@@ -189,13 +188,13 @@ function buildPreviewTitle(kind: DocKind, docData: DocumentPreviewData): string 
   return previewTitle;
 }
 
-// ─── Copy Zalo text vào clipboard ─────────────────────────────────────────────
+// ─── Copy Zalo text vào clipboard ──────────────────────────────────────────────
 
 async function copyZaloText(text: string): Promise<void> {
   await navigator.clipboard.writeText(text);
 }
 
-// ─── Ghi log vào document_logs ────────────────────────────────────────────────
+// ─── Ghi log vào document_logs ─────────────────────────────────────────────────
 
 async function logDocument(
   opts: GenerateOptions,
@@ -235,7 +234,7 @@ async function logDocument(
   }
 }
 
-// ─── Hook chính ───────────────────────────────────────────────────────────────
+// ─── Hook chính ────────────────────────────────────────────────────────────────
 
 export interface UseDocumentGeneratorReturn {
   generating: boolean;
@@ -250,6 +249,8 @@ export function useDocumentGenerator(): UseDocumentGeneratorReturn {
     try {
       // 1. Fetch data thật từ DB
       const docData = await fetchDocumentData(opts.bookingId, opts.groupId);
+      // Gắn lang vào docData — template đọc field này để chọn ngôn ngữ
+      if (opts.lang) docData.lang = opts.lang;
 
       // 2. Render template → { html, zaloText }
       let result: { html: string; zaloText: string };
@@ -299,7 +300,7 @@ export function useDocumentGenerator(): UseDocumentGeneratorReturn {
   return { generating, generate };
 }
 
-// ─── Convenience hook cho 1 booking cụ thể ────────────────────────────────────
+// ─── Convenience hook cho 1 booking cụ thể ─────────────────────────────────────
 // Dùng trong BookingRow / BookingListPanel để tránh truyền bookingId/groupId mỗi lần
 
 export interface UseBookingDocumentsReturn {
@@ -340,8 +341,8 @@ export function useBookingDocuments(
   };
 }
 
-// ─── Adapter cho DocumentActionsMenu ─────────────────────────────────────────
-// Copilot dùng interface { groupId } + generateAndPrint/generateAndCopyZalo
+// ─── Adapter cho DocumentActionsMenu ───────────────────────────────────────────
+// Dùng interface { groupId } + generateAndPrint/generateAndCopyZalo
 // Hook này bridge sang useDocumentGenerator bên dưới
 
 interface UseDocumentGeneratorByGroupOptions {
@@ -350,9 +351,11 @@ interface UseDocumentGeneratorByGroupOptions {
 
 interface GenerateByGroupParams {
   kind: DocKind;
-  bookingId?: string;       // nếu không truyền → lấy booking đầu tiên của group
+  bookingId?: string;
   depositAmount?: number;
-  depositDeadline?: string; // 'YYYY-MM-DD'
+  depositDeadline?: string;
+  /** Ngôn ngữ document: 'vi' (mặc định) | 'en' */
+  lang?: 'vi' | 'en';
 }
 
 interface UseDocumentGeneratorByGroupReturn {
@@ -391,6 +394,8 @@ export function useDocumentGeneratorByGroup(
     try {
       const bookingId = await resolveBookingId(params.bookingId);
       const docData = await fetchDocumentData(bookingId, groupId);
+      // Gắn lang — forward từ caller
+      if (params.lang) docData.lang = params.lang;
 
       let result: { html: string; zaloText: string };
 
