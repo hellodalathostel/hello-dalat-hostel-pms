@@ -120,24 +120,6 @@ const vietQrUrl = (amount: number, addInfo: string) => {
   return `https://img.vietqr.io/image/${VQR_BANK}-${VQR_ACCOUNT}-print.png?amount=${amount}&addInfo=${safeInfo}&accountName=${safeName}`;
 };
 
-// QR SVG placeholder (hiển thị khi không có real QR)
-const QR_PLACEHOLDER_SVG = `
-  <svg viewBox="0 0 24 24" width="70" height="70" fill="none" stroke="#2d6a4f" stroke-width="1.5">
-    <rect x="3" y="3" width="8" height="8"/>
-    <rect x="13" y="3" width="8" height="8"/>
-    <rect x="3" y="13" width="8" height="8"/>
-    <rect x="5" y="5" width="4" height="4" fill="#2d6a4f" stroke="none"/>
-    <rect x="15" y="5" width="4" height="4" fill="#2d6a4f" stroke="none"/>
-    <rect x="5" y="15" width="4" height="4" fill="#2d6a4f" stroke="none"/>
-    <line x1="14" y1="14" x2="14" y2="14" stroke="#2d6a4f" stroke-width="2"/>
-    <line x1="17" y1="14" x2="17" y2="14" stroke="#2d6a4f" stroke-width="2"/>
-    <line x1="20" y1="14" x2="20" y2="14" stroke="#2d6a4f" stroke-width="2"/>
-    <line x1="14" y1="17" x2="14" y2="17" stroke="#2d6a4f" stroke-width="2"/>
-    <line x1="20" y1="17" x2="20" y2="17" stroke="#2d6a4f" stroke-width="2"/>
-    <line x1="14" y1="20" x2="20" y2="20" stroke="#2d6a4f" stroke-width="2"/>
-    <line x1="17" y1="17" x2="17" y2="20" stroke="#2d6a4f" stroke-width="2"/>
-  </svg>`;
-
 // ─── CSS Base ─────────────────────────────────────────────────────────────────
 // Tất cả màu text trong callout/table dùng hardcode hex để đảm bảo đọc được
 // trên cả light mode và dark mode trong popup window.
@@ -1032,7 +1014,6 @@ export function renderInvoice(d: DocumentData): { html: string; zaloText: string
   const lang = d.lang ?? 'vi';
   const isEN = lang === 'en';
   const fmt = isEN ? fmtVND_EN : fmtVND;
-  const fmtDate = isEN ? fmtDate_EN : fmtDate_VI;
   const fmtDateTime = isEN ? fmtDateTime_EN : fmtDateTime_VI;
   const nightsLabel = isEN ? nightsLabel_EN(d) : nightsLabel_VI(d);
   const invoiceNo = `HD-${dayjs(d.generatedAt).format('YYYYMMDD')}-${d.bookingId.slice(0, 6).toUpperCase()}`;
