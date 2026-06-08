@@ -128,275 +128,114 @@ const vietQrUrl = (amount: number, addInfo: string) => {
 
 const BASE_STYLE = `
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;500;600&family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&display=swap');
-
+  @import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;500;600&family=Playfair+Display:wght@600&display=swap');
   * { box-sizing: border-box; margin: 0; padding: 0; }
-
-  body {
-    font-family: 'Be Vietnam Pro', 'Segoe UI', sans-serif;
-    font-size: 13px;
-    line-height: 1.6;
-    color: #1a1a1a;
-    background: #fff;
-    padding: 0;
-    max-width: 700px;
-    margin: 0 auto;
-  }
-
-  /* ── Masthead ── */
-  .masthead {
-    background: #2d6a4f;
-    padding: 20px 28px;
-    display: flex;
-    align-items: center;
-    gap: 16px;
-  }
-  .masthead-logo {
-    width: 44px; height: 44px;
-    border-radius: 50%;
-    background: rgba(255,255,255,0.15);
-    display: flex; align-items: center; justify-content: center;
-    flex-shrink: 0;
-    overflow: hidden;
-  }
-  .masthead-logo img { width: 44px; height: 44px; object-fit: cover; }
-  .masthead-brand { flex: 1; }
-  .masthead-brand h1 {
-    font-family: 'Cormorant Garamond', Georgia, serif;
-    font-size: 18px; font-weight: 600;
-    color: #fff; letter-spacing: 0.3px; line-height: 1.2;
-  }
-  .masthead-brand p { font-size: 10.5px; color: rgba(255,255,255,0.65); margin-top: 2px; }
-  .masthead-contact { text-align: right; font-size: 10.5px; color: rgba(255,255,255,0.78); line-height: 1.9; }
-
-  /* ── Title band ── */
-  .title-band {
-    border-bottom: 0.5px solid #e0d8c8;
-    padding: 14px 28px;
-    display: flex; justify-content: space-between; align-items: center;
-    background: #faf8f4;
-  }
-  .doc-title {
-    font-family: 'Cormorant Garamond', Georgia, serif;
-    font-size: 20px; font-weight: 600;
-    color: #1a1a1a; letter-spacing: 0.3px;
-  }
-  .doc-meta { font-size: 10px; color: #8a7a60; text-align: right; line-height: 1.8; }
-
-  /* ── Body ── */
-  .doc-body { padding: 22px 28px; background: #fff; }
-
-  /* ── Section ── */
-  .section { margin-bottom: 20px; }
-  .section-label {
-    font-size: 9px; font-weight: 700;
-    text-transform: uppercase; letter-spacing: 2px;
-    color: #2d6a4f;
-    padding-bottom: 7px;
-    border-bottom: 1px solid #c8ddd0;
-    margin-bottom: 12px;
-    display: flex; align-items: center; gap: 6px;
-  }
-  .section-label::before {
-    content: '';
-    display: inline-block; width: 3px; height: 10px;
-    background: #2d6a4f; border-radius: 2px; flex-shrink: 0;
-  }
-
-  /* ── Info grid ── */
-  .info-grid {
-    display: grid; grid-template-columns: 1fr 1fr;
-    border: 0.5px solid #e8e0d0; border-radius: 4px; overflow: hidden;
-  }
-  .info-cell {
-    padding: 9px 12px;
-    border-bottom: 0.5px solid #e8e0d0;
-    border-right: 0.5px solid #e8e0d0;
-    background: #fff;
-  }
-  .info-cell:nth-child(even) { border-right: none; }
-  .info-cell:nth-last-child(-n+2) { border-bottom: none; }
-  .info-cell.full { grid-column: span 2; border-right: none; }
-  .info-key {
-    font-size: 9px; text-transform: uppercase;
-    letter-spacing: 1.5px; color: #8a7a60; font-weight: 700; margin-bottom: 3px;
-  }
-  .info-val { font-size: 13px; font-weight: 500; color: #1a1a1a; line-height: 1.4; }
-  .info-val.muted { color: #8a7a60; font-weight: 400; }
-
-  /* ── Badge ── */
-  .badge {
-    display: inline-block; padding: 1px 6px;
-    border-radius: 20px; font-size: 9.5px; font-weight: 700;
-  }
-  .badge-green { background: #c8e6c9; color: #1b5e20; }
-  .badge-amber { background: #ffe0b2; color: #6d3200; }
-
-  /* ── Line table ── */
-  .line-table { width: 100%; border-collapse: collapse; border: 0.5px solid #e0d8c8; }
-  .line-table thead tr { background: #f5f0e8; }
-  .line-table th {
-    padding: 7px 12px; font-size: 9.5px; font-weight: 700;
-    text-transform: uppercase; letter-spacing: 1.2px; color: #5a4a30;
-    border-bottom: 0.5px solid #e0d8c8; text-align: left;
-  }
-  .line-table td {
-    padding: 8px 12px; font-size: 12.5px;
-    border-bottom: 0.5px solid #f0ebe0;
-    color: #1a1a1a; vertical-align: middle; background: #fff;
-  }
-  .line-table tr:last-child td { border-bottom: none; }
-  .line-table .total-row td {
-    background: #d4edda; font-weight: 700; color: #0a3d1a;
-    font-size: 13.5px; border-top: 1px solid #a8d5b5;
-  }
-  .line-table .paid-row td { background: #dce8fa; color: #0c2a5e; font-weight: 600; }
-  .line-table .due-row td {
-    background: #fde8c8; color: #6d2800; font-weight: 700;
-    font-size: 13.5px; border-top: 1px solid #f5c87a;
-  }
-  /* Dòng phụ thu thẻ — nền nhẹ để phân biệt với dịch vụ thường */
-  .line-table .surcharge-row td { background: #fdf6ee; color: #7a4500; }
-  .tr { text-align: right; }
-  .tc { text-align: center; }
-
-  /* ── QR block ── */
-  .qr-block {
-    display: flex; gap: 18px; padding: 16px;
-    background: #f7f4ef; border: 0.5px solid #e0d8c8; border-radius: 4px;
-    align-items: flex-start;
-  }
-  .qr-img {
-    width: 110px; height: 110px;
-    background: #fff; border: 0.5px solid #d0c8b8; border-radius: 4px;
-    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-    overflow: hidden;
-  }
-  .qr-img img { width: 110px; height: 110px; object-fit: contain; }
-  .qr-info { flex: 1; }
-  .qr-amount {
-    font-family: 'Cormorant Garamond', serif;
-    font-size: 22px; font-weight: 600; color: #0a3d1a; line-height: 1; margin-bottom: 10px;
-  }
-  .qr-row { display: flex; gap: 8px; margin-bottom: 4px; }
-  .qr-key { font-size: 10px; color: #6a5a40; width: 100px; flex-shrink: 0; }
-  .qr-val { font-size: 12px; color: #1a1a1a; font-weight: 500; }
-  .qr-note {
-    font-size: 10.5px; color: #5a4a30; margin-top: 8px; line-height: 1.5;
-    border-top: 0.5px solid #e0d8c8; padding-top: 7px;
-  }
-
-  /* ── Callout ── */
-  .callout {
-    display: flex; gap: 12px; padding: 12px 16px; margin: 14px 0;
-    align-items: flex-start; font-size: 12.5px; line-height: 1.6;
-    border-radius: 0 4px 4px 0;
-  }
-  .callout strong { font-weight: 700; }
-  .callout-text { color: #1a1a1a; }
-  .callout-icon {
-    width: 18px; height: 18px; border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 10px; flex-shrink: 0; margin-top: 1px; font-weight: 700;
-  }
-  .callout-green { background: #e8f5ec; border-left: 3px solid #2d6a4f; }
-  .callout-green .callout-icon { background: #2d6a4f; color: #fff; }
-  .callout-amber { background: #fff3e0; border-left: 3px solid #c07800; }
-  .callout-amber .callout-icon { background: #c07800; color: #fff; font-size: 11px; }
-  .callout-blue { background: #e8f0fe; border-left: 3px solid #1a56a0; }
-  .callout-blue .callout-icon { background: #1a56a0; color: #fff; }
-  .callout-blue .callout-text { color: #1a1a1a; }
-
-  /* ── Cancel policy table ── */
-  .cancel-table { width: 100%; border-collapse: collapse; border: 0.5px solid #e0d8c8; }
-  .cancel-table th {
-    background: #f5f0e8; padding: 7px 12px; font-size: 9.5px;
-    text-transform: uppercase; letter-spacing: 1.2px; color: #5a4a30;
-    font-weight: 700; border-bottom: 0.5px solid #e0d8c8; text-align: left;
-  }
-  .cancel-table td {
-    padding: 7px 12px; font-size: 12px;
-    border-bottom: 0.5px solid #f0ebe0; color: #1a1a1a; background: #fff;
-  }
-  .cancel-table tr:last-child td { border-bottom: none; }
-  .refund-ok   { color: #0a4d1a; font-weight: 700; }
-  .refund-none { color: #8b0000; font-weight: 700; }
-
-  /* ── House rules ── */
-  .rules-list { list-style: none; }
-  .rules-list li {
-    display: flex; align-items: baseline; gap: 10px;
-    padding: 6px 0; border-bottom: 0.5px solid #f0ebe0;
-    font-size: 12px; color: #2a2a2a;
-  }
-  .rules-list li:last-child { border-bottom: none; }
-  .rules-icon { color: #2d6a4f; font-size: 8px; flex-shrink: 0; }
-
-  /* ── Getting here (EN only) ── */
-  .directions-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  .direction-card {
-    background: #f7f4ef; border: 0.5px solid #e0d8c8;
-    border-radius: 4px; padding: 10px 12px;
-  }
-  .dir-mode {
-    font-size: 9px; font-weight: 700; text-transform: uppercase;
-    letter-spacing: 1.5px; color: #6a5a40; margin-bottom: 4px;
-  }
-  .dir-detail { font-size: 12px; color: #1a1a1a; line-height: 1.5; }
-  .dir-time { font-size: 10.5px; color: #2d6a4f; font-weight: 600; margin-top: 3px; }
-
-  /* ── Divider ── */
-  hr.divider { border: none; border-top: 0.5px solid #e8e0d0; margin: 18px 0; }
-
-  /* ── Footer ── */
-  .doc-footer {
-    padding: 12px 28px; background: #f5f0e8;
-    border-top: 1px solid #e0d8c8;
-    display: flex; justify-content: space-between; align-items: center;
-  }
-  .doc-footer .brand {
-    font-family: 'Cormorant Garamond', serif;
-    font-size: 14px; font-weight: 600; color: #2d6a4f;
-  }
-  .doc-footer .footer-meta { font-size: 10px; color: #6a5a40; text-align: right; line-height: 1.7; }
-
-  /* ── Print ── */
+  body { font-family: 'Be Vietnam Pro','Segoe UI',sans-serif; font-size:13px; line-height:1.6; color:#1a1a1a; background:#fff; max-width:700px; margin:0 auto; }
+  .inv-header { background:#2d6a4f; padding:20px 28px; display:flex; align-items:center; gap:16px; }
+  .inv-logo { width:48px; height:48px; border-radius:50%; overflow:hidden; border:2px solid rgba(255,255,255,0.3); flex-shrink:0; }
+  .inv-logo img { width:100%; height:100%; object-fit:cover; }
+  .inv-brand { flex:1; }
+  .inv-brand-name { font-family:'Playfair Display',Georgia,serif; font-size:17px; font-weight:600; color:#fff; letter-spacing:0.2px; line-height:1.2; }
+  .inv-brand-addr { font-size:10.5px; color:rgba(255,255,255,0.62); margin-top:3px; }
+  .inv-brand-contact { font-size:10.5px; color:rgba(255,255,255,0.75); margin-top:1px; }
+  .inv-docbar { background:#f7f4ee; border-bottom:0.5px solid #e4ddd0; padding:12px 28px; display:flex; justify-content:space-between; align-items:center; }
+  .inv-doc-title { font-family:'Playfair Display',serif; font-size:17px; font-weight:600; color:#1a1a1a; }
+  .inv-doc-meta { text-align:right; font-size:10px; color:#8a7a60; line-height:1.9; }
+  .inv-body { padding:22px 28px; }
+  .inv-footer { background:#f2ede4; border-top:1px solid #e4ddd0; padding:10px 28px; display:flex; justify-content:space-between; align-items:center; }
+  .inv-footer-brand { font-family:'Playfair Display',serif; font-size:14px; font-weight:600; color:#2d6a4f; }
+  .inv-footer-meta { font-size:10px; color:#6a5a40; text-align:right; line-height:1.8; }
+  .section { margin-bottom:20px; }
+  .section-label { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:2px; color:#2d6a4f; padding-bottom:7px; border-bottom:1px solid #c8ddd0; margin-bottom:12px; display:flex; align-items:center; gap:6px; }
+  .section-label::before { content:''; display:inline-block; width:3px; height:10px; background:#2d6a4f; border-radius:2px; }
+  .info-grid { display:grid; grid-template-columns:1fr 1fr; border:0.5px solid #e4ddd0; border-radius:6px; overflow:hidden; }
+  .info-cell { padding:10px 14px; border-bottom:0.5px solid #e4ddd0; border-right:0.5px solid #e4ddd0; background:#fff; }
+  .info-cell:nth-child(even) { border-right:none; }
+  .info-cell:nth-last-child(-n+2) { border-bottom:none; }
+  .info-cell.full { grid-column:span 2; border-right:none; }
+  .info-key { font-size:9px; text-transform:uppercase; letter-spacing:1.5px; color:#8a7a60; font-weight:700; margin-bottom:3px; }
+  .info-val { font-size:13px; font-weight:500; color:#1a1a1a; }
+  .info-val.muted { color:#8a7a60; font-weight:400; }
+  .badge { display:inline-block; padding:1px 8px; border-radius:20px; font-size:10px; font-weight:700; }
+  .badge-green { background:#c8e6c9; color:#1b5e20; }
+  .badge-amber { background:#ffe0b2; color:#6d3200; }
+  .inv-tag { display:inline-block; padding:1px 8px; border-radius:20px; font-size:10px; font-weight:700; }
+  .tag-paid { background:#c8e6c9; color:#1b5e20; }
+  .tag-pending { background:#ffe0b2; color:#6d3200; }
+  table.line-table { width:100%; border-collapse:collapse; border:0.5px solid #e4ddd0; }
+  table.line-table thead tr { background:#f2ede4; }
+  table.line-table th { padding:8px 12px; font-size:9.5px; font-weight:700; text-transform:uppercase; letter-spacing:1.2px; color:#5a4a30; border-bottom:0.5px solid #e4ddd0; text-align:left; }
+  table.line-table td { padding:9px 12px; font-size:12.5px; border-bottom:0.5px solid #f0ebe0; color:#1a1a1a; vertical-align:middle; background:#fff; }
+  table.line-table tr:last-child td { border-bottom:none; }
+  table.line-table .total-row td { background:#d0e8da; font-weight:700; color:#0a3d1a; font-size:13.5px; border-top:1px solid #a8d5b5; }
+  table.line-table .paid-row td { background:#dce8fa; color:#0c2a5e; font-weight:600; }
+  table.line-table .due-row td { background:#fde8c8; color:#6d2800; font-weight:700; font-size:13.5px; border-top:1px solid #f5c87a; }
+  table.line-table .surcharge-row td { background:#fdf6ee; color:#7a4500; }
+  .tr { text-align:right; }
+  .tc { text-align:center; }
+  .qr-block { display:flex; gap:18px; padding:16px; background:#f7f4ef; border:0.5px solid #e0d8c8; border-radius:6px; align-items:flex-start; }
+  .qr-img { width:110px; height:110px; background:#fff; border:0.5px solid #d0c8b8; border-radius:4px; display:flex; align-items:center; justify-content:center; flex-shrink:0; overflow:hidden; }
+  .qr-img img { width:110px; height:110px; object-fit:contain; }
+  .qr-info { flex:1; }
+  .qr-amount { font-family:'Playfair Display',serif; font-size:22px; font-weight:600; color:#0a3d1a; line-height:1; margin-bottom:10px; }
+  .qr-row { display:flex; gap:8px; margin-bottom:4px; }
+  .qr-key { font-size:10px; color:#6a5a40; width:100px; flex-shrink:0; }
+  .qr-val { font-size:12px; color:#1a1a1a; font-weight:500; }
+  .qr-note { font-size:10.5px; color:#5a4a30; margin-top:8px; line-height:1.5; border-top:0.5px solid #e0d8c8; padding-top:7px; }
+  .callout { display:flex; gap:12px; padding:12px 16px; margin:14px 0; align-items:flex-start; font-size:12.5px; line-height:1.6; border-radius:0 4px 4px 0; }
+  .callout-text { color:#1a1a1a; }
+  .callout-icon { width:20px; height:20px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:11px; flex-shrink:0; margin-top:1px; font-weight:700; }
+  .callout-green { background:#e8f5ec; border-left:3px solid #2d6a4f; }
+  .callout-green .callout-icon { background:#2d6a4f; color:#fff; }
+  .callout-amber { background:#fff3e0; border-left:3px solid #c07800; }
+  .callout-amber .callout-icon { background:#c07800; color:#fff; }
+  .callout-blue { background:#e8f0fe; border-left:3px solid #1a56a0; }
+  .callout-blue .callout-icon { background:#1a56a0; color:#fff; }
+  .cancel-table { width:100%; border-collapse:collapse; border:0.5px solid #e0d8c8; }
+  .cancel-table th { background:#f5f0e8; padding:7px 12px; font-size:9.5px; text-transform:uppercase; letter-spacing:1.2px; color:#5a4a30; font-weight:700; border-bottom:0.5px solid #e0d8c8; text-align:left; }
+  .cancel-table td { padding:7px 12px; font-size:12px; border-bottom:0.5px solid #f0ebe0; color:#1a1a1a; background:#fff; }
+  .cancel-table tr:last-child td { border-bottom:none; }
+  .refund-ok { color:#0a4d1a; font-weight:700; }
+  .refund-none { color:#8b0000; font-weight:700; }
+  .rules-list { list-style:none; }
+  .rules-list li { display:flex; align-items:baseline; gap:10px; padding:6px 0; border-bottom:0.5px solid #f0ebe0; font-size:12px; color:#2a2a2a; }
+  .rules-list li:last-child { border-bottom:none; }
+  .rules-icon { color:#2d6a4f; font-size:8px; flex-shrink:0; }
+  .directions-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .direction-card { background:#f7f4ef; border:0.5px solid #e0d8c8; border-radius:4px; padding:10px 12px; }
+  .dir-mode { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:1.5px; color:#6a5a40; margin-bottom:4px; }
+  .dir-detail { font-size:12px; color:#1a1a1a; line-height:1.5; }
+  .dir-time { font-size:10.5px; color:#2d6a4f; font-weight:600; margin-top:3px; }
+  hr.divider { border:none; border-top:0.5px solid #e8e0d0; margin:18px 0; }
   @media print {
-    body { padding: 0; max-width: 100%; }
-    .masthead { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .line-table .total-row td,
-    .line-table .paid-row td,
-    .line-table .due-row td,
-    .line-table .surcharge-row td,
-    .callout-green, .callout-amber, .callout-blue,
-    .cancel-table th, .line-table thead tr,
-    .title-band, .doc-footer { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    body { max-width:100%; }
+    .inv-header,.inv-docbar,.inv-footer,.callout-green,.callout-amber,.callout-blue,
+    table.line-table .total-row td,table.line-table .paid-row td,
+    table.line-table .due-row td,table.line-table .surcharge-row td,
+    table.line-table thead tr,.cancel-table th { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
   }
 </style>`;
 
 // ─── Header ───────────────────────────────────────────────────────────────────
 
 const htmlHeader = (lang: 'vi' | 'en' = 'vi') => `
-<div class="masthead">
-  <div class="masthead-logo">
+<div class="inv-header">
+  <div class="inv-logo">
     <img src="${LOGO_URL}" alt="Hello Dalat Hostel logo" />
   </div>
-  <div class="masthead-brand">
-    <h1>${HOSTEL_NAME}</h1>
-    <p>${lang === 'en' ? HOSTEL_ADDR_EN : HOSTEL_ADDR_VI}</p>
-  </div>
-  <div class="masthead-contact">
-    <div>${lang === 'en' ? HOSTEL_PHONE_INTL : HOSTEL_PHONE}</div>
-    <div>${HOSTEL_EMAIL}</div>
+  <div class="inv-brand">
+    <div class="inv-brand-name">${HOSTEL_NAME}</div>
+    <div class="inv-brand-addr">${lang === 'en' ? HOSTEL_ADDR_EN : HOSTEL_ADDR_VI}</div>
+    <div class="inv-brand-contact">${lang === 'en' ? HOSTEL_PHONE_INTL : HOSTEL_PHONE} &nbsp;·&nbsp; ${HOSTEL_EMAIL}</div>
   </div>
 </div>`;
 
 // ─── Footer ───────────────────────────────────────────────────────────────────
 
 const htmlFooter = (extra?: string, lang: 'vi' | 'en' = 'vi') => `
-<div class="doc-footer">
-  <span class="brand">${HOSTEL_NAME}</span>
-  <div class="footer-meta">
+<div class="inv-footer">
+  <div class="inv-footer-brand">${HOSTEL_NAME}</div>
+  <div class="inv-footer-meta">
     <div>${extra ?? (lang === 'en' ? '33/18/2 Phan Dinh Phung, Ward 1, Da Lat' : HOSTEL_ADDR_VI)}</div>
   </div>
 </div>`;
@@ -544,15 +383,15 @@ export function renderBookingConfirmation(d: DocumentData): { html: string; zalo
   <title>${isEN ? 'Booking Confirmation' : 'Xác nhận đặt phòng'}</title>${BASE_STYLE}</head><body>
   ${htmlHeader(lang)}
 
-  <div class="title-band">
-    <div class="doc-title">${isEN ? 'Booking Confirmation' : 'Xác nhận đặt phòng'}</div>
-    <div class="doc-meta">
+  <div class="inv-docbar">
+    <div class="inv-doc-title">${isEN ? 'Booking Confirmation' : 'Xác nhận đặt phòng'}</div>
+    <div class="inv-doc-meta">
       <div>${fmtDateTime(d.generatedAt)}</div>
       ${d.otaBookingNumber ? `<div>${isEN ? 'OTA Ref' : 'Mã OTA'}: ${d.otaBookingNumber}</div>` : ''}
     </div>
   </div>
 
-  <div class="doc-body">
+  <div class="inv-body">
     <div class="section">
       <div class="section-label">${isEN ? 'Guest Information' : 'Thông tin khách'}</div>
       <div class="info-grid">
@@ -761,12 +600,12 @@ export function renderDepositRequest(
   <title>${isEN ? 'Deposit Request' : 'Yêu cầu đặt cọc'}</title>${BASE_STYLE}</head><body>
   ${htmlHeader(lang)}
 
-  <div class="title-band">
-    <div class="doc-title">${isEN ? 'Deposit Request' : 'Yêu cầu đặt cọc'}</div>
-    <div class="doc-meta"><div>${fmtDateTime(d.generatedAt)}</div></div>
+  <div class="inv-docbar">
+    <div class="inv-doc-title">${isEN ? 'Deposit Request' : 'Yêu cầu đặt cọc'}</div>
+    <div class="inv-doc-meta"><div>${fmtDateTime(d.generatedAt)}</div></div>
   </div>
 
-  <div class="doc-body">
+  <div class="inv-body">
     <div class="section">
       <div class="section-label">${isEN ? 'Reservation Summary' : 'Thông tin đặt phòng'}</div>
       <div class="info-grid">
@@ -884,12 +723,12 @@ export function renderDepositConfirmation(d: DocumentData): { html: string; zalo
   <title>${isEN ? 'Deposit Receipt' : 'Xác nhận nhận cọc'}</title>${BASE_STYLE}</head><body>
   ${htmlHeader(lang)}
 
-  <div class="title-band">
-    <div class="doc-title">${isEN ? 'Deposit Receipt' : 'Xác nhận nhận cọc'}</div>
-    <div class="doc-meta"><div>${isEN ? 'Confirmed' : 'Ngày xác nhận'}: ${fmtDateTime(d.generatedAt)}</div></div>
+  <div class="inv-docbar">
+    <div class="inv-doc-title">${isEN ? 'Deposit Receipt' : 'Xác nhận nhận cọc'}</div>
+    <div class="inv-doc-meta"><div>${isEN ? 'Confirmed' : 'Ngày xác nhận'}: ${fmtDateTime(d.generatedAt)}</div></div>
   </div>
 
-  <div class="doc-body">
+  <div class="inv-body">
     <div class="section">
       <div class="section-label">${isEN ? 'Reservation' : 'Thông tin đặt phòng'}</div>
       <div class="info-grid">
@@ -1028,15 +867,15 @@ export function renderInvoice(d: DocumentData): { html: string; zaloText: string
   <title>${isEN ? 'Invoice' : 'Hóa đơn'}</title>${BASE_STYLE}</head><body>
   ${htmlHeader(lang)}
 
-  <div class="title-band">
-    <div class="doc-title">${isEN ? 'Invoice' : 'Hóa đơn thanh toán'}</div>
-    <div class="doc-meta">
+  <div class="inv-docbar">
+    <div class="inv-doc-title">${isEN ? 'Invoice' : 'Hóa đơn thanh toán'}</div>
+    <div class="inv-doc-meta">
       <div>${isEN ? 'No.' : 'Số HĐ:'} ${invoiceNo}</div>
       <div>${fmtDateTime(d.generatedAt)}</div>
     </div>
   </div>
 
-  <div class="doc-body">
+  <div class="inv-body">
     <div class="section">
       <div class="section-label">${isEN ? 'Billed To' : 'Thông tin khách'}</div>
       <div class="info-grid">
@@ -1047,6 +886,17 @@ export function renderInvoice(d: DocumentData): { html: string; zaloText: string
         <div class="info-cell">
           <div class="info-key">${isEN ? 'Phone' : 'Số điện thoại'}</div>
           <div class="info-val">${d.guestPhone || '—'}</div>
+        </div>
+        <div class="info-cell">
+          <div class="info-key">${isEN ? 'Room' : 'Phòng'}</div>
+          <div class="info-val">${d.roomName}</div>
+        </div>
+        <div class="info-cell">
+          <div class="info-key">${isEN ? 'Status' : 'Trạng thái'}</div>
+          <div class="info-val">${bal <= 0
+            ? `<span class="inv-tag tag-paid">${isEN ? 'Fully paid' : 'Đã thanh toán đủ'}</span>`
+            : `<span class="inv-tag tag-pending">${isEN ? 'Balance due' : 'Còn nợ'}</span>`
+          }</div>
         </div>
       </div>
     </div>
@@ -1203,12 +1053,12 @@ export function renderArrivalNotice(d: DocumentData): { html: string; zaloText: 
   <title>${isEN ? 'Pre-arrival Notice' : 'Thông báo trước ngày đến'}</title>${BASE_STYLE}</head><body>
   ${htmlHeader(lang)}
 
-  <div class="title-band">
-    <div class="doc-title">${isEN ? "We're Looking Forward to Your Stay" : 'Thông báo trước ngày đến'}</div>
-    <div class="doc-meta"><div>${isEN ? 'Sent' : 'Ngày gửi'}: ${fmtDateTime(d.generatedAt)}</div></div>
+  <div class="inv-docbar">
+    <div class="inv-doc-title">${isEN ? "We're Looking Forward to Your Stay" : 'Thông báo trước ngày đến'}</div>
+    <div class="inv-doc-meta"><div>${isEN ? 'Sent' : 'Ngày gửi'}: ${fmtDateTime(d.generatedAt)}</div></div>
   </div>
 
-  <div class="doc-body">
+  <div class="inv-body">
     <div class="section">
       <div class="section-label">${isEN ? 'Your Reservation' : 'Lịch check-in của bạn'}</div>
       <div class="info-grid">
