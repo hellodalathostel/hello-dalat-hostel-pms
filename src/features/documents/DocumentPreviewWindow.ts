@@ -1,113 +1,16 @@
-const PREVIEW_STYLES = `
-  * { box-sizing: border-box; }
-  body { margin: 0; font-family: sans-serif; background: #f0f0f0; }
-
-  #doc-actions {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 52px;
-    background: #1a1a2e;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 0 20px;
-    z-index: 9999;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-  }
-
-  #doc-actions span {
-    color: #ccc;
-    font-size: 13px;
-    flex: 1;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  #doc-actions .hint {
-    color: #a9b1d6;
-    font-size: 12px;
-    flex: 0 0 auto;
-    max-width: 35%;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  #doc-actions button {
-    border: none;
-    border-radius: 6px;
-    padding: 7px 16px;
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: opacity 0.15s;
-    flex: 0 0 auto;
-  }
-
-  #doc-actions button:hover { opacity: 0.85; }
-
-  #btn-print { background: #4caf50; color: #fff; }
-  #btn-close { background: #555; color: #fff; }
-
-  #doc-content {
-    padding-top: 64px;
-    padding-bottom: 40px;
-    display: flex;
-    justify-content: center;
-  }
-
-  @media (max-width: 768px) {
-    #doc-actions {
-      height: auto;
-      min-height: 52px;
-      flex-wrap: wrap;
-      padding: 8px 12px;
-      gap: 8px;
-    }
-
-    #doc-actions span {
-      min-width: 100%;
-      order: 0;
-    }
-
-    #doc-actions .hint {
-      min-width: 100%;
-      max-width: 100%;
-      order: 1;
-    }
-
-    #btn-print {
-      order: 2;
-    }
-
-    #btn-close {
-      order: 3;
-    }
-
-    #doc-content {
-      padding-top: 110px;
-    }
-  }
-
-  @media print {
-    #doc-actions { display: none !important; }
-    #doc-content { padding-top: 0 !important; padding-bottom: 0 !important; }
-    body { background: #fff; }
-  }
-`;
+// src/features/documents/DocumentPreviewWindow.ts
+// Mở popup preview tài liệu.
+// htmlContent là full HTML document — write trực tiếp, không wrap thêm.
 
 /**
- * Mo cua so popup preview tai lieu.
- * Nguoi dung co the review, chup man hinh, sau do moi in/luu PDF.
+ * Mở cửa sổ popup, write htmlContent (full HTML document) trực tiếp.
+ * Action bar (In/Lưu PDF + Đóng) được inject vào DOM sau khi popup load xong.
  */
 export function openDocumentPreview(htmlContent: string, title: string): void {
-  const popupWidth = 860;
+  const popupWidth  = 860;
   const popupHeight = 700;
-  const left = Math.max(0, Math.round((window.screen.width - popupWidth) / 2));
-  const top = Math.max(0, Math.round((window.screen.height - popupHeight) / 2));
+  const left = Math.max(0, Math.round((window.screen.width  - popupWidth)  / 2));
+  const top  = Math.max(0, Math.round((window.screen.height - popupHeight) / 2));
 
   const popup = window.open(
     '',
@@ -117,51 +20,84 @@ export function openDocumentPreview(htmlContent: string, title: string): void {
   );
 
   if (!popup) {
-    console.warn('[DocumentPreview] Popup bi chan boi trinh duyet');
+    console.warn('[DocumentPreview] Popup bị chặn bởi trình duyệt');
     fallbackIframePrint(htmlContent);
     return;
   }
 
+  // Write toàn bộ HTML document — KHÔNG wrap thêm
   popup.document.open();
-  popup.document.write(`<!doctype html>
-<html lang="vi">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>${escapeHtml(title)}</title>
-    <style>${PREVIEW_STYLES}</style>
-  </head>
-  <body>
-    <div id="doc-actions">
-      <span>${escapeHtml(title)}</span>
-      <span class="hint">📸 Chụp màn hình: Win+Shift+S / Cmd+Shift+4</span>
-      <button id="btn-print" type="button">In / Luu PDF</button>
-      <button id="btn-close" type="button">Dong</button>
-    </div>
-    <div id="doc-content">${htmlContent}</div>
-  </body>
-</html>`);
+  popup.document.write(htmlContent);
   popup.document.close();
 
-  const printButton = popup.document.getElementById('btn-print');
-  const closeButton = popup.document.getElementById('btn-close');
+  // Inject action bar sau khi DOM ready
+  const inject = () => {
+    const doc = popup.document;
 
-  printButton?.addEventListener('click', () => {
-    popup.focus();
-    popup.print();
-  });
+    // Tạo action bar
+    const bar = doc.createElement('div');
+    bar.id = 'doc-action-bar';
+    bar.innerHTML = `
+      <span>${escapeHtml(title)}</span>
+      <span class="hint">📸 Chụp màn hình: Win+Shift+S / Cmd+Shift+4</span>
+      <button id="btn-print" type="button">In / Lưu PDF</button>
+      <button id="btn-close" type="button">Đóng</button>
+    `;
 
-  closeButton?.addEventListener('click', () => {
-    popup.close();
-  });
+    // Style action bar
+    const style = doc.createElement('style');
+    style.textContent = `
+      #doc-action-bar {
+        position: fixed; top: 0; left: 0; right: 0; height: 52px;
+        background: #1a1a2e; display: flex; align-items: center;
+        gap: 10px; padding: 0 20px; z-index: 9999;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3); font-family: sans-serif;
+      }
+      #doc-action-bar span { color: #ccc; font-size: 13px; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      #doc-action-bar .hint { color: #a9b1d6; font-size: 12px; flex: 0 0 auto; max-width: 35%; }
+      #doc-action-bar button { border: none; border-radius: 6px; padding: 7px 16px; font-size: 13px; font-weight: 600; cursor: pointer; flex: 0 0 auto; }
+      #btn-print { background: #4caf50; color: #fff; }
+      #btn-close  { background: #555;    color: #fff; }
+      body { padding-top: 60px !important; }
+      @media print {
+        #doc-action-bar { display: none !important; }
+        body { padding-top: 0 !important; }
+      }
+      @media (max-width: 768px) {
+        #doc-action-bar { height: auto; min-height: 52px; flex-wrap: wrap; padding: 8px 12px; }
+        #doc-action-bar span { min-width: 100%; }
+        #doc-action-bar .hint { min-width: 100%; max-width: 100%; }
+        body { padding-top: 110px !important; }
+      }
+    `;
+
+    doc.head.appendChild(style);
+    doc.body.insertBefore(bar, doc.body.firstChild);
+
+    doc.getElementById('btn-print')?.addEventListener('click', () => {
+      popup.focus();
+      popup.print();
+    });
+    doc.getElementById('btn-close')?.addEventListener('click', () => {
+      popup.close();
+    });
+  };
+
+  // Chạy inject sau khi popup load xong
+  if (popup.document.readyState === 'complete') {
+    inject();
+  } else {
+    popup.addEventListener('load', inject);
+    // Fallback nếu load event không fire
+    setTimeout(inject, 500);
+  }
 
   popup.focus();
 }
 
 function fallbackIframePrint(html: string): void {
   const iframe = document.createElement('iframe');
-  iframe.style.cssText =
-    'position:fixed;top:-9999px;left:-9999px;width:0;height:0;border:0;';
+  iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:0;height:0;border:0;';
   document.body.appendChild(iframe);
   iframe.srcdoc = html;
   iframe.onload = () => {
