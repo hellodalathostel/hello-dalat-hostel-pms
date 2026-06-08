@@ -27,7 +27,8 @@ export type DocKind =
   | 'deposit_request'
   | 'deposit_confirmation'
   | 'invoice'
-  | 'arrival_notice';
+  | 'arrival_notice'
+  | 'group_invoice';
 
 export type DocFormat = 'pdf' | 'zalo_text';
 

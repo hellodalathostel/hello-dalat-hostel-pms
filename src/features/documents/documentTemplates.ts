@@ -27,6 +27,37 @@ export interface PaymentItem {
   note: string | null;
 }
 
+export interface GroupBookingRow {
+  bookingId: string;
+  roomName: string;
+  roomType: string;
+  checkIn: string;
+  checkOut: string;
+  nights: number;
+  pricePerNight: number;
+  roomSubtotal: number;
+  surcharge: number;
+  services: BookingServiceItem[];
+  discounts: BookingDiscountItem[];
+  grandTotal: number;
+}
+
+export interface GroupDocumentData {
+  groupId: string;
+  guestName: string;
+  guestPhone: string;
+  source: string;
+  otaBookingNumber?: string;
+  checkIn: string;       // earliest check_in trong group
+  checkOut: string;      // latest check_out trong group
+  bookings: GroupBookingRow[];
+  totalGrandTotal: number;  // SUM(booking.grandTotal)
+  totalPaid: number;
+  payments: PaymentItem[];
+  generatedAt: string;
+  lang?: 'vi' | 'en';
+}
+
 /** Data object chuẩn hóa — useDocumentGenerator build từ DB rồi truyền vào đây */
 export interface DocumentData {
   bookingId: string;
@@ -1228,6 +1259,7 @@ export const DOC_KIND_LABELS: Record<DocKind, string> = {
   deposit_confirmation: 'Xác nhận nhận cọc',
   invoice:              'Hóa đơn',
   arrival_notice:       'Thông báo check-in',
+  group_invoice:        'Hóa đơn tổng hợp',
 };
 
 export const DOC_KIND_LABELS_EN: Record<DocKind, string> = {
@@ -1236,6 +1268,7 @@ export const DOC_KIND_LABELS_EN: Record<DocKind, string> = {
   deposit_confirmation: 'Deposit Receipt',
   invoice:              'Invoice',
   arrival_notice:       'Pre-arrival Notice',
+  group_invoice:        'Group Invoice',
 };
 
 export type { DocKind };
