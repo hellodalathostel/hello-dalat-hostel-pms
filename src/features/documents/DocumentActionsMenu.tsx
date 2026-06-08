@@ -13,6 +13,7 @@ import {
   Space,
   Typography,
   Divider,
+  Segmented,
 } from 'antd'
 import type { MenuProps } from 'antd'
 import {
@@ -45,6 +46,8 @@ export function DocumentActionsMenu({ groupId, remaining = 0 }: Props) {
   const [pendingFormat, setPendingFormat] = useState<'print' | 'zalo'>('print')
   const [depositOpts, setDepositOpts] = useState<DepositOptions>({})
   const [zaloPreviewOpen, setZaloPreviewOpen] = useState(false)
+  // Ngôn ngữ template — mặc định VI
+  const [lang, setLang] = useState<'vi' | 'en'>('vi')
 
   const { isGenerating, zaloText, clearZaloText, generateAndPrint, generateAndCopyZalo } =
     useDocumentGenerator({ groupId })
@@ -74,9 +77,9 @@ export function DocumentActionsMenu({ groupId, remaining = 0 }: Props) {
     }
 
     if (format === 'print') {
-      await generateAndPrint({ kind })
+      await generateAndPrint({ kind, lang })
     } else {
-      await generateAndCopyZalo({ kind })
+      await generateAndCopyZalo({ kind, lang })
       setZaloPreviewOpen(true)
     }
   }
@@ -89,12 +92,14 @@ export function DocumentActionsMenu({ groupId, remaining = 0 }: Props) {
     if (pendingFormat === 'print') {
       await generateAndPrint({
         kind: pendingKind,
+        lang,
         depositAmount: depositOpts.amount,
         depositDeadline: depositOpts.deadline,
       })
     } else {
       await generateAndCopyZalo({
         kind: pendingKind,
+        lang,
         depositAmount: depositOpts.amount,
         depositDeadline: depositOpts.deadline,
       })
@@ -141,18 +146,31 @@ export function DocumentActionsMenu({ groupId, remaining = 0 }: Props) {
   return (
     <>
       {/* Dropdown trigger */}
-      <Dropdown
-        menu={{ items: menuItems }}
-        trigger={['click']}
-        disabled={isGenerating}
-      >
-        <Button
-          icon={<FileTextOutlined />}
-          loading={isGenerating}
+      <Space.Compact>
+        <Segmented<'vi' | 'en'>
+          value={lang}
+          onChange={setLang}
+          options={[
+            { label: 'VI', value: 'vi' },
+            { label: 'EN', value: 'en' },
+          ]}
+          size="small"
+          style={{ alignSelf: 'center' }}
+          disabled={isGenerating}
+        />
+        <Dropdown
+          menu={{ items: menuItems }}
+          trigger={['click']}
+          disabled={isGenerating}
         >
-          Tài liệu <DownOutlined />
-        </Button>
-      </Dropdown>
+          <Button
+            icon={<FileTextOutlined />}
+            loading={isGenerating}
+          >
+            Tài liệu <DownOutlined />
+          </Button>
+        </Dropdown>
+      </Space.Compact>
 
       {/* Modal nhập thông tin đặt cọc */}
       <Modal
@@ -198,7 +216,7 @@ export function DocumentActionsMenu({ groupId, remaining = 0 }: Props) {
 
       {/* Modal preview Zalo text */}
       <Modal
-        title="Text Zalo đã copy"
+        title={lang === 'en' ? 'Zalo text (copied)' : 'Text Zalo đã copy'}
         open={zaloPreviewOpen}
         footer={
           <Button
@@ -207,7 +225,7 @@ export function DocumentActionsMenu({ groupId, remaining = 0 }: Props) {
               if (zaloText) navigator.clipboard.writeText(zaloText)
             }}
           >
-            Copy lại
+            {lang === 'en' ? 'Copy again' : 'Copy lại'}
           </Button>
         }
         onCancel={() => {
@@ -224,7 +242,9 @@ export function DocumentActionsMenu({ groupId, remaining = 0 }: Props) {
         />
         <Divider style={{ margin: '8px 0' }} />
         <Text type="secondary" style={{ fontSize: 12 }}>
-          Text đã được copy vào clipboard. Paste vào Zalo để gửi cho khách.
+          {lang === 'en'
+            ? 'Text copied to clipboard. Paste into Zalo to send.'
+            : 'Text đã được copy vào clipboard. Paste vào Zalo để gửi cho khách.'}
         </Text>
       </Modal>
     </>
