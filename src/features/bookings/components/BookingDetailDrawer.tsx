@@ -43,6 +43,7 @@ import type { BookingDetailItem } from '@/features/bookings/hooks/useBookingDeta
 import { EditBookingModal } from '@/features/bookings/components/EditBookingModal'
 import BookingFolioEditModal from '@/features/bookings/components/BookingFolioEditModal'
 import { AddServiceModal } from '@/features/bookings/components/AddServiceModal'
+import { AddRoomModal } from '@/components/bookings/AddRoomModal'
 import { CheckinImportModal } from '@/features/checkin/components/CheckinImportModal'
 import { CheckoutModal } from '@/features/checkout/components/CheckoutModal'
 import { useVoidBooking } from '@/features/bookings/hooks/useVoidBooking'
@@ -153,6 +154,7 @@ export default function BookingDetailDrawer({ groupId = null, bookingId = null, 
   const [earlyLateBooking, setEarlyLateBooking] = useState<BookingDetailItem | null>(null)
   const [addServiceOpen, setAddServiceOpen] = useState(false)
   const [addServiceBookingId, setAddServiceBookingId] = useState<string | null>(null)
+  const [addRoomOpen, setAddRoomOpen] = useState(false)
 
   const handleCancelBooking = (bookingIdToCancel: string) => {
     cancelBookingMutation.mutate(bookingIdToCancel, {
@@ -325,10 +327,20 @@ export default function BookingDetailDrawer({ groupId = null, bookingId = null, 
             </Row>
             {/* Danh sách phòng */}
             <div>
-              <Typography.Title level={5} style={{ marginBottom: 12 }}>
-                <CalendarOutlined style={{ marginRight: 8 }} />
-                Danh sách phòng
-              </Typography.Title>
+              <Flex align="center" justify="space-between" style={{ marginBottom: 12 }}>
+                <Typography.Title level={5} style={{ marginBottom: 0 }}>
+                  <CalendarOutlined style={{ marginRight: 8 }} />
+                  Danh sách phòng
+                </Typography.Title>
+                <Button
+                  icon={<PlusOutlined />}
+                  onClick={() => setAddRoomOpen(true)}
+                  size="small"
+                  disabled={!effectiveGroupId}
+                >
+                  Thêm phòng
+                </Button>
+              </Flex>
               <Space direction="vertical" size={12} style={{ width: '100%' }}>
                 {data.bookings.map((booking) => (
                   <BookingRoomCard
@@ -460,6 +472,16 @@ export default function BookingDetailDrawer({ groupId = null, bookingId = null, 
           }
         }}
       />
+
+      {effectiveGroupId && data && (
+        <AddRoomModal
+          open={addRoomOpen}
+          groupId={effectiveGroupId}
+          defaultCheckIn={data.bookings[0]?.check_in}
+          defaultCheckOut={data.bookings[0]?.check_out}
+          onClose={() => setAddRoomOpen(false)}
+        />
+      )}
     </>
   )
 }
