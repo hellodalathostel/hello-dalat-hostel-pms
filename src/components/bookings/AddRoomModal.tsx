@@ -1,13 +1,13 @@
+import { useEffect } from 'react';
 import {
-  Modal, Form, Select, DatePicker, InputNumber,
-  Input, Row, Col, Spin,
+  Modal, Form, Select, DatePicker, InputNumber, Input, Row, Col, Spin,
 } from 'antd';
 import dayjs, { Dayjs } from 'dayjs';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabaseClient';
+import { supabase } from '@/api/supabase';
 import { useAddRoomToGroup } from '@/hooks/useAddRoomToGroup';
 
 const schema = z.object({
@@ -55,7 +55,6 @@ export function AddRoomModal({ open, groupId, defaultCheckIn, defaultCheckOut, o
   });
 
   // Reset khi mở modal
-  import { useEffect } from 'react';
   useEffect(() => {
     if (open) {
       reset({
@@ -80,7 +79,7 @@ export function AddRoomModal({ open, groupId, defaultCheckIn, defaultCheckOut, o
         p_room_id: watchRoomId,
         p_date:    watchCheckIn.format('YYYY-MM-DD'),
       })
-      .then(({ data }) => {
+      .then(({ data }: { data: number | null }) => {
         if (data && data > 0) setValue('price_per_night', data);
       });
   }, [watchRoomId, watchCheckIn, setValue]);
