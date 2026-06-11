@@ -1271,4 +1271,276 @@ export const DOC_KIND_LABELS_EN: Record<DocKind, string> = {
   group_invoice:        'Group Invoice',
 };
 
+// ─── renderGroupInvoice ──────────────────────────────────────────────────────
+// Render HTML hoa don tong hop cho ca group
+// grandTotal = SUM(booking.grand_total) da tinh san trong GroupDocumentData
+export function renderGroupInvoice(data: GroupDocumentData, lang: 'vi' | 'en' = 'vi'): string {
+  const isEn = lang === 'en';
+
+  const t = {
+    title:         isEn ? 'GROUP INVOICE' : 'HOA DON TONG HOP',
+    hostelName:    'Hello Dalat Hostel',
+    hostelAddr:    '33/18/2 Phan Dinh Phung, P.1, Da Lat',
+    hostelPhone:   '0969 975 935',
+    hostelEmail:   'hellodalathostel@gmail.com',
+    groupLabel:    isEn ? 'Group' : 'Ten doan',
+    invoiceDate:   isEn ? 'Issue Date' : 'Ngay xuat',
+    checkIn:       isEn ? 'Check-in' : 'Nhan phong',
+    checkOut:      isEn ? 'Check-out' : 'Tra phong',
+    room:          isEn ? 'Room' : 'Phong',
+    guest:         isEn ? 'Guest' : 'Khach',
+    nights:        isEn ? 'Nights' : 'Dem',
+    pricePerNight: isEn ? 'Rate/Night' : 'Gia/dem',
+    roomSubtotal:  isEn ? 'Room Total' : 'Tien phong',
+    surcharge:     isEn ? 'Surcharge' : 'Phu thu',
+    services:      isEn ? 'Services' : 'Dich vu',
+    discount:      isEn ? 'Discount' : 'Giam gia',
+    bookingTotal:  isEn ? 'Booking Total' : 'Tong booking',
+    grandTotal:    isEn ? 'GRAND TOTAL' : 'TONG CONG',
+    paid:          isEn ? 'Paid' : 'Da thanh toan',
+    debt:          isEn ? 'REMAINING' : 'CON LAI',
+    no:            isEn ? 'No.' : 'STT',
+    note:          isEn ? 'Note' : 'Ghi chu',
+    thankYou:      isEn ? 'Thank you for your stay!' : 'Cam on quy khach da luu tru!',
+  };
+
+  const payload = data as GroupDocumentData & {
+    issueDate?: string;
+    groupName?: string;
+    note?: string;
+    totalDebt?: number;
+    bookings: Array<GroupBookingRow & {
+      guestName?: string;
+      services: Array<{
+        serviceName?: string;
+        quantity?: number;
+        totalPrice?: number;
+      }>;
+      discounts: Array<{
+        discountName?: string;
+        amount: number;
+      }>;
+    }>;
+  };
+
+  // Formatter
+  const fmt = (n: number) => n.toLocaleString('vi-VN') + ' ₫';
+  const fmtDate = (d: string) => {
+    const [y, m, day] = d.split('-');
+    return isEn ? `${day}/${m}/${y}` : `${day}/${m}/${y}`;
+  };
+
+  // Render tung booking row (co the expand services/discounts)
+  const bookingRows = payload.bookings.map((b, i) => {
+    // Tinh tong services va discounts cua booking nay
+    const svcTotal = b.services.reduce((s, x) => s + (x.totalPrice ?? 0), 0);
+    const discTotal = b.discounts.reduce((s, x) => s + x.amount, 0);
+
+    // Sub-rows cho services (neu co)
+    const svcRows = b.services.map(s => `
+    <tr class="sub-row">
+      <td colspan="5" class="sub-label">+ ${s.serviceName ?? ''} x ${s.quantity ?? 0}</td>
+      <td class="amount">${fmt(s.totalPrice ?? 0)}</td>
+    </tr>`).join('');
+
+    // Sub-rows cho discounts (neu co)
+    const discRows = b.discounts.map(d => `
+    <tr class="sub-row">
+      <td colspan="5" class="sub-label disc">- ${d.discountName ?? ''}</td>
+      <td class="amount disc">-${fmt(d.amount)}</td>
+    </tr>`).join('');
+
+    return `
+    <tr class="booking-row">
+      <td class="center">${i + 1}</td>
+      <td>${b.roomName}</td>
+      <td>${b.guestName ?? '—'}</td>
+      <td>${fmtDate(b.checkIn)} → ${fmtDate(b.checkOut)}<br/><small>${b.nights}n</small></td>
+      <td class="amount">${fmt(b.pricePerNight)}<br/><small>x ${b.nights}</small></td>
+      <td class="amount"><strong>${fmt(b.grandTotal)}</strong></td>
+    </tr>
+    ${b.surcharge > 0 ? `
+    <tr class="sub-row">
+      <td colspan="5" class="sub-label">+ ${t.surcharge}</td>
+      <td class="amount">${fmt(b.surcharge)}</td>
+    </tr>` : ''}
+    ${svcRows}
+    ${discRows}`;
+  }).join('');
+
+  const totalDebt = payload.totalDebt ?? (payload.totalGrandTotal - payload.totalPaid);
+
+  // Dong debt — highlight do neu con no
+  const debtStyle = totalDebt > 0
+    ? 'color:#c0392b; font-weight:700;'
+    : 'color:#27ae60; font-weight:700;';
+
+  return `
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>${t.title}</title>
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        font-family: 'Segoe UI', Arial, sans-serif;
+        font-size: 13px;
+        color: #1a1a1a;
+        padding: 32px 40px;
+        max-width: 860px;
+        margin: auto;
+      }
+      .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 28px; }
+      .hostel-info h1 { font-size: 18px; font-weight: 700; color: #1a5276; }
+      .hostel-info p { font-size: 12px; color: #555; line-height: 1.6; }
+      .doc-title { text-align: right; }
+      .doc-title h2 { font-size: 22px; font-weight: 800; color: #1a5276; letter-spacing: 1px; }
+      .doc-title p { font-size: 12px; color: #777; margin-top: 4px; }
+      .meta-strip {
+        background: #eaf0fb;
+        border-radius: 6px;
+        padding: 10px 16px;
+        display: flex;
+        gap: 32px;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+      }
+      .meta-strip .item { font-size: 12px; }
+      .meta-strip .item strong { display: block; color: #1a5276; }
+      table { width: 100%; border-collapse: collapse; margin-bottom: 0; }
+      thead th {
+        background: #1a5276;
+        color: #fff;
+        padding: 8px 10px;
+        text-align: left;
+        font-size: 12px;
+        font-weight: 600;
+      }
+      thead th.center, td.center { text-align: center; }
+      thead th.amount, td.amount { text-align: right; }
+      tbody tr.booking-row { background: #fff; }
+      tbody tr.booking-row:nth-child(odd) { background: #f7f9fd; }
+      tbody td {
+        padding: 8px 10px;
+        border-bottom: 1px solid #e8ecf4;
+        vertical-align: top;
+        font-size: 12.5px;
+      }
+      tbody td small { color: #888; font-size: 11px; }
+      tr.sub-row td {
+        padding: 3px 10px 3px 24px;
+        border-bottom: none;
+        font-size: 11.5px;
+      }
+      .sub-label { color: #555; font-style: italic; }
+      .sub-label.disc { color: #c0392b; }
+      .amount.disc { color: #c0392b; }
+      .totals {
+        margin-top: 16px;
+        display: flex;
+        justify-content: flex-end;
+      }
+      .totals table { width: 320px; }
+      .totals td {
+        padding: 5px 10px;
+        font-size: 13px;
+        border: none;
+      }
+      .totals .label { color: #555; }
+      .totals .val { text-align: right; font-weight: 600; }
+      .totals .grand td { font-size: 15px; border-top: 2px solid #1a5276; padding-top: 10px; }
+      .totals .grand .label { color: #1a5276; font-weight: 700; }
+      .totals .grand .val { color: #1a5276; font-weight: 800; }
+      .totals .debt td { padding-top: 4px; }
+      .note-box {
+        margin-top: 20px;
+        background: #fffbea;
+        border-left: 3px solid #f1c40f;
+        padding: 8px 12px;
+        font-size: 12px;
+        color: #555;
+        border-radius: 0 4px 4px 0;
+      }
+      .footer {
+        margin-top: 32px;
+        text-align: center;
+        font-size: 11.5px;
+        color: #888;
+        border-top: 1px solid #e0e0e0;
+        padding-top: 12px;
+      }
+      @media print {
+        body { padding: 16px 20px; }
+        .no-print { display: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <div class="hostel-info">
+        <h1>${t.hostelName}</h1>
+        <p>${t.hostelAddr}</p>
+        <p>${t.hostelPhone} · ${t.hostelEmail}</p>
+      </div>
+      <div class="doc-title">
+        <h2>${t.title}</h2>
+        <p>${t.invoiceDate}: ${fmtDate(payload.issueDate ?? dayjs().format('YYYY-MM-DD'))}</p>
+      </div>
+    </div>
+
+    <div class="meta-strip">
+      <div class="item"><strong>${t.groupLabel}</strong>${payload.groupName ?? payload.guestName ?? '—'}</div>
+      <div class="item"><strong>${t.checkIn}</strong>${fmtDate(payload.checkIn)}</div>
+      <div class="item"><strong>${t.checkOut}</strong>${fmtDate(payload.checkOut)}</div>
+      <div class="item"><strong>${isEn ? 'Rooms' : 'So phong'}</strong>${payload.bookings.length}</div>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th class="center">${t.no}</th>
+          <th>${t.room}</th>
+          <th>${t.guest}</th>
+          <th>${t.checkIn} / ${t.checkOut}</th>
+          <th class="amount">${t.pricePerNight}</th>
+          <th class="amount">${t.bookingTotal}</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${bookingRows}
+      </tbody>
+    </table>
+
+    <div class="totals">
+      <table>
+        <tr class="grand">
+          <td class="label">${t.grandTotal}</td>
+          <td class="val">${fmt(payload.totalGrandTotal)}</td>
+        </tr>
+        <tr>
+          <td class="label">✓ ${t.paid}</td>
+          <td class="val">${fmt(payload.totalPaid)}</td>
+        </tr>
+        <tr class="debt">
+          <td class="label" style="${debtStyle}">${t.debt}</td>
+          <td class="val" style="${debtStyle}">${fmt(totalDebt)}</td>
+        </tr>
+      </table>
+    </div>
+
+    ${payload.note ? `
+    <div class="note-box">
+      <strong>${t.note}:</strong> ${payload.note}
+    </div>
+    ` : ''}
+
+    <div class="footer">
+      <p>${t.thankYou}</p>
+      <p>${t.hostelName} · ${t.hostelAddr}</p>
+    </div>
+  </body>
+</html>
+`;
+}
+
 export type { DocKind };

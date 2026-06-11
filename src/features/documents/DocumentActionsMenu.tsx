@@ -136,6 +136,19 @@ export function DocumentActionsMenu({ groupId, remaining = 0 }: Props) {
     ...alwaysItems.map(({ kind, icon }) =>
       buildSubItems(kind, DOC_KIND_LABELS[kind], icon)
     ),
+    {
+      key: 'group_invoice',
+      icon: <FileTextOutlined />,
+      label: DOC_KIND_LABELS['group_invoice'],
+      children: [
+        {
+          key: 'group_invoice__print',
+          icon: <PrinterOutlined />,
+          label: 'In / Tải PDF',
+          onClick: () => triggerGenerate('group_invoice', 'print'),
+        },
+      ],
+    },
     ...(depositItems.length > 0
       ? [{ type: 'divider' as const }, ...depositItems.map(({ kind, icon }) =>
           buildSubItems(kind, DOC_KIND_LABELS[kind], icon)

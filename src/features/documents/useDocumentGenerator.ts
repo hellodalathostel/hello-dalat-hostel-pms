@@ -19,6 +19,7 @@ import {
   renderDepositConfirmation,
   renderInvoice,
   renderArrivalNotice,
+  renderGroupInvoice,
 } from './documentTemplates';
 import { openDocumentPreview } from './DocumentPreviewWindow';
 
@@ -557,6 +558,19 @@ export function useDocumentGeneratorByGroup(
         case 'arrival_notice':
           result = renderArrivalNotice(docData);
           break;
+        case 'group_invoice': {
+          const groupData = await fetchGroupDocumentData(groupId);
+          const html = renderGroupInvoice(groupData, params.lang ?? 'vi');
+          openDocumentPreview(html, DOC_KIND_LABELS['group_invoice']);
+          message.success('Đang mở cửa sổ in PDF…');
+          await supabase.rpc('create_document_log', {
+            p_group_id: groupId,
+            p_booking_id: null,
+            p_doc_kind: 'group_invoice',
+            p_lang: params.lang ?? 'vi',
+          });
+          return null;
+        }
         default:
           throw new Error('Loại document không hợp lệ');
       }
