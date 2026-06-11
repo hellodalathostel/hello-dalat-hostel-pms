@@ -1254,21 +1254,25 @@ Hẹn gặp bạn tại Đà Lạt! 🌿`;
 // ─── Labels ───────────────────────────────────────────────────────────────────
 
 export const DOC_KIND_LABELS: Record<DocKind, string> = {
-  booking_confirmation: 'Xác nhận đặt phòng',
-  deposit_request:      'Yêu cầu đặt cọc',
-  deposit_confirmation: 'Xác nhận nhận cọc',
-  invoice:              'Hóa đơn',
-  arrival_notice:       'Thông báo check-in',
-  group_invoice:        'Hóa đơn tổng hợp',
+  booking_confirmation:  'Xác nhận đặt phòng',
+  deposit_request:       'Yêu cầu đặt cọc',
+  deposit_confirmation:  'Xác nhận nhận cọc',
+  invoice:               'Hóa đơn',
+  arrival_notice:        'Thông báo check-in',
+  group_invoice:         'Hóa đơn tổng hợp',
+  group_confirmation:    'Xác nhận đặt phòng (Đoàn)',
+  group_deposit_request: 'Yêu cầu đặt cọc (Đoàn)',
 };
 
 export const DOC_KIND_LABELS_EN: Record<DocKind, string> = {
-  booking_confirmation: 'Booking Confirmation',
-  deposit_request:      'Deposit Request',
-  deposit_confirmation: 'Deposit Receipt',
-  invoice:              'Invoice',
-  arrival_notice:       'Pre-arrival Notice',
-  group_invoice:        'Group Invoice',
+  booking_confirmation:  'Booking Confirmation',
+  deposit_request:       'Deposit Request',
+  deposit_confirmation:  'Deposit Receipt',
+  invoice:               'Invoice',
+  arrival_notice:        'Pre-arrival Notice',
+  group_invoice:         'Group Invoice',
+  group_confirmation:    'Group Booking Confirmation',
+  group_deposit_request: 'Group Deposit Request',
 };
 
 // ─── renderGroupInvoice ──────────────────────────────────────────────────────
@@ -1532,6 +1536,313 @@ export function renderGroupInvoice(data: GroupDocumentData, lang: 'vi' | 'en' = 
   </body>
 </html>
 `;
+}
+
+// ─── renderGroupConfirmation ─────────────────────────────────────────────────
+// Popup preview → Print/PDF cho xác nhận đặt phòng đoàn
+export function renderGroupConfirmation(data: GroupDocumentData, lang: 'vi' | 'en' = 'vi'): string {
+  const isEn = lang === 'en';
+  const fmtDate = isEn ? fmtDate_EN : fmtDate_VI;
+  const fmtMoney = isEn ? fmtVND_EN : fmtVND;
+
+  const t = {
+    title:        isEn ? 'Booking Confirmation'    : 'Xác Nhận Đặt Phòng',
+    refLabel:     isEn ? 'Reference'               : 'Mã tham chiếu',
+    guestLabel:   isEn ? 'Guest'                   : 'Khách đặt',
+    phoneLabel:   isEn ? 'Phone'                   : 'Điện thoại',
+    sourceLabel:  isEn ? 'Source'                  : 'Kênh đặt',
+    stayLabel:    isEn ? 'Stay Period'             : 'Thời gian lưu trú',
+    issuedLabel:  isEn ? 'Issued'                  : 'Ngày lập',
+    roomsTitle:   isEn ? 'Room Details'            : 'Chi tiết phòng',
+    roomCol:      isEn ? 'Room'                    : 'Phòng',
+    checkinCol:   isEn ? 'Check-in'                : 'Check-in',
+    checkoutCol:  isEn ? 'Check-out'               : 'Check-out',
+    nightsCol:    isEn ? 'Nights'                  : 'Đêm',
+    priceCol:     isEn ? 'Rate/night'              : 'Giá/đêm',
+    subtotalCol:  isEn ? 'Subtotal'                : 'Tiền phòng',
+    svcTitle:     isEn ? 'Additional Services'     : 'Dịch vụ thêm',
+    svcName:      isEn ? 'Service'                 : 'Dịch vụ',
+    svcQty:       isEn ? 'Qty'                     : 'SL',
+    svcPrice:     isEn ? 'Unit price'              : 'Đơn giá',
+    svcTotal:     isEn ? 'Total'                   : 'Thành tiền',
+    discTitle:    isEn ? 'Discounts'               : 'Giảm giá',
+    totalLabel:   isEn ? 'Total Amount'            : 'Tổng cộng',
+    cancelTitle:  isEn ? 'Cancellation Policy'     : 'Chính sách huỷ phòng',
+    cancelPeriod: isEn ? 'Notice period'           : 'Thời gian báo huỷ',
+    cancelRefund: isEn ? 'Refund'                  : 'Hoàn tiền',
+    calloutMsg:   isEn
+      ? 'Please reply to confirm your booking. This confirmation is valid for 24 hours.'
+      : 'Vui lòng xác nhận lại để giữ phòng. Thông tin đặt phòng có hiệu lực trong 24 giờ.',
+    bankTitle:    isEn ? 'Deposit Payment'         : 'Thanh toán cọc',
+    bankNote:     isEn
+      ? `Transfer reference: Your name or phone number`
+      : `Nội dung CK: Tên hoặc SĐT của bạn`,
+  };
+
+  // Services gộp từ tất cả bookings (dedup theo tên)
+  const allServices: BookingServiceItem[] = [];
+  data.bookings.forEach(b => {
+    b.services.forEach(s => {
+      const existing = allServices.find(x => x.name === s.name);
+      if (existing) {
+        existing.qty += s.qty;
+      } else {
+        allServices.push({ ...s });
+      }
+    });
+  });
+  const hasServices = allServices.length > 0;
+
+  const allDiscounts: BookingDiscountItem[] = data.bookings.flatMap(b => b.discounts);
+  const hasDiscounts = allDiscounts.length > 0;
+
+  const refId = `HD-${data.groupId.slice(0, 8).toUpperCase()}`;
+
+  const bookingRows = data.bookings.map(b => `
+    <tr>
+      <td><strong>${b.roomName}</strong></td>
+      <td class="tc">${fmtDate(b.checkIn)}</td>
+      <td class="tc">${fmtDate(b.checkOut)}</td>
+      <td class="tc">${b.nights}</td>
+      <td class="tr">${fmtMoney(b.pricePerNight)}</td>
+      <td class="tr">${fmtMoney(b.roomSubtotal)}</td>
+    </tr>
+    ${b.surcharge > 0 ? `
+    <tr class="surcharge-row">
+      <td colspan="5" style="padding-left:24px;font-size:11.5px;color:#7a4500;">
+        ${isEn ? 'Card fee' : 'Phụ thu thẻ'} — ${b.roomName}
+      </td>
+      <td class="tr">${fmtMoney(b.surcharge)}</td>
+    </tr>` : ''}
+  `).join('');
+
+  const servicesSection = hasServices ? `
+    <div class="section">
+      <div class="section-label">${t.svcTitle}</div>
+      <table class="line-table">
+        <thead>
+          <tr>
+            <th>${t.svcName}</th>
+            <th class="tc">${t.svcQty}</th>
+            <th class="tr">${t.svcPrice}</th>
+            <th class="tr">${t.svcTotal}</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${allServices.map(s => `
+          <tr>
+            <td>${s.name}</td>
+            <td class="tc">${s.qty}</td>
+            <td class="tr">${fmtMoney(s.price)}</td>
+            <td class="tr">${fmtMoney(s.price * s.qty)}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>` : '';
+
+  const discountsSection = hasDiscounts ? `
+    <div class="section">
+      <div class="section-label">${t.discTitle}</div>
+      <table class="line-table">
+        <tbody>
+          ${allDiscounts.map(d => `
+          <tr>
+            <td>${d.description ?? (isEn ? 'Discount' : 'Giảm giá')}</td>
+            <td class="tr" style="color:#8b0000;">− ${fmtMoney(d.amount)}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>` : '';
+
+  const totalSection = `
+    <table class="line-table" style="margin-bottom:20px;">
+      <tbody>
+        <tr class="total-row">
+          <td>${t.totalLabel}</td>
+          <td class="tr">${fmtMoney(data.totalGrandTotal)}</td>
+        </tr>
+      </tbody>
+    </table>`;
+
+  const cancelSection = `
+    <div class="section">
+      <div class="section-label">${t.cancelTitle}</div>
+      <table class="cancel-table">
+        <thead>
+          <tr>
+            <th>${t.cancelPeriod}</th>
+            <th>${t.cancelRefund}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>${isEn ? 'More than 7 days before check-in' : 'Trước check-in > 7 ngày'}</td>
+            <td class="refund-ok">${isEn ? '100% refund' : 'Hoàn 100%'}</td>
+          </tr>
+          <tr>
+            <td>${isEn ? '3 – 7 days before check-in' : 'Trước check-in 3 – 7 ngày'}</td>
+            <td style="color:#c07800;font-weight:700;">${isEn ? '50% refund' : 'Hoàn 50%'}</td>
+          </tr>
+          <tr>
+            <td>${isEn ? 'Less than 3 days before check-in' : 'Trước check-in < 3 ngày'}</td>
+            <td class="refund-none">${isEn ? 'Non-refundable' : 'Không hoàn tiền'}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>`;
+
+  const qrSection = `
+    <div class="section">
+      <div class="section-label">${t.bankTitle}</div>
+      <div class="qr-block">
+        <div class="qr-img">
+          <img src="${vietQrUrl(0, `HD ${removeDiacritics(data.guestName)}`)}" alt="VietQR" />
+        </div>
+        <div class="qr-info">
+          <div class="qr-row"><span class="qr-key">${isEn ? 'Bank' : 'Ngân hàng'}</span><span class="qr-val">Vietcombank (VCB)</span></div>
+          <div class="qr-row"><span class="qr-key">${isEn ? 'Account' : 'Số tài khoản'}</span><span class="qr-val">${VQR_ACCOUNT_DISPLAY}</span></div>
+          <div class="qr-row"><span class="qr-key">${isEn ? 'Name' : 'Chủ tài khoản'}</span><span class="qr-val">${VQR_OWNER}</span></div>
+          <div class="qr-note">${t.bankNote}</div>
+        </div>
+      </div>
+    </div>`;
+
+  const calloutSection = `
+    <div class="callout callout-amber">
+      <div class="callout-icon">!</div>
+      <div class="callout-text">${t.calloutMsg}</div>
+    </div>`;
+
+  const html = `<!DOCTYPE html>
+<html lang="${lang}">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>${t.title} — ${data.guestName}</title>
+  ${BASE_STYLE}
+</head>
+<body>
+  ${htmlHeader(lang)}
+  <div class="inv-docbar">
+    <span class="inv-doc-title">${t.title}</span>
+    <div class="inv-doc-meta">
+      <div>${t.refLabel}: <strong>${refId}</strong></div>
+      <div>${t.issuedLabel}: ${isEn ? fmtDateTime_EN(data.generatedAt) : fmtDateTime_VI(data.generatedAt)}</div>
+    </div>
+  </div>
+  <div class="inv-body">
+
+    ${calloutSection}
+
+    <div class="section" style="margin-top:16px;">
+      <div class="info-grid">
+        <div class="info-cell">
+          <div class="info-key">${t.guestLabel}</div>
+          <div class="info-val">${data.guestName}</div>
+        </div>
+        <div class="info-cell">
+          <div class="info-key">${t.phoneLabel}</div>
+          <div class="info-val">${data.guestPhone || '—'}</div>
+        </div>
+        <div class="info-cell">
+          <div class="info-key">${t.stayLabel}</div>
+          <div class="info-val">${fmtDate(data.checkIn)} → ${fmtDate(data.checkOut)}</div>
+        </div>
+        <div class="info-cell">
+          <div class="info-key">${t.sourceLabel}</div>
+          <div class="info-val muted">${data.source}${data.otaBookingNumber ? ` · ${data.otaBookingNumber}` : ''}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-label">${t.roomsTitle}</div>
+      <table class="line-table">
+        <thead>
+          <tr>
+            <th>${t.roomCol}</th>
+            <th class="tc">${t.checkinCol}</th>
+            <th class="tc">${t.checkoutCol}</th>
+            <th class="tc">${t.nightsCol}</th>
+            <th class="tr">${t.priceCol}</th>
+            <th class="tr">${t.subtotalCol}</th>
+          </tr>
+        </thead>
+        <tbody>${bookingRows}</tbody>
+      </table>
+    </div>
+
+    ${servicesSection}
+    ${discountsSection}
+    ${totalSection}
+    ${qrSection}
+    ${cancelSection}
+    ${houseRulesHtml(lang)}
+
+  </div>
+  ${htmlFooter(undefined, lang)}
+</body>
+</html>`;
+
+  return html;
+}
+
+// ─── generateGroupZaloDeposit ────────────────────────────────────────────────
+// Tạo text Zalo yêu cầu đặt cọc đoàn — staff copy-paste
+// depositAmount: số tiền cọc staff nhập thủ công
+export function generateGroupZaloDeposit(
+  data: GroupDocumentData,
+  depositAmount: number
+): string {
+  const fmtNum = (n: number) => new Intl.NumberFormat('vi-VN').format(n);
+
+  const roomLines = data.bookings.map(b =>
+    `🛏 ${b.roomName}: ${b.checkIn} → ${b.checkOut} (${b.nights} đêm) — ${fmtNum(b.roomSubtotal)}đ`
+  ).join('\n');
+
+  const allServices: BookingServiceItem[] = [];
+  data.bookings.forEach(b => {
+    b.services.forEach(s => {
+      const existing = allServices.find(x => x.name === s.name);
+      if (existing) {
+        existing.qty += s.qty;
+      } else {
+        allServices.push({ ...s });
+      }
+    });
+  });
+  const serviceLines = allServices.length > 0
+    ? '\n🔹 Dịch vụ thêm:\n' + allServices.map(s =>
+        `   • ${s.name} × ${s.qty}: ${fmtNum(s.price * s.qty)}đ`
+      ).join('\n')
+    : '';
+
+  const allDiscounts = data.bookings.flatMap(b => b.discounts);
+  const discountLines = allDiscounts.length > 0
+    ? '\n🏷 Giảm giá:\n' + allDiscounts.map(d =>
+        `   • ${d.description ?? 'Giảm giá'}: −${fmtNum(d.amount)}đ`
+      ).join('\n')
+    : '';
+
+  return `Xin chào ${data.guestName} 👋
+
+Cảm ơn anh/chị đã đặt phòng tại Hello Dalat Hostel!
+
+📋 Thông tin đặt phòng:
+${roomLines}${serviceLines}${discountLines}
+
+💰 Tổng tiền: ${fmtNum(data.totalGrandTotal)}đ
+💳 Đặt cọc: ${fmtNum(depositAmount)}đ
+
+Vui lòng chuyển khoản về:
+🏦 Vietcombank — 9969 975 935
+👤 NGUYEN THANH HIEU
+📎 Nội dung: HD ${data.guestName}
+
+Hostel sẽ xác nhận trong vòng 30 phút sau khi nhận cọc.
+Mọi thắc mắc: 0969 975 935 (Zalo / Call)
+
+Hello Dalat Hostel 🏡`;
 }
 
 export type { DocKind };

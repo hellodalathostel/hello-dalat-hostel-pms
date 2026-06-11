@@ -22,6 +22,8 @@ import {
   FileTextOutlined,
   DownOutlined,
   CopyOutlined,
+  FileProtectOutlined,
+  WalletOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { useDocumentGeneratorByGroup as useDocumentGenerator } from './useDocumentGenerator'
@@ -69,9 +71,10 @@ export function DocumentActionsMenu({ groupId, remaining = 0 }: Props) {
 
   /** Trigger generate — nếu là deposit_request thì mở modal nhập số tiền cọc */
   async function triggerGenerate(kind: DocKind, format: 'print' | 'zalo') {
-    if (kind === 'deposit_request') {
+    if (kind === 'deposit_request' || kind === 'group_deposit_request') {
       setPendingKind(kind)
       setPendingFormat(format)
+      setDepositOpts({})
       setDepositModalOpen(true)
       return
     }
@@ -146,6 +149,32 @@ export function DocumentActionsMenu({ groupId, remaining = 0 }: Props) {
           icon: <PrinterOutlined />,
           label: 'In / Tải PDF',
           onClick: () => triggerGenerate('group_invoice', 'print'),
+        },
+      ],
+    },
+    {
+      key: 'group_confirmation',
+      icon: <FileProtectOutlined />,
+      label: DOC_KIND_LABELS['group_confirmation'],
+      children: [
+        {
+          key: 'group_confirmation__print',
+          icon: <PrinterOutlined />,
+          label: 'In / Tải PDF',
+          onClick: () => triggerGenerate('group_confirmation', 'print'),
+        },
+      ],
+    },
+    {
+      key: 'group_deposit_request',
+      icon: <WalletOutlined />,
+      label: DOC_KIND_LABELS['group_deposit_request'],
+      children: [
+        {
+          key: 'group_deposit_request__zalo',
+          icon: <MessageOutlined />,
+          label: 'Copy Zalo',
+          onClick: () => triggerGenerate('group_deposit_request', 'zalo'),
         },
       ],
     },

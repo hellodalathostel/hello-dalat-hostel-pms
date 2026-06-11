@@ -20,6 +20,8 @@ import {
   renderInvoice,
   renderArrivalNotice,
   renderGroupInvoice,
+  renderGroupConfirmation,
+  generateGroupZaloDeposit,
 } from './documentTemplates';
 import { openDocumentPreview } from './DocumentPreviewWindow';
 
@@ -30,7 +32,9 @@ export type DocKind =
   | 'deposit_confirmation'
   | 'invoice'
   | 'arrival_notice'
-  | 'group_invoice';
+  | 'group_invoice'
+  | 'group_confirmation'
+  | 'group_deposit_request';
 
 export type DocFormat = 'pdf' | 'zalo_text';
 
@@ -572,6 +576,38 @@ export function useDocumentGeneratorByGroup(
           });
           return null;
         }
+
+        case 'group_confirmation': {
+          const groupData = await fetchGroupDocumentData(groupId);
+          if (params.lang) groupData.lang = params.lang;
+          const html = renderGroupConfirmation(groupData, params.lang ?? 'vi');
+          openDocumentPreview(html, DOC_KIND_LABELS['group_confirmation']);
+          message.success('Đang mở cửa sổ in PDF…');
+          await supabase.rpc('create_document_log', {
+            p_group_id: groupId,
+            p_booking_id: null,
+            p_doc_kind: 'group_confirmation',
+            p_lang: params.lang ?? 'vi',
+          });
+          return null;
+        }
+
+        case 'group_deposit_request': {
+          const groupData = await fetchGroupDocumentData(groupId);
+          const depositAmount = params.depositAmount ?? 0;
+          const zaloMsg = generateGroupZaloDeposit(groupData, depositAmount);
+          await copyZaloText(zaloMsg);
+          message.success('Đã sao chép nội dung Zalo vào clipboard!');
+          setZaloText(zaloMsg);
+          await supabase.rpc('create_document_log', {
+            p_group_id: groupId,
+            p_booking_id: null,
+            p_doc_kind: 'group_deposit_request',
+            p_lang: 'vi',
+          });
+          return zaloMsg;
+        }
+
         default:
           throw new Error('Loại document không hợp lệ');
       }
