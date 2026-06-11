@@ -298,7 +298,8 @@ export async function fetchGroupDocumentData(
 
   // 3. Map sang GroupBookingRow[]
   const rows: GroupBookingRow[] = bookings.map((b) => {
-    const room = (b.rooms as { id: string; name: string; type: string } | null);
+    const roomArr = b.rooms as unknown as { id: string; name: string; type: string }[] | null;
+    const room = Array.isArray(roomArr) ? roomArr[0] ?? null : roomArr;
     return {
       bookingId: b.id,
       roomName: room?.name ?? b.room_id,
