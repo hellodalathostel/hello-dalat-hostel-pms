@@ -11,6 +11,7 @@ import { message } from 'antd';
 import dayjs from 'dayjs';
 import { supabase } from '@/api/supabase';
 import type { DocumentData, DepositRequestOptions } from './documentTemplates';
+import type { GroupBookingRow, GroupDocumentData } from './documentTemplates';
 import { DOC_KIND_LABELS } from './documentTemplates';
 import {
   renderBookingConfirmation,
@@ -233,6 +234,142 @@ async function logDocument(
   if (error) {
     console.error('[useDocumentGenerator] Lỗi ghi log:', error.message);
   }
+}
+
+// ─── fetchGroupDocumentData ──────────────────────────────────────────────────
+// Query tất cả bookings của group để render group_invoice
+// grandTotal = SUM(booking.grand_total) — đọc từ DB, không tính frontend
+export async function fetchGroupDocumentData(
+  groupId: string
+): Promise<GroupDocumentData> {
+  // 1. Lấy thông tin group
+  const { data: group, error: groupError } = await supabase
+    .from('groups')
+    .select('id, customer_name, customer_phone, source, ota_booking_number, paid')
+    .eq('id', groupId)
+    .single();
+
+  if (groupError || !group) {
+    throw new Error(`Không tìm thấy group: ${groupError?.message ?? 'unknown'}`);
+  }
+
+  // 2. Lấy tất cả bookings thuộc group (chỉ active — không lấy cancelled)
+  const { data: bookings, error: bookingsError } = await supabase
+    .from('bookings')
+    .select(`
+      id,
+      room_id,
+      check_in,
+      check_out,
+      nights,
+      price_per_night,
+      room_subtotal,
+      surcharge,
+      grand_total,
+      status,
+      booking_services (
+        name,
+        price,
+        qty
+      ),
+      booking_discounts (
+        description,
+        amount
+      ),
+      rooms (
+        id,
+        name,
+        type
+      )
+    `)
+    .eq('group_id', groupId)
+    .or('is_deleted.is.null,is_deleted.eq.false')
+    .neq('status', 'cancelled')
+    .order('check_in', { ascending: true });
+
+  if (bookingsError) {
+    throw new Error(`Lỗi query bookings: ${bookingsError.message}`);
+  }
+
+  if (!bookings || bookings.length === 0) {
+    throw new Error('Group không có booking nào hợp lệ.');
+  }
+
+  // 3. Map sang GroupBookingRow[]
+  const rows: GroupBookingRow[] = bookings.map((b) => {
+    const room = (b.rooms as { id: string; name: string; type: string } | null);
+    return {
+      bookingId: b.id,
+      roomName: room?.name ?? b.room_id,
+      roomType: room?.type ?? '',
+      checkIn: b.check_in,
+      checkOut: b.check_out,
+      nights: b.nights ?? 0,
+      pricePerNight: b.price_per_night ?? 0,
+      roomSubtotal: b.room_subtotal ?? 0,
+      surcharge: b.surcharge ?? 0,
+      services: (b.booking_services ?? []).map((s: {
+        name: string;
+        price: number;
+        qty: number;
+      }) => ({
+        name: s.name,
+        price: s.price,
+        qty: Number(s.qty),
+      })),
+      discounts: (b.booking_discounts ?? []).map((d: {
+        description: string | null;
+        amount: number;
+      }) => ({
+        description: d.description,
+        amount: d.amount,
+      })),
+      grandTotal: b.grand_total ?? 0,
+    };
+  });
+
+  // 4. Tính tổng từ DB values — KHÔNG tính frontend
+  const totalGrandTotal = rows.reduce((sum, r) => sum + r.grandTotal, 0);
+  const totalPaid = group.paid ?? 0;
+
+  // 5. Lấy ngày check-in sớm nhất và check-out muộn nhất của group
+  const checkInDates = bookings.map((b) => b.check_in).sort();
+  const checkOutDates = bookings.map((b) => b.check_out).sort();
+
+  const { data: payments, error: paymentsError } = await supabase
+    .from('payment_history')
+    .select('id, amount, method, date, note')
+    .eq('group_id', groupId)
+    .order('date', { ascending: true });
+
+  if (paymentsError) {
+    throw new Error(`Lỗi query payments: ${paymentsError.message}`);
+  }
+
+  return {
+    groupId: group.id,
+    guestName: group.customer_name ?? '',
+    guestPhone: group.customer_phone ?? '',
+    source: group.source ?? '',
+    otaBookingNumber: group.ota_booking_number ?? undefined,
+    checkIn: checkInDates[0],
+    checkOut: checkOutDates[checkOutDates.length - 1],
+    bookings: rows,
+    totalGrandTotal,
+    totalPaid,
+    payments: (payments ?? []).map((p) => {
+      const methodKey = (p.method ?? 'other').toLowerCase();
+      const normalizedMethod = PAYMENT_METHOD_LABEL[methodKey] ? methodKey : 'other';
+      return {
+        id: p.id,
+        amount: p.amount,
+        method: normalizedMethod,
+        date: p.date,
+        note: p.note,
+      };
+    }),
+    generatedAt: new Date().toISOString(),
+  };
 }
 
 // ─── Hook chính ────────────────────────────────────────────────────────────────
