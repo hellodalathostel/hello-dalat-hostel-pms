@@ -1332,21 +1332,17 @@ export function renderGroupInvoice(data: GroupDocumentData, lang: 'vi' | 'en' = 
 
   // Render tung booking row (co the expand services/discounts)
   const bookingRows = payload.bookings.map((b, i) => {
-    // Tinh tong services va discounts cua booking nay
-    const svcTotal = b.services.reduce((s, x) => s + (x.totalPrice ?? 0), 0);
-    const discTotal = b.discounts.reduce((s, x) => s + x.amount, 0);
-
     // Sub-rows cho services (neu co)
     const svcRows = b.services.map(s => `
     <tr class="sub-row">
-      <td colspan="5" class="sub-label">+ ${s.serviceName ?? ''} x ${s.quantity ?? 0}</td>
-      <td class="amount">${fmt(s.totalPrice ?? 0)}</td>
+      <td colspan="5" class="sub-label">+ ${s.name ?? ''} x ${s.qty ?? 0}</td>
+      <td class="amount">${fmt(s.price ?? 0)}</td>
     </tr>`).join('');
 
     // Sub-rows cho discounts (neu co)
     const discRows = b.discounts.map(d => `
     <tr class="sub-row">
-      <td colspan="5" class="sub-label disc">- ${d.discountName ?? ''}</td>
+      <td colspan="5" class="sub-label disc">- ${d.description ?? '—'}</td>
       <td class="amount disc">-${fmt(d.amount)}</td>
     </tr>`).join('');
 
@@ -1354,7 +1350,7 @@ export function renderGroupInvoice(data: GroupDocumentData, lang: 'vi' | 'en' = 
     <tr class="booking-row">
       <td class="center">${i + 1}</td>
       <td>${b.roomName}</td>
-      <td>${b.guestName ?? '—'}</td>
+      <td>${b.roomType || '—'}</td>
       <td>${fmtDate(b.checkIn)} → ${fmtDate(b.checkOut)}<br/><small>${b.nights}n</small></td>
       <td class="amount">${fmt(b.pricePerNight)}<br/><small>x ${b.nights}</small></td>
       <td class="amount"><strong>${fmt(b.grandTotal)}</strong></td>
@@ -1484,12 +1480,12 @@ export function renderGroupInvoice(data: GroupDocumentData, lang: 'vi' | 'en' = 
       </div>
       <div class="doc-title">
         <h2>${t.title}</h2>
-        <p>${t.invoiceDate}: ${fmtDate(payload.issueDate ?? dayjs().format('YYYY-MM-DD'))}</p>
+        <p>${t.invoiceDate}: ${fmtDate(payload.generatedAt.split('T')[0])}</p>
       </div>
     </div>
 
     <div class="meta-strip">
-      <div class="item"><strong>${t.groupLabel}</strong>${payload.groupName ?? payload.guestName ?? '—'}</div>
+      <div class="item"><strong>${t.groupLabel}</strong>${payload.guestName || '—'}</div>
       <div class="item"><strong>${t.checkIn}</strong>${fmtDate(payload.checkIn)}</div>
       <div class="item"><strong>${t.checkOut}</strong>${fmtDate(payload.checkOut)}</div>
       <div class="item"><strong>${isEn ? 'Rooms' : 'So phong'}</strong>${payload.bookings.length}</div>
@@ -1528,11 +1524,6 @@ export function renderGroupInvoice(data: GroupDocumentData, lang: 'vi' | 'en' = 
       </table>
     </div>
 
-    ${payload.note ? `
-    <div class="note-box">
-      <strong>${t.note}:</strong> ${payload.note}
-    </div>
-    ` : ''}
 
     <div class="footer">
       <p>${t.thankYou}</p>
