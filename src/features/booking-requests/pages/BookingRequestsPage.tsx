@@ -14,7 +14,6 @@ import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
 import {
   useBookingRequests,
-  useConfirmRequest,
   useConvertRequest,
   useRejectRequest,
   type BookingRequest,
@@ -31,13 +30,12 @@ const STATUS_COLOR: Record<BookingRequestStatus, string> = {
 
 const STATUS_LABEL: Record<BookingRequestStatus, string> = {
   pending: 'Chờ xử lý',
-  confirmed: 'Đã xác nhận',
+  confirmed: 'Đã convert',
   rejected: 'Đã từ chối',
 }
 
 export default function BookingRequestsPage() {
   const { data: requests = [], isLoading } = useBookingRequests()
-  const confirmMutation = useConfirmRequest()
   const rejectMutation = useRejectRequest()
   const convertMutation = useConvertRequest()
 
@@ -107,7 +105,7 @@ export default function BookingRequestsPage() {
       width: 130,
       filters: [
         { text: 'Chờ xử lý', value: 'pending' },
-        { text: 'Đã xác nhận', value: 'confirmed' },
+        { text: 'Đã convert', value: 'confirmed' },
         { text: 'Đã từ chối', value: 'rejected' },
       ],
       onFilter: (value, request) => request.status === value,
@@ -116,7 +114,7 @@ export default function BookingRequestsPage() {
     {
       title: 'Hành động',
       key: 'actions',
-      width: 216,
+      width: 172,
       render: (_, request) => {
         if (request.status === 'rejected') {
           return <Text type="secondary">Đã từ chối</Text>
@@ -132,14 +130,6 @@ export default function BookingRequestsPage() {
 
         return (
           <Space>
-            <Button
-              loading={confirmMutation.isPending && request.id === confirmMutation.variables}
-              onClick={() => {
-                confirmMutation.mutate(request.id)
-              }}
-            >
-              Xác nhận
-            </Button>
             <Button
               type="primary"
               loading={convertMutation.isPending && convertModal.request?.id === request.id}
@@ -164,10 +154,8 @@ export default function BookingRequestsPage() {
         )
       },
     },
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- confirmMutation object stable; isPending+variables đã cover đủ deps thực sự
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   ], [
-    confirmMutation.isPending,
-    confirmMutation.variables,
     convertModal.request?.id,
     convertMutation.isPending,
     rejectModal.id,
