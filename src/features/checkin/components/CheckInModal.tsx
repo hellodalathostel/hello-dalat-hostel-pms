@@ -5,6 +5,7 @@ import { UserOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { useCheckIn } from '@/features/checkin/hooks/useCheckIn'
 import { useBreakpoint } from '@/shared/hooks/useBreakpoint'
+import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
 import type { DashboardRoom } from '@/types/dashboard'
 import type { ManualCheckinFormValues } from '@/types/checkin'
 
@@ -24,6 +25,7 @@ export function CheckInModal({ open, room, onClose, onSuccess }: Props) {
   const [form] = Form.useForm<ManualCheckinFormValues>()
   const checkIn = useCheckIn()
   const { isMobile } = useBreakpoint()
+  const { message } = useAppFeedback()
 
   // Reset form mỗi lần mở modal
   useEffect(() => {
@@ -35,7 +37,10 @@ export function CheckInModal({ open, room, onClose, onSuccess }: Props) {
   }, [open, form])
 
   const handleSubmit = async (values: ManualCheckinFormValues) => {
-    if (!room?.booking_id) return
+    if (!room?.booking_id) {
+      message.error('Không tìm thấy booking — vui lòng đóng và mở lại.')
+      return
+    }
 
     try {
       const rawDateOfBirth = form.getFieldValue('date_of_birth')

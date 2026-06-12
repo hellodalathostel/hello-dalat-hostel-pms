@@ -90,6 +90,8 @@ export function EarlyLateModal({
           },
         },
       )
+    }).catch(() => {
+      // AntD tự hiển thị lỗi dưới field — không cần toast thêm
     })
   }
 
@@ -141,16 +143,18 @@ export function EarlyLateModal({
           </Radio.Group>
         </Form.Item>
 
-        <Alert
-          type="warning"
-          showIcon
-          style={{ marginBottom: 16 }}
-          message={
-            <span>
-              Phòng sẽ bị block thêm: <strong>{blockNight}</strong>
-            </span>
-          }
-        />
+        {!isBlocked && (
+          <Alert
+            type="warning"
+            showIcon
+            style={{ marginBottom: 16 }}
+            message={
+              <span>
+                Phòng sẽ bị block thêm: <strong>{blockNight}</strong>
+              </span>
+            }
+          />
+        )}
 
         <Form.Item
           name="fee"
