@@ -1,6 +1,7 @@
+// FILE: src/features/finance/pages/FinancePage.tsx
 import { useState } from 'react'
 import dayjs from 'dayjs'
-import { Alert, Button, DatePicker, Space, Spin, Typography } from 'antd'
+import { Alert, Button, DatePicker, Flex, Grid, Spin, Typography } from 'antd'
 import { DownloadOutlined, PlusOutlined } from '@ant-design/icons'
 import type { Dayjs } from 'dayjs'
 import { useMonthlyRevenue } from '../hooks/useMonthlyRevenue'
@@ -10,10 +11,13 @@ import { ManualRevenueModal } from '../components/ManualRevenueModal'
 import { exportFinanceExcel } from '../utils/exportFinanceExcel'
 
 const { Title } = Typography
+const { useBreakpoint } = Grid
 
 export default function FinancePage() {
   const [month, setMonth] = useState<Dayjs>(dayjs().startOf('month'))
   const [manualRevenueOpen, setManualRevenueOpen] = useState(false)
+  const screens = useBreakpoint()
+  const isMobile = !screens.md
 
   const {
     data: summary,
@@ -24,9 +28,7 @@ export default function FinancePage() {
   const { data: unpaid = [], isLoading: unpaidLoading } = useUnpaidBookings()
 
   function handleMonthChange(value: Dayjs | null) {
-    if (value) {
-      setMonth(value.startOf('month'))
-    }
+    if (value) setMonth(value.startOf('month'))
   }
 
   function handleExport() {
@@ -35,9 +37,10 @@ export default function FinancePage() {
   }
 
   return (
-    <div style={{ padding: '16px 24px' }}>
-      <Space style={{ marginBottom: 16 }} align="center" wrap>
-        <Title level={3} style={{ margin: 0 }}>
+    <div style={{ padding: isMobile ? '12px 16px' : '16px 24px' }}>
+      {/* Header — wrap tốt trên mobile */}
+      <Flex wrap="wrap" gap={8} align="center" style={{ marginBottom: 16 }}>
+        <Title level={isMobile ? 4 : 3} style={{ margin: 0, flex: '1 1 auto' }}>
           📊 Tài chính
         </Title>
         <DatePicker
@@ -46,29 +49,35 @@ export default function FinancePage() {
           onChange={handleMonthChange}
           format="MM/YYYY"
           allowClear={false}
+          style={{ width: isMobile ? '100%' : 130 }}
         />
-        <Button
-          icon={<DownloadOutlined />}
-          onClick={handleExport}
-          disabled={!summary || summaryLoading}
-          type="default"
-        >
-          Xuất Excel
-        </Button>
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={() => setManualRevenueOpen(true)}
-        >
-          Nhập thủ công
-        </Button>
-      </Space>
+        <Flex gap={8} style={{ width: isMobile ? '100%' : 'auto' }}>
+          <Button
+            icon={<DownloadOutlined />}
+            onClick={handleExport}
+            disabled={!summary || summaryLoading}
+            style={{ flex: 1 }}
+          >
+            {isMobile ? 'Excel' : 'Xuất Excel'}
+          </Button>
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => setManualRevenueOpen(true)}
+            style={{ flex: 1 }}
+          >
+            {isMobile ? 'Nhập' : 'Nhập thủ công'}
+          </Button>
+        </Flex>
+      </Flex>
 
       {summaryError && (
         <Alert
           type="error"
           message="Không tải được dữ liệu doanh thu"
-          description={summaryError instanceof Error ? summaryError.message : String(summaryError)}
+          description={
+            summaryError instanceof Error ? summaryError.message : String(summaryError)
+          }
           style={{ marginBottom: 16 }}
         />
       )}
