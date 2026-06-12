@@ -79,11 +79,11 @@ export default function DK14Report(): React.JSX.Element {
 
   const previewData: DK14PreviewRow[] = useMemo(
     () =>
-      rows.slice(0, 8).map((row, index) => ({
+      (data ?? []).slice(0, 8).map((row, index) => ({
         ...row,
         key: `${row.stt ?? index}-${row.so_giay_to ?? row.ho_va_ten ?? index}`,
       })),
-    [rows],
+    [data],
   )
 
   const columns: ColumnsType<DK14PreviewRow> = [

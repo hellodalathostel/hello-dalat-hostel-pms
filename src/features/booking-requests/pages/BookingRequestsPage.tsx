@@ -164,6 +164,7 @@ export default function BookingRequestsPage() {
         )
       },
     },
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- confirmMutation object stable; isPending+variables đã cover đủ deps thực sự
   ], [
     confirmMutation.isPending,
     confirmMutation.variables,
