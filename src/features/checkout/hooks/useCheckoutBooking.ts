@@ -1,8 +1,8 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { message } from 'antd'
 import { supabase } from '@/api/supabase'
 import type { PaymentMethod } from '@/types/database'
 import { normalizeError } from '@/shared/utils/normalizeError'
+import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
 
 export interface RecordPaymentParams {
   groupId: string
@@ -29,6 +29,7 @@ type CheckoutResult = {
 
 export function useRecordPayment() {
   const queryClient = useQueryClient()
+  const { message } = useAppFeedback()
 
   return useMutation({
     mutationFn: async (params: RecordPaymentParams): Promise<RecordPaymentResult> => {
@@ -66,11 +67,12 @@ export function useRecordPayment() {
 
 export function useCheckoutBooking() {
   const queryClient = useQueryClient()
+  const { message } = useAppFeedback()
 
   return useMutation({
     mutationFn: async (params: CheckoutParams): Promise<CheckoutResult> => {
       try {
-        const { data, error } = await supabase.rpc('checkout_booking', {
+        const { data, error } = await supabase.rpc('checkout_booking_txn', {
           p_booking_id: params.bookingId,
         })
 
