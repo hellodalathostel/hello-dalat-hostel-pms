@@ -1,12 +1,15 @@
+// FILE: src/features/bookings/components/BookingFolioEditModal.tsx
 // Modal chỉnh sửa folio: Cọc | Dịch vụ | Giảm giá
-// Mở từ BookingModal hoặc bất kỳ nơi nào có bookingId + groupId
+// Mở từ BookingDetailDrawer hoặc bất kỳ nơi nào có bookingId + groupId
 import {
   Modal, Tabs, Form, InputNumber, Select, Input, Button,
   Table, Popconfirm, Tag, Divider, Space, Typography, Spin,
 } from 'antd'
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import dayjs from 'dayjs'
+import { useQuery } from '@tanstack/react-query'
+import { supabase } from '@/api/supabase'
 import { useBookingFolio } from '@/features/bookings/hooks/useBookingFolio'
 import { useDepositActions } from '@/features/bookings/hooks/useDepositActions'
 import { useServiceActions } from '@/features/bookings/hooks/useServiceActions'
@@ -24,16 +27,17 @@ const METHOD_OPTIONS = [
   { value: 'other',    label: 'Khác' },
 ]
 
-const SERVICE_CATALOG = [
-  { id: 'svc_breakfast',  name: 'Bữa sáng',                price: 50000  },
-  { id: 'svc_transfer',   name: 'Đưa đón sân bay / ga tàu', price: 150000 },
-  { id: 'svc_laundry',    name: 'Giặt sấy (kg)',            price: 25000  },
-  { id: 'svc_water',      name: 'Nước khoáng minibar',      price: 15000  },
-  { id: 'svc_motorbike',  name: 'Thuê xe máy (ngày)',       price: 120000 },
-  { id: 'svc_tour',       name: 'Tour Đà Lạt (người)',      price: 250000 },
-]
+// Key dùng chung với AddServiceModal để share TanStack Query cache
+const SERVICE_CATALOG_KEY = ['service-catalog']
 
-const fmt = (n?: number | null) => (typeof n === 'number' && !isNaN(n) ? n.toLocaleString('vi-VN') + ' ₫' : '—')
+interface ServiceCatalogItem {
+  id: string
+  name: string
+  price: number
+}
+
+const fmt = (n?: number | null) =>
+  typeof n === 'number' && !isNaN(n) ? n.toLocaleString('vi-VN') + ' ₫' : '—'
 
 interface Props {
   open: boolean
@@ -65,6 +69,30 @@ export default function BookingFolioEditModal({ open, onClose, bookingId, groupI
   const [discountForm] = Form.useForm()
   const [pendingVoidPaymentId, setPendingVoidPaymentId] = useState<string | null>(null)
 
+  // Fetch catalog động từ DB — share cache với AddServiceModal
+  const { data: serviceCatalog = [], isLoading: catalogLoading } = useQuery<ServiceCatalogItem[]>({
+    queryKey: SERVICE_CATALOG_KEY,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('services')
+        .select('id, name, price')
+        .eq('is_deleted', false)
+        .order('name')
+      if (error) throw error
+      return data ?? []
+    },
+    staleTime: 5 * 60 * 1000, // 5 phút — catalog ít thay đổi
+  })
+
+  // Reset cả 3 form khi modal đóng
+  useEffect(() => {
+    if (!open) {
+      depositForm.resetFields()
+      serviceForm.resetFields()
+      discountForm.resetFields()
+    }
+  }, [open, depositForm, serviceForm, discountForm])
+
   const handleVoidPayment = async (paymentId: string) => {
     setPendingVoidPaymentId(paymentId)
     try {
@@ -74,55 +102,66 @@ export default function BookingFolioEditModal({ open, onClose, bookingId, groupI
     }
   }
 
-  // Khi chọn service từ catalog → tự điền price
+  // Khi chọn service từ catalog → tự điền name + price
   const handleServiceSelect = (serviceId: string) => {
-    const svc = SERVICE_CATALOG.find(s => s.id === serviceId)
+    const svc = serviceCatalog.find((s) => s.id === serviceId)
     if (svc) serviceForm.setFieldsValue({ name: svc.name, price: svc.price })
   }
 
-  // Submit cọc
+  // Submit cọc — try/catch để không nuốt lỗi validate
   const handleDepositSubmit = async () => {
-    const values = await depositForm.validateFields()
-    await addDeposit.mutateAsync({
-      groupId,
-      amount: values.amount,
-      method: values.method,
-      note: values.note,
-      firstBookingId: bookingId,
-    })
-    depositForm.resetFields()
+    try {
+      const values = await depositForm.validateFields()
+      await addDeposit.mutateAsync({
+        groupId,
+        amount: values.amount,
+        method: values.method,
+        note: values.note,
+        firstBookingId: bookingId,
+      })
+      depositForm.resetFields()
+    } catch {
+      // validateFields throw khi form invalid — lỗi mutation đã được hook xử lý
+    }
   }
 
   // Submit dịch vụ
   const handleServiceSubmit = async () => {
-    const values = await serviceForm.validateFields()
-    await addService.mutateAsync({
-      bookingId,
-      serviceId: values.serviceId ?? undefined,
-      name: values.name,
-      price: values.price,
-      qty: values.qty ?? 1,
-    })
-    serviceForm.resetFields()
+    try {
+      const values = await serviceForm.validateFields()
+      await addService.mutateAsync({
+        bookingId,
+        serviceId: values.serviceId ?? undefined,
+        name: values.name,
+        price: values.price,
+        qty: values.qty ?? 1,
+      })
+      serviceForm.resetFields()
+    } catch {
+      // validateFields throw khi form invalid — lỗi mutation đã được hook xử lý
+    }
   }
 
   // Submit giảm giá
   const handleDiscountSubmit = async () => {
-    const values = await discountForm.validateFields()
-    await addDiscount.mutateAsync({
-      bookingId,
-      amount: values.amount,
-      description: values.description,
-    })
-    discountForm.resetFields()
+    try {
+      const values = await discountForm.validateFields()
+      await addDiscount.mutateAsync({
+        bookingId,
+        amount: values.amount,
+        description: values.description,
+      })
+      discountForm.resetFields()
+    } catch {
+      // validateFields throw khi form invalid — lỗi mutation đã được hook xử lý
+    }
   }
 
   // ── Tab Cọc ──────────────────────────────────────────────
   const DepositTab = (
     <div>
-      {/* Form thêm cọc mới */}
       <Form form={depositForm} layout="inline" style={{ marginBottom: 16 }}>
-        <Form.Item name="amount" rules={[{ required: true, message: 'Nhập số tiền' }]}> 
+        <Form.Item name="amount" rules={[{ required: true, message: 'Nhập số tiền' }]}>
           <InputNumber<number>
             placeholder="Số tiền"
             min={1000}
@@ -133,7 +172,7 @@ export default function BookingFolioEditModal({ open, onClose, bookingId, groupI
             addonAfter="₫"
           />
         </Form.Item>
-        <Form.Item name="method" rules={[{ required: true, message: 'Chọn phương thức' }]}> 
+        <Form.Item name="method" rules={[{ required: true, message: 'Chọn phương thức' }]}>
           <Select placeholder="Phương thức" options={METHOD_OPTIONS} style={{ width: 150 }} />
         </Form.Item>
         <Form.Item name="note">
@@ -151,7 +190,6 @@ export default function BookingFolioEditModal({ open, onClose, bookingId, groupI
         </Form.Item>
       </Form>
 
-      {/* Danh sách cọc đã ghi */}
       <Table<FolioPaymentRow>
         dataSource={folio?.payments ?? []}
         rowKey="id"
@@ -172,11 +210,9 @@ export default function BookingFolioEditModal({ open, onClose, bookingId, groupI
               if (isVoidedOrigin) {
                 return <Text style={{ color: '#cf1322', textDecoration: 'line-through' }}>{fmt(amount)}</Text>
               }
-
               if (isReverseEntry) {
                 return <Text type="secondary">{fmt(amount)}</Text>
               }
-
               return fmt(amount)
             },
           },
@@ -188,10 +224,7 @@ export default function BookingFolioEditModal({ open, onClose, bookingId, groupI
             ellipsis: true,
             render: (note: string | null, row) => {
               const isReverseEntry = row.isVoid && Boolean(row.voidedPaymentId)
-              if (isReverseEntry) {
-                return <Tag color="default">Void entry</Tag>
-              }
-
+              if (isReverseEntry) return <Tag color="default">Void entry</Tag>
               return note || <Text type="secondary">—</Text>
             },
           },
@@ -204,17 +237,13 @@ export default function BookingFolioEditModal({ open, onClose, bookingId, groupI
               const isVoidedOrigin = row.isVoid && !row.voidedPaymentId
               const isRowPending = pendingVoidPaymentId === row.id
 
-              if (isReverseEntry) {
-                return <Tag color="default">Void entry</Tag>
-              }
+              if (isReverseEntry) return <Tag color="default">Void entry</Tag>
 
               if (isVoidedOrigin) {
                 return (
                   <Space size={8}>
                     <Tag color="red">Đã void</Tag>
-                    <Button size="small" type="text" danger disabled>
-                      Void
-                    </Button>
+                    <Button size="small" type="text" danger disabled>Void</Button>
                   </Space>
                 )
               }
@@ -227,9 +256,7 @@ export default function BookingFolioEditModal({ open, onClose, bookingId, groupI
                   cancelText="Huỷ"
                   okButtonProps={{ danger: true, loading: isRowPending }}
                 >
-                  <Button size="small" danger type="text" loading={isRowPending}>
-                    Void
-                  </Button>
+                  <Button size="small" danger type="text" loading={isRowPending}>Void</Button>
                 </Popconfirm>
               )
             },
@@ -254,21 +281,22 @@ export default function BookingFolioEditModal({ open, onClose, bookingId, groupI
   const ServiceTab = (
     <div>
       <Form form={serviceForm} layout="inline" style={{ marginBottom: 16 }}>
-        {/* Chọn từ catalog hoặc nhập tay */}
+        {/* Dropdown catalog động từ DB */}
         <Form.Item name="serviceId">
           <Select
             placeholder="Chọn dịch vụ..."
             allowClear
+            loading={catalogLoading}
             style={{ width: 220 }}
             onChange={handleServiceSelect}
             onClear={() => serviceForm.setFieldsValue({ name: undefined, price: undefined })}
-            options={SERVICE_CATALOG.map(s => ({ value: s.id, label: s.name }))}
+            options={serviceCatalog.map((s) => ({ value: s.id, label: s.name }))}
           />
         </Form.Item>
-        <Form.Item name="name" rules={[{ required: true, message: 'Nhập tên' }]}> 
+        <Form.Item name="name" rules={[{ required: true, message: 'Nhập tên' }]}>
           <Input placeholder="Tên dịch vụ" style={{ width: 180 }} />
         </Form.Item>
-        <Form.Item name="price" rules={[{ required: true, message: 'Nhập giá' }]}> 
+        <Form.Item name="price" rules={[{ required: true, message: 'Nhập giá' }]}>
           <InputNumber<number>
             placeholder="Đơn giá"
             min={0}
@@ -279,7 +307,7 @@ export default function BookingFolioEditModal({ open, onClose, bookingId, groupI
             addonAfter="₫"
           />
         </Form.Item>
-        <Form.Item name="qty" initialValue={1}> 
+        <Form.Item name="qty" initialValue={1}>
           <InputNumber placeholder="SL" min={0.5} step={0.5} style={{ width: 70 }} addonBefore="×" />
         </Form.Item>
         <Form.Item>
@@ -321,9 +349,7 @@ export default function BookingFolioEditModal({ open, onClose, bookingId, groupI
           },
         ]}
         summary={() => {
-          const total = (folio?.services ?? []).reduce(
-            (s, sv) => s + sv.price * sv.qty, 0
-          )
+          const total = (folio?.services ?? []).reduce((s, sv) => s + sv.price * sv.qty, 0)
           return (
             <Table.Summary.Row>
               <Table.Summary.Cell index={0} colSpan={3} align="right">
@@ -341,7 +367,7 @@ export default function BookingFolioEditModal({ open, onClose, bookingId, groupI
   const DiscountTab = (
     <div>
       <Form form={discountForm} layout="inline" style={{ marginBottom: 16 }}>
-        <Form.Item name="amount" rules={[{ required: true, message: 'Nhập số tiền' }]}> 
+        <Form.Item name="amount" rules={[{ required: true, message: 'Nhập số tiền' }]}>
           <InputNumber<number>
             placeholder="Số tiền giảm"
             min={1000}
@@ -459,9 +485,9 @@ export default function BookingFolioEditModal({ open, onClose, bookingId, groupI
           <Divider style={{ margin: '12px 0' }} />
           <Tabs
             items={[
-              { key: 'deposit',  label: '💰 Cọc',       children: DepositTab  },
-              { key: 'services', label: '🛎 Dịch vụ',   children: ServiceTab  },
-              { key: 'discount', label: '🏷 Giảm giá',  children: DiscountTab },
+              { key: 'deposit',  label: '💰 Cọc',      children: DepositTab  },
+              { key: 'services', label: '🛎 Dịch vụ',  children: ServiceTab  },
+              { key: 'discount', label: '🏷 Giảm giá', children: DiscountTab },
             ]}
           />
         </>
