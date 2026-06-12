@@ -44,12 +44,13 @@ export function QuickCheckoutModal({ target, onClose }: CheckoutModalProps) {
   const { mutateAsync, isPending } = useCheckout()
   const { message } = useAppFeedback()
 
-  // Reset form khi chuyển sang booking mới
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // Reset form khi chuyển sang booking mới — derived state reset hợp lệ
   useEffect(() => {
     if (!target) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPaymentMethod('cash')
     setNote('')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [target?.bookingId])
 
   if (!target) {

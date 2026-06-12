@@ -85,7 +85,7 @@ serve(async (req) => {
 
   // ── 4. SOURCE breakdown từ groups ───────────────────────────────────────
   const groupIds = [...new Set((checkIns ?? []).map((b) => b.group_id).filter(Boolean))]
-  let sourceBreakdown: Record<string, number> = {}
+  const sourceBreakdown: Record<string, number> = {}
 
   if (groupIds.length > 0) {
     const { data: groups } = await supabasePublic

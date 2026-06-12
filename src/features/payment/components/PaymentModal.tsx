@@ -45,6 +45,7 @@ export function PaymentModal({ visible, room, onCancel }: PaymentModalProps): JS
     mode: 'onSubmit',
   })
 
+  // eslint-disable-next-line react-hooks/incompatible-library -- RHF watch() không tương thích React Compiler, known issue
   const selectedMethod = watch('method')
 
   const handleClose = () => {

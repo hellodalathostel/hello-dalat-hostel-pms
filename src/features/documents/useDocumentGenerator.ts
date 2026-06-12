@@ -61,7 +61,7 @@ interface DocumentPreviewData extends DocumentData {
   group: {
     guest_name: string | null;
   };
-  bookings: Array<any>;
+  bookings: Array<Record<string, unknown>>;
 }
 
 const PAYMENT_METHOD_LABEL: Record<string, string> = {

@@ -47,8 +47,10 @@ export function CheckoutModal({ target, onClose }: CheckoutModalProps) {
   // Tách bookingId ra ngoài để deps array không dùng optional chaining
   const bookingId = target?.bookingId
 
+  // Reset form khi chuyển sang booking khác — đây là derived state reset hợp lệ
   useEffect(() => {
     if (!bookingId) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPaymentMethod('cash')
     setNote('')
   }, [bookingId])

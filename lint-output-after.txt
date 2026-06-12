@@ -1,0 +1,13 @@
+
+> hello-dalat-hostel-pms@0.0.0 lint
+> eslint .
+
+
+/workspaces/hello-dalat-hostel-pms/src/features/booking-requests/pages/BookingRequestsPage.tsx
+  167:6  warning  React Hook useMemo has a missing dependency: 'confirmMutation'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/workspaces/hello-dalat-hostel-pms/src/features/compliance/pages/DK14ReportPage.tsx
+  78:9  warning  The 'rows' logical expression could make the dependencies of useMemo Hook (at line 86) change on every render. To fix this, wrap the initialization of 'rows' in its own useMemo() Hook  react-hooks/exhaustive-deps
+
+✖ 2 problems (0 errors, 2 warnings)
+

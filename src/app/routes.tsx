@@ -1,0 +1,14 @@
+import { lazy } from 'react'
+
+export const DashboardPage = lazy(() => import('@/features/dashboard/pages/DashboardPage'))
+export const NewBookingPage = lazy(() => import('@/features/bookings/pages/NewBookingPage'))
+export const RoomCalendarPage = lazy(() => import('@/features/calendar/pages/RoomCalendarPage'))
+export const RevenueDashboardPage = lazy(() => import('@/features/dashboard/pages/RevenueDashboardPage'))
+export const FinancePage = lazy(() => import('@/features/finance/pages/FinancePage'))
+export const DK14ReportPage = lazy(() => import('@/features/compliance/pages/DK14ReportPage'))
+export const CheckinImportPage = lazy(() => import('@/features/checkin/pages/CheckinImportPage'))
+export const SettingsPage = lazy(() => import('@/features/settings/pages/SettingsPage'))
+export const BookingsPage = lazy(() => import('@/features/bookings/pages/BookingsPage').then((m) => ({ default: m.BookingsPage })))
+export const GuestsPage = lazy(() => import('@/pages/GuestsPage'))
+export const HousekeepingPage = lazy(() => import('@/features/housekeeping/pages/HousekeepingPage'))
+export const BookingRequestsPage = lazy(() => import('@/features/booking-requests/pages/BookingRequestsPage'))

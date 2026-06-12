@@ -1,0 +1,150 @@
+$ eslint .
+
+/workspaces/hello-dalat-hostel-pms/src/app/router.tsx
+   9:7  error  Fast refresh only works when a file only exports components. Move your component(s) to a separate file. If all exports are HOCs, add them to the `extraHOCs` option  react-refresh/only-export-components
+  10:7  error  Fast refresh only works when a file only exports components. Move your component(s) to a separate file. If all exports are HOCs, add them to the `extraHOCs` option  react-refresh/only-export-components
+  11:7  error  Fast refresh only works when a file only exports components. Move your component(s) to a separate file. If all exports are HOCs, add them to the `extraHOCs` option  react-refresh/only-export-components
+  12:7  error  Fast refresh only works when a file only exports components. Move your component(s) to a separate file. If all exports are HOCs, add them to the `extraHOCs` option  react-refresh/only-export-components
+  13:7  error  Fast refresh only works when a file only exports components. Move your component(s) to a separate file. If all exports are HOCs, add them to the `extraHOCs` option  react-refresh/only-export-components
+  14:7  error  Fast refresh only works when a file only exports components. Move your component(s) to a separate file. If all exports are HOCs, add them to the `extraHOCs` option  react-refresh/only-export-components
+  15:7  error  Fast refresh only works when a file only exports components. Move your component(s) to a separate file. If all exports are HOCs, add them to the `extraHOCs` option  react-refresh/only-export-components
+  16:7  error  Fast refresh only works when a file only exports components. Move your component(s) to a separate file. If all exports are HOCs, add them to the `extraHOCs` option  react-refresh/only-export-components
+  17:7  error  Fast refresh only works when a file only exports components. Move your component(s) to a separate file. If all exports are HOCs, add them to the `extraHOCs` option  react-refresh/only-export-components
+  18:7  error  Fast refresh only works when a file only exports components. Move your component(s) to a separate file. If all exports are HOCs, add them to the `extraHOCs` option  react-refresh/only-export-components
+  19:7  error  Fast refresh only works when a file only exports components. Move your component(s) to a separate file. If all exports are HOCs, add them to the `extraHOCs` option  react-refresh/only-export-components
+  20:7  error  Fast refresh only works when a file only exports components. Move your component(s) to a separate file. If all exports are HOCs, add them to the `extraHOCs` option  react-refresh/only-export-components
+
+/workspaces/hello-dalat-hostel-pms/src/components/CheckoutModal.tsx
+  52:5  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/workspaces/hello-dalat-hostel-pms/src/components/CheckoutModal.tsx:52:5
+  50 |   useEffect(() => {
+  51 |     if (!bookingId) return
+> 52 |     setPaymentMethod('cash')
+     |     ^^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  53 |     setNote('')
+  54 |   }, [bookingId])
+  55 |  react-hooks/set-state-in-effect
+
+/workspaces/hello-dalat-hostel-pms/src/components/booking/BookingImportPDF.tsx
+  64:38  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/workspaces/hello-dalat-hostel-pms/src/components/bookings/AddRoomModal.tsx
+  74:24  warning  Compilation Skipped: Use of incompatible library
+
+This API returns functions which cannot be memoized without leading to stale UI. To prevent this, by default React Compiler will skip memoizing this component/hook. However, you may see issues if values from this API are passed to other components/hooks that are memoized.
+
+/workspaces/hello-dalat-hostel-pms/src/components/bookings/AddRoomModal.tsx:74:24
+  72 |
+  73 |   // Gợi ý giá khi chọn phòng + ngày
+> 74 |   const watchRoomId  = watch('room_id');
+     |                        ^^^^^ React Hook Form's `useForm()` API returns a `watch()` function which cannot be memoized safely.
+  75 |   const watchCheckIn = watch('check_in');
+  76 |
+  77 |   useEffect(() => {  react-hooks/incompatible-library
+
+/workspaces/hello-dalat-hostel-pms/src/features/booking-requests/pages/BookingRequestsPage.tsx
+  167:6  warning  React Hook useMemo has a missing dependency: 'confirmMutation'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/workspaces/hello-dalat-hostel-pms/src/features/bookings/pages/NewBookingPage.tsx
+  114:26  warning  Compilation Skipped: Use of incompatible library
+
+This API returns functions which cannot be memoized without leading to stale UI. To prevent this, by default React Compiler will skip memoizing this component/hook. However, you may see issues if values from this API are passed to other components/hooks that are memoized.
+
+/workspaces/hello-dalat-hostel-pms/src/features/bookings/pages/NewBookingPage.tsx:114:26
+  112 |   }, [defaultValues, reset])
+  113 |
+> 114 |   const selectedSource = watch('source')
+      |                          ^^^^^ React Hook Form's `useForm()` API returns a `watch()` function which cannot be memoized safely.
+  115 |   const bookingValues = watch('bookings')
+  116 |
+  117 |   useEffect(() => {  react-hooks/incompatible-library
+
+/workspaces/hello-dalat-hostel-pms/src/features/checkout/components/CheckoutModal.tsx
+  56:7  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/workspaces/hello-dalat-hostel-pms/src/features/checkout/components/CheckoutModal.tsx:56:7
+  54 |   useEffect(() => {
+  55 |     if (!open) {
+> 56 |       setStep('folio')
+     |       ^^^^^^^ Avoid calling setState() directly within an effect
+  57 |       setPaymentMethod('cash')
+  58 |       form.resetFields()
+  59 |     }  react-hooks/set-state-in-effect
+
+/workspaces/hello-dalat-hostel-pms/src/features/checkout/components/QuickCheckoutModal.tsx
+  48:3  warning  Unused eslint-disable directive (no problems were reported from 'react-hooks/exhaustive-deps')
+  51:5  error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/workspaces/hello-dalat-hostel-pms/src/features/checkout/components/QuickCheckoutModal.tsx:51:5
+  49 |   useEffect(() => {
+  50 |     if (!target) return
+> 51 |     setPaymentMethod('cash')
+     |     ^^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  52 |     setNote('')
+  53 |   }, [target?.bookingId])
+  54 |  react-hooks/set-state-in-effect
+  53:6  warning  React Hook useEffect has a missing dependency: 'target'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       react-hooks/exhaustive-deps
+
+/workspaces/hello-dalat-hostel-pms/src/features/compliance/pages/DK14ReportPage.tsx
+  78:9  warning  The 'rows' logical expression could make the dependencies of useMemo Hook (at line 86) change on every render. To fix this, wrap the initialization of 'rows' in its own useMemo() Hook  react-hooks/exhaustive-deps
+
+/workspaces/hello-dalat-hostel-pms/src/features/documents/useDocumentGenerator.ts
+  64:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/workspaces/hello-dalat-hostel-pms/src/features/payment/components/PaymentModal.tsx
+  48:26  warning  Compilation Skipped: Use of incompatible library
+
+This API returns functions which cannot be memoized without leading to stale UI. To prevent this, by default React Compiler will skip memoizing this component/hook. However, you may see issues if values from this API are passed to other components/hooks that are memoized.
+
+/workspaces/hello-dalat-hostel-pms/src/features/payment/components/PaymentModal.tsx:48:26
+  46 |   })
+  47 |
+> 48 |   const selectedMethod = watch('method')
+     |                          ^^^^^ React Hook Form's `useForm()` API returns a `watch()` function which cannot be memoized safely.
+  49 |
+  50 |   const handleClose = () => {
+  51 |     reset(getDefaultValues(room))  react-hooks/incompatible-library
+
+/workspaces/hello-dalat-hostel-pms/src/pages/NewBooking.tsx
+  106:26  warning  Compilation Skipped: Use of incompatible library
+
+This API returns functions which cannot be memoized without leading to stale UI. To prevent this, by default React Compiler will skip memoizing this component/hook. However, you may see issues if values from this API are passed to other components/hooks that are memoized.
+
+/workspaces/hello-dalat-hostel-pms/src/pages/NewBooking.tsx:106:26
+  104 |   }, [defaultValues, reset])
+  105 |
+> 106 |   const selectedSource = watch('source')
+      |                          ^^^^^ React Hook Form's `useForm()` API returns a `watch()` function which cannot be memoized safely.
+  107 |
+  108 |   useEffect(() => {
+  109 |     setValue('channel_fee_rate', DEFAULT_FEE_RATES[selectedSource] ?? 0, {  react-hooks/incompatible-library
+
+/workspaces/hello-dalat-hostel-pms/supabase/functions/daily-revenue-summary/index.ts
+  88:7  error  'sourceBreakdown' is never reassigned. Use 'const' instead  prefer-const
+
+/workspaces/hello-dalat-hostel-pms/supabase/functions/price-alert-bot/index.ts
+  49:19  error  '_req' is defined but never used  @typescript-eslint/no-unused-vars
+
+✖ 27 problems (19 errors, 8 warnings)
+  1 error and 1 warning potentially fixable with the `--fix` option.
+
+[ELIFECYCLE] Command failed with exit code 1.

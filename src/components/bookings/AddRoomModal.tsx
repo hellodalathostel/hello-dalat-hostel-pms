@@ -71,6 +71,7 @@ export function AddRoomModal({ open, groupId, defaultCheckIn, defaultCheckOut, o
   }, [open, defaultCheckIn, defaultCheckOut, reset]);
 
   // Gợi ý giá khi chọn phòng + ngày
+  // eslint-disable-next-line react-hooks/incompatible-library -- RHF watch() không tương thích React Compiler, known issue
   const watchRoomId  = watch('room_id');
   const watchCheckIn = watch('check_in');
 

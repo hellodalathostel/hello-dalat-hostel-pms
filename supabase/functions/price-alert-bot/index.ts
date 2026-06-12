@@ -46,7 +46,7 @@ function getDateVN(offsetDays: number): string {
 	return vnDate.toISOString().slice(0, 10);
 }
 
-Deno.serve(async (_req) => {
+Deno.serve(async () => {
 	try {
 		const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 		const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;

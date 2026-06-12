@@ -51,8 +51,10 @@ export function CheckoutModal({ bookingId, open, onClose }: Props) {
   const recordPayment = useRecordPayment()
   const checkoutBooking = useCheckoutBooking()
 
+  // Reset state khi modal đóng — derived state reset hợp lệ, không phải side effect
   useEffect(() => {
     if (!open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setStep('folio')
       setPaymentMethod('cash')
       form.resetFields()

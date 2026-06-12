@@ -111,6 +111,7 @@ export default function NewBooking(): JSX.Element {
     reset(defaultValues)
   }, [defaultValues, reset])
 
+  // eslint-disable-next-line react-hooks/incompatible-library -- RHF watch() không tương thích React Compiler, known issue
   const selectedSource = watch('source')
   const bookingValues = watch('bookings')
 
