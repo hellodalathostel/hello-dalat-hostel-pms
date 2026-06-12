@@ -9,12 +9,13 @@ import { z } from 'zod';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/api/supabase';
 import { useAddRoomToGroup } from '@/hooks/useAddRoomToGroup';
+import { useAppFeedback } from '@/shared/hooks/useAppFeedback';
 
 const schema = z.object({
   room_id:         z.string().min(1, 'Chọn phòng'),
   check_in:        z.custom<Dayjs>(v => dayjs.isDayjs(v), 'Chọn ngày nhận'),
   check_out:       z.custom<Dayjs>(v => dayjs.isDayjs(v), 'Chọn ngày trả'),
-  price_per_night: z.number().min(0, 'Nhập giá'),
+  price_per_night: z.number().min(1, 'Nhập giá'),
   guests_count:    z.number().min(1),
   note:            z.string().optional(),
 });
@@ -30,6 +31,7 @@ interface Props {
 }
 
 export function AddRoomModal({ open, groupId, defaultCheckIn, defaultCheckOut, onClose }: Props) {
+  const { message } = useAppFeedback();
   const { mutate: addRoom, isPending } = useAddRoomToGroup();
 
   const { data: rooms = [], isLoading: roomsLoading } = useQuery({
@@ -95,7 +97,12 @@ export function AddRoomModal({ open, groupId, defaultCheckIn, defaultCheckOut, o
         guests_count:    values.guests_count,
         note:            values.note,
       },
-      { onSuccess: onClose },
+      {
+        onSuccess: onClose,
+        onError: (error: Error) => {
+          message.error(`Tạo phòng thất bại: ${error.message}`);
+        },
+      },
     );
   };
 
@@ -201,7 +208,7 @@ export function AddRoomModal({ open, groupId, defaultCheckIn, defaultCheckOut, o
                       style={{ width: '100%' }}
                       formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
                       parser={v => Number(v?.replace(/,/g, '') ?? 0)}
-                      min={0}
+                      min={1}
                       step={50000}
                     />
                   )}

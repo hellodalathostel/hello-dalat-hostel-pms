@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Button, Divider, Input, Modal, Select, Space, Tag, Typography, message } from 'antd'
+import { Button, Divider, Input, Modal, Select, Space, Tag, Typography } from 'antd'
 import { DollarOutlined, LogoutOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { useCheckout } from '@/hooks/useCheckOut'
+import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
 import type { PaymentMethod } from '@/types/database'
 
 const { Text, Title } = Typography
@@ -28,9 +29,9 @@ const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   cash: 'Tiền mặt',
   transfer: 'Chuyển khoản',
   card: 'Thẻ',
-  other: 'Khác',
   momo: 'MoMo',
   zalopay: 'ZaloPay',
+  other: 'Khác',
 }
 
 function formatVND(amount: number): string {
@@ -38,6 +39,7 @@ function formatVND(amount: number): string {
 }
 
 export function CheckoutModal({ target, onClose }: CheckoutModalProps) {
+  const { message } = useAppFeedback()
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash')
   const [note, setNote] = useState('')
   const { mutateAsync, isPending } = useCheckout()

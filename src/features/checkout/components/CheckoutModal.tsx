@@ -13,12 +13,12 @@ import {
   Steps,
   Table,
   Typography,
-  message,
 } from 'antd'
 import { CheckCircleOutlined, CreditCardOutlined, DollarOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { useBookingFolio } from '@/features/bookings/hooks/useBookingFolio'
 import { useCheckoutBooking, useRecordPayment } from '@/features/checkout/hooks/useCheckoutBooking'
+import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
 import type { PaymentMethod } from '@/types/database'
 
 const { Text, Title } = Typography
@@ -42,6 +42,7 @@ type PaymentFormValues = {
 }
 
 export function CheckoutModal({ bookingId, open, onClose }: Props) {
+  const { message } = useAppFeedback()
   const [step, setStep] = useState<Step>('folio')
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash')
   const [form] = Form.useForm<PaymentFormValues>()
@@ -306,6 +307,8 @@ export function CheckoutModal({ bookingId, open, onClose }: Props) {
                   { value: 'cash', label: 'Tiền mặt' },
                   { value: 'transfer', label: 'Chuyển khoản' },
                   { value: 'card', label: 'Thẻ (+4%)' },
+                  { value: 'momo', label: 'MoMo' },
+                  { value: 'zalopay', label: 'ZaloPay' },
                   { value: 'other', label: 'Khác' },
                 ]}
               />

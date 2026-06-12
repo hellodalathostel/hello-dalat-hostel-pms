@@ -157,7 +157,7 @@ export function EditBookingModal({ booking, onClose, onSuccess }: EditBookingMod
           name='room_id'
           render={({ field, fieldState }) => (
             <Form.Item
-              label='Phong'
+              label='Phòng'
               required
               validateStatus={fieldState.error ? 'error' : ''}
               help={fieldState.error?.message}
@@ -216,7 +216,7 @@ export function EditBookingModal({ booking, onClose, onSuccess }: EditBookingMod
           name='price_per_night'
           render={({ field, fieldState }) => (
             <Form.Item
-              label='Gia phong'
+              label='Giá phòng'
               required
               validateStatus={fieldState.error ? 'error' : ''}
               help={fieldState.error?.message}
@@ -245,7 +245,7 @@ export function EditBookingModal({ booking, onClose, onSuccess }: EditBookingMod
           name='guests_count'
           render={({ field, fieldState }) => (
             <Form.Item
-              label='So khach'
+              label='Số khách'
               required
               validateStatus={fieldState.error ? 'error' : ''}
               help={fieldState.error?.message}
@@ -266,7 +266,7 @@ export function EditBookingModal({ booking, onClose, onSuccess }: EditBookingMod
           name='guest_name'
           render={({ field, fieldState }) => (
             <Form.Item
-              label='Ten khach'
+              label='Tên khách'
               validateStatus={fieldState.error ? 'error' : ''}
               help={fieldState.error?.message}
             >
@@ -280,7 +280,7 @@ export function EditBookingModal({ booking, onClose, onSuccess }: EditBookingMod
           name='note'
           render={({ field, fieldState }) => (
             <Form.Item
-              label='Ghi chu'
+              label='Ghi chú'
               validateStatus={fieldState.error ? 'error' : ''}
               help={fieldState.error?.message}
             >

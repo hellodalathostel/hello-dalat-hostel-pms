@@ -19,6 +19,7 @@ import {
 } from '@ant-design/icons'
 import type { UploadFile } from 'antd'
 import { useCheckinImport, type ImportRowResult } from '../hooks/useCheckinImport'
+import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
 
 const { Dragger } = Upload
 const { Text } = Typography
@@ -32,6 +33,7 @@ interface Props {
 type Step = 'upload' | 'preview' | 'result'
 
 export function CheckinImportModal({ open, onClose, onSuccess }: Props) {
+  const { message } = useAppFeedback()
   const [step, setStep] = useState<Step>('upload')
   const [fileList, setFileList] = useState<UploadFile[]>([])
   const [parseError, setParseError] = useState<string | null>(null)
@@ -140,7 +142,9 @@ export function CheckinImportModal({ open, onClose, onSuccess }: Props) {
               icon={<ArrowRightOutlined />}
               loading={processing}
               onClick={() => {
-                void handleImport()
+                handleImport().catch((error: Error) => {
+                  message.error(`Import thất bại: ${error.message}`)
+                })
               }}
             >
               Thực hiện check-in ({rows.length} khách)
