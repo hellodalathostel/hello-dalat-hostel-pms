@@ -43,6 +43,8 @@ type SubmitSuccessResult = {
   success: true
   request_id: string
   has_conflict: boolean
+  deposit: number
+  nights: number
   vietqr: VietQRInfo
 }
 
@@ -146,6 +148,13 @@ export default function BookPage() {
             Để giữ phòng, vui lòng chuyển khoản đặt cọc và ghi đúng nội dung bên dưới. Chúng tôi
             sẽ xác nhận qua điện thoại sau khi nhận thanh toán.
           </Paragraph>
+
+          {result.deposit > 0 && (
+            <Paragraph>
+              <Text strong>Số tiền cọc (1 đêm): </Text>
+              <Text>{result.deposit.toLocaleString('vi-VN')}đ</Text>
+            </Paragraph>
+          )}
 
           <Card style={styles.qrCard}>
             <img src={result.vietqr.url} alt="VietQR thanh toán" style={styles.qrImage} />

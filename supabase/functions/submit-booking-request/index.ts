@@ -120,25 +120,42 @@ serve(async (req) => {
     return json({ error: "Khong the tao yeu cau dat phong" }, 500);
   }
 
-  // Build VietQR URL
-  // addInfo phai ASCII - format: "Dat phong [room_id] [check_in]"
+  // Tinh so dem
+  const nights = Math.round((d_out.getTime() - d_in.getTime()) / (1000 * 60 * 60 * 24));
+
+  // Query gia phong theo check_in (get_suggested_price tra INTEGER)
+  const { data: suggestedPrice, error: priceErr } = await supabase
+    .rpc('get_suggested_price', {
+      p_room_id: room_id!,
+      p_date: check_in!,
+    });
+
+  // Neu khong lay duoc gia → fallback 0 (QR van hien, khach lien he xac nhan)
+  const deposit = (!priceErr && typeof suggestedPrice === 'number' && suggestedPrice > 0)
+    ? suggestedPrice  // coc = 1 dem dau
+    : 0;
+
+  // Build VietQR URL (amount tinh bang dong VND)
   const addInfo = encodeURIComponent(
-    `Dat phong ${room_id} ${check_in!.replace(/-/g, "")}`,
+    `Dat phong ${room_id} ${check_in!.replace(/-/g, '')}`,
   );
   const vietqr_url =
     `https://img.vietqr.io/image/${VIETQR_BANK}-${VIETQR_ACCT}-compact2.png` +
-    `?accountName=${encodeURIComponent(VIETQR_NAME)}&addInfo=${addInfo}`;
+    `?amount=${deposit}` +
+    `&accountName=${encodeURIComponent(VIETQR_NAME)}&addInfo=${addInfo}`;
 
   return json({
     success: true,
     request_id: inserted.id,
-    has_conflict, // frontend co the hien banner "phong co the da kin"
+    has_conflict,
+    deposit,   // thêm để frontend có thể hiển thị số tiền cọc bằng text
+    nights,
     vietqr: {
       url: vietqr_url,
-      bank: "Vietcombank",
+      bank: 'Vietcombank',
       account: VIETQR_ACCT,
       account_name: VIETQR_NAME,
-      note: `Dat phong ${room_id} ${check_in!.replace(/-/g, "")}`,
+      note: `Dat phong ${room_id} ${check_in!.replace(/-/g, '')}`,
     },
   });
 });
