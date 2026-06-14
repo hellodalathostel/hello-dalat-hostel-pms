@@ -1,7 +1,7 @@
 // Hook CRUD booking_discounts — trigger tự recalc grand_total
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/api/supabase'
-import { message } from 'antd'
+import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
 
 interface AddDiscountPayload {
   bookingId: string
@@ -11,6 +11,7 @@ interface AddDiscountPayload {
 
 export function useDiscountActions(bookingId: string, groupId: string) {
   const queryClient = useQueryClient()
+  const { message } = useAppFeedback()
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['booking-folio', bookingId] })
