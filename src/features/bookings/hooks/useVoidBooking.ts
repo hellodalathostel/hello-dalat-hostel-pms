@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { message } from 'antd'
 import { supabase } from '@/api/supabase'
+import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
 import { normalizeError } from '@/shared/utils/normalizeError'
 
 interface VoidBookingParams {
@@ -18,6 +18,7 @@ interface VoidBookingResponse {
 
 export function useVoidBooking() {
   const queryClient = useQueryClient()
+  const { message } = useAppFeedback()
 
   return useMutation({
     mutationKey: ['void-booking'],
