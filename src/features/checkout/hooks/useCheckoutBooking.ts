@@ -55,8 +55,10 @@ export function useRecordPayment() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['group', vars.groupId] }),
         queryClient.invalidateQueries({ queryKey: ['groups'] }),
+        queryClient.invalidateQueries({ queryKey: ['bookings'] }),
         queryClient.invalidateQueries({ queryKey: ['booking-detail'] }),
         queryClient.invalidateQueries({ queryKey: ['dashboard', 'today'] }),
+        queryClient.invalidateQueries({ queryKey: ['room-calendar'] }),
       ])
     },
     onError: (error: Error) => {

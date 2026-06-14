@@ -1,7 +1,7 @@
 // Hook xử lý nhập cọc — dùng record_payment_txn RPC
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/api/supabase'
-import { message } from 'antd'
+import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
 
 type PaymentMethod = 'cash' | 'transfer' | 'card' | 'other' | 'momo' | 'zalopay'
 
@@ -15,6 +15,7 @@ interface DepositPayload {
 
 export function useDepositActions(bookingId: string, groupId: string) {
   const queryClient = useQueryClient()
+  const { message } = useAppFeedback()
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['booking-folio', bookingId] })
