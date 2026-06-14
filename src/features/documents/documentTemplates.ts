@@ -1493,9 +1493,61 @@ export function renderGroupInvoice(data: GroupDocumentData, lang: 'vi' | 'en' = 
         border-top: 1px solid #e0e0e0;
         padding-top: 12px;
       }
+      .qr-section {
+        margin-top: 20px;
+        background: #f7f4ef;
+        border: 0.5px solid #e0d8c8;
+        border-radius: 6px;
+        padding: 16px;
+        display: flex;
+        gap: 18px;
+        align-items: flex-start;
+      }
+      .qr-section img {
+        width: 220px;
+        height: 220px;
+        border: 0.5px solid #d0c8b8;
+        border-radius: 4px;
+        background: #fff;
+        flex-shrink: 0;
+      }
+      .qr-details { flex: 1; }
+      .qr-details .qr-amount {
+        font-size: 22px;
+        font-weight: 700;
+        color: #0a3d1a;
+        margin-bottom: 10px;
+        line-height: 1;
+      }
+      .qr-details .qr-row {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 4px;
+        font-size: 12px;
+      }
+      .qr-details .qr-key { color: #6a5a40; width: 110px; flex-shrink: 0; }
+      .qr-details .qr-val { font-weight: 500; color: #1a1a1a; }
+      .qr-details .qr-ref { font-weight: 700; color: #0a3d1a; }
+      .qr-details .qr-note {
+        font-size: 10.5px;
+        color: #5a4a30;
+        margin-top: 8px;
+        border-top: 0.5px solid #e0d8c8;
+        padding-top: 7px;
+        line-height: 1.5;
+      }
+      .qr-section-label {
+        font-size: 9px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 2px;
+        color: #2d6a4f;
+        margin-bottom: 10px;
+      }
       @media print {
         body { padding: 16px 20px; }
         .no-print { display: none; }
+        .qr-section { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       }
     </style>
   </head>
@@ -1552,6 +1604,42 @@ export function renderGroupInvoice(data: GroupDocumentData, lang: 'vi' | 'en' = 
       </table>
     </div>
 
+
+    ${totalDebt > 0 ? (() => {
+      const lastName = removeDiacritics(payload.guestName).trim().split(/\s+/).pop() ?? '';
+      const qrAddInfo = `TT DOAN ${dayjs(payload.checkIn).format('DDMM')} ${lastName}`;
+      const qrUrl = `https://img.vietqr.io/image/VCB-9969975935-print.png?amount=${totalDebt}&addInfo=${encodeURIComponent(removeDiacritics(qrAddInfo))}&accountName=${encodeURIComponent('NGUYEN THANH HIEU')}`;
+      return `
+      <div>
+        <div class="qr-section-label" style="margin-top:20px">${isEn ? 'Payment' : 'Thanh toán số còn lại'}</div>
+        <div class="qr-section">
+          <img src="${qrUrl}" alt="QR thanh toán" />
+          <div class="qr-details">
+            <div class="qr-amount">${fmt(totalDebt)}</div>
+            <div class="qr-row">
+              <span class="qr-key">${isEn ? 'Bank' : 'Ngân hàng'}</span>
+              <span class="qr-val">Vietcombank (VCB)</span>
+            </div>
+            <div class="qr-row">
+              <span class="qr-key">${isEn ? 'Account No.' : 'Số tài khoản'}</span>
+              <span class="qr-val" style="font-weight:700;letter-spacing:1px">9969 975 935</span>
+            </div>
+            <div class="qr-row">
+              <span class="qr-key">${isEn ? 'Account Name' : 'Chủ TK'}</span>
+              <span class="qr-val">NGUYEN THANH HIEU</span>
+            </div>
+            <div class="qr-row">
+              <span class="qr-key">${isEn ? 'Reference' : 'Nội dung CK'}</span>
+              <span class="qr-val qr-ref">${qrAddInfo}</span>
+            </div>
+            <p class="qr-note">${isEn
+              ? `Scan QR with any Vietnamese banking app. After transferring, please send a screenshot to WhatsApp/Zalo +84 969 975 935.`
+              : `Scan QR bằng app ngân hàng để chuyển khoản. Sau khi chuyển, gửi ảnh xác nhận qua Zalo 0969 975 935.`
+            }</p>
+          </div>
+        </div>
+      </div>`;
+    })() : ''}
 
     <div class="footer">
       <p>${t.thankYou}</p>
