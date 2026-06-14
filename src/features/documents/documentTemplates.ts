@@ -205,8 +205,8 @@ const BASE_STYLE = `
   .tr { text-align:right; }
   .tc { text-align:center; }
   .qr-block { display:flex; gap:18px; padding:16px; background:#f7f4ef; border:0.5px solid #e0d8c8; border-radius:6px; align-items:flex-start; }
-  .qr-img { width:110px; height:110px; background:#fff; border:0.5px solid #d0c8b8; border-radius:4px; display:flex; align-items:center; justify-content:center; flex-shrink:0; overflow:hidden; }
-  .qr-img img { width:110px; height:110px; object-fit:contain; }
+  .qr-img { width:220px; height:220px; background:#fff; border:0.5px solid #d0c8b8; border-radius:4px; display:flex; align-items:center; justify-content:center; flex-shrink:0; overflow:hidden; }
+  .qr-img img { width:220px; height:220px; object-fit:contain; }
   .qr-info { flex:1; }
   .qr-amount { font-family:'Playfair Display',serif; font-size:22px; font-weight:600; color:#0a3d1a; line-height:1; margin-bottom:10px; }
   .qr-row { display:flex; gap:8px; margin-bottom:4px; }
