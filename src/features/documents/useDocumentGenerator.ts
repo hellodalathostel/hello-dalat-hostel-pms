@@ -342,10 +342,12 @@ export async function fetchGroupDocumentData(
   const checkInDates = bookings.map((b) => b.check_in).sort();
   const checkOutDates = bookings.map((b) => b.check_out).sort();
 
+  // Chỉ lấy payments hợp lệ — loại bỏ các khoản đã void
   const { data: payments, error: paymentsError } = await supabase
     .from('payment_history')
     .select('id, amount, method, date, note')
     .eq('group_id', groupId)
+    .eq('is_void', false)
     .order('date', { ascending: true });
 
   if (paymentsError) {
@@ -564,30 +566,62 @@ export function useDocumentGeneratorByGroup(
           result = renderArrivalNotice(docData);
           break;
         case 'group_invoice': {
+          // Fetch đủ tất cả bookings trong group — không chỉ 1 booking
           const groupData = await fetchGroupDocumentData(groupId);
-          const html = renderGroupInvoice(groupData, params.lang ?? 'vi');
+          const lang = params.lang ?? 'vi';
+          const html = renderGroupInvoice(groupData, lang);
           openDocumentPreview(html, DOC_KIND_LABELS['group_invoice']);
           message.success('Đang mở cửa sổ in PDF…');
+          // Log với đúng signature của create_document_log RPC
+          const snapshot = {
+            guestName: groupData.guestName,
+            checkIn: groupData.checkIn,
+            checkOut: groupData.checkOut,
+            totalGrandTotal: groupData.totalGrandTotal,
+            totalPaid: groupData.totalPaid,
+            roomCount: groupData.bookings.length,
+            generatedAt: groupData.generatedAt,
+          };
           await supabase.rpc('create_document_log', {
             p_group_id: groupId,
             p_booking_id: null,
-            p_doc_kind: 'group_invoice',
-            p_lang: params.lang ?? 'vi',
+            p_doc_type: 'group_invoice',
+            p_doc_format: 'pdf',
+            p_content_snapshot: snapshot,
+            p_sent_via: 'print',
+            p_recipient_name: groupData.guestName,
+            p_recipient_phone: groupData.guestPhone || null,
+            p_note: null,
           });
           return null;
         }
 
         case 'group_confirmation': {
           const groupData = await fetchGroupDocumentData(groupId);
-          if (params.lang) groupData.lang = params.lang;
-          const html = renderGroupConfirmation(groupData, params.lang ?? 'vi');
+          const lang = params.lang ?? 'vi';
+          const html = renderGroupConfirmation(groupData, lang);
           openDocumentPreview(html, DOC_KIND_LABELS['group_confirmation']);
           message.success('Đang mở cửa sổ in PDF…');
+          // Log với đúng signature của create_document_log RPC
+          const snapshot = {
+            guestName: groupData.guestName,
+            checkIn: groupData.checkIn,
+            checkOut: groupData.checkOut,
+            totalGrandTotal: groupData.totalGrandTotal,
+            totalPaid: groupData.totalPaid,
+            roomCount: groupData.bookings.length,
+            generatedAt: groupData.generatedAt,
+          };
           await supabase.rpc('create_document_log', {
             p_group_id: groupId,
             p_booking_id: null,
-            p_doc_kind: 'group_confirmation',
-            p_lang: params.lang ?? 'vi',
+            p_doc_type: 'group_confirmation',
+            p_doc_format: 'pdf',
+            p_content_snapshot: snapshot,
+            p_sent_via: 'print',
+            p_recipient_name: groupData.guestName,
+            p_recipient_phone: groupData.guestPhone || null,
+            p_note: null,
           });
           return null;
         }
