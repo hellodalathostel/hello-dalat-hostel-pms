@@ -164,8 +164,13 @@ export function useCreateBooking() {
   return useMutation({
     mutationKey: ['create-group-booking-rpc'],
     mutationFn: createBookingMutationFn,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['room-calendar'] })
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['room-calendar'] }),
+        queryClient.invalidateQueries({ queryKey: ['bookings'] }),
+        queryClient.invalidateQueries({ queryKey: ['groups'] }),
+        queryClient.invalidateQueries({ queryKey: ['dashboard', 'today'] }),
+      ])
     },
     onError: (error) => {
       const normalizedError = normalizeError(error)

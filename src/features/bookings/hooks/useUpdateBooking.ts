@@ -33,6 +33,8 @@ async function invalidateOperationalQueries(queryClient: ReturnType<typeof useQu
     queryClient.invalidateQueries({ queryKey: ['booking-detail'] }),
     queryClient.invalidateQueries({ queryKey: ['room-calendar'] }),
     queryClient.invalidateQueries({ queryKey: ['dashboard', 'today'] }),
+    queryClient.invalidateQueries({ queryKey: ['bookings'] }),
+    queryClient.invalidateQueries({ queryKey: ['groups'] }),
   ])
 }
 
