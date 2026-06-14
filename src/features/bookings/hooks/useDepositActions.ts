@@ -45,23 +45,5 @@ export function useDepositActions(bookingId: string, groupId: string) {
     },
   })
 
-  // Xóa payment_history row trực tiếp (RLS auth_write = ALL)
-  const deleteDeposit = useMutation({
-    mutationFn: async (paymentId: string) => {
-      const { error } = await supabase
-        .from('payment_history')
-        .delete()
-        .eq('id', paymentId)
-      if (error) throw error
-    },
-    onSuccess: () => {
-      message.success('Đã xóa khoản cọc')
-      invalidate()
-    },
-    onError: (err: Error) => {
-      message.error(`Lỗi xóa cọc: ${err.message}`)
-    },
-  })
-
-  return { addDeposit, deleteDeposit }
+  return { addDeposit }
 }
