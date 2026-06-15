@@ -204,121 +204,66 @@ const STATUS_ICON: Record<string, string> = {
   "Cần Làm": "⬜", "Đang Làm": "🟡", "Hoàn Thành": "✅", "Bỏ Qua": "⏭",
 };
 
-// ─── Parse /task command ────────────────────────────────────────────────────
-
-interface ParsedTask {
-  name: string;
-  loai: string;
-  uuTien: string;
-  ngay: string;         // YYYY-MM-DD
-  ghiChu: string;
-  nguoiThucHien: string;
-}
-
-function parseTaskCommand(rawText: string): ParsedTask | { error: string } {
-  // rawText = phần sau "/task " (đã trim)
-  if (!rawText) return { error: "Thiếu nội dung task." };
-
-  let text = rawText;
-  let ghiChu = "";
-  let uuTien = "Bình Thường";
-  let loai = "Khác";
-  let ngay = todayICT();
-  let nguoiThucHien = "Lợi";
-
-  // Tách ghi chú sau "|"
-  const pipeIdx = text.indexOf("|");
-  if (pipeIdx !== -1) {
-    ghiChu = text.slice(pipeIdx + 1).trim();
-    text = text.slice(0, pipeIdx).trim();
-  }
-
-  // Ưu tiên: !khan !cao !thuong !thap
-  const uuTienMap: Record<string, string> = {
-    "!khan": "Khẩn", "!cao": "Cao", "!thuong": "Bình Thường", "!thap": "Thấp",
-  };
-  for (const [key, val] of Object.entries(uuTienMap)) {
-    if (text.toLowerCase().includes(key)) {
-      uuTien = val;
-      text = text.replace(new RegExp(key, "gi"), "").trim();
-    }
-  }
-
-  // Người thực hiện: @hieu @loi @ca_hai
-  if (text.toLowerCase().includes("@hieu")) {
-    nguoiThucHien = "Hiếu";
-    text = text.replace(/@hieu/gi, "").trim();
-  } else if (text.toLowerCase().includes("@ca_hai") || text.toLowerCase().includes("@cahai")) {
-    nguoiThucHien = "Cả Hai";
-    text = text.replace(/@ca_hai/gi, "").replace(/@cahai/gi, "").trim();
-  } else {
-    text = text.replace(/@loi/gi, "").trim();
-  }
-
-  // Ngày: "ngay mai", "dd/mm", "dd/mm/yyyy"
-  const ngayMaiMatch = text.match(/\bngay\s*mai\b/i);
-  if (ngayMaiMatch) {
-    const tomorrow = new Date(Date.now() + 7 * 3600000 + 86400000);
-    ngay = tomorrow.toISOString().split("T")[0];
-    text = text.replace(ngayMaiMatch[0], "").trim();
-  } else {
-    const dateMatch = text.match(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{4}))?\b/);
-    if (dateMatch) {
-      const parsed = parseDate(dateMatch[0]);
-      if (parsed) {
-        ngay = parsed;
-        text = text.replace(dateMatch[0], "").trim();
-      }
-    }
-  }
-
-  // Loại: tự động detect từ keyword
-  const loaiKeywords: Array<[string, string]> = [
-    ["don phong", "Dọn Phòng"], ["dọn phòng", "Dọn Phòng"],
-    ["check.in", "Check-in/out"], ["check.out", "Check-in/out"],
-    ["bao tri", "Bảo Trì"], ["bảo trì", "Bảo Trì"], ["sua", "Bảo Trì"], ["sửa", "Bảo Trì"],
-    ["mua", "Mua Sắm"],
-    ["admin", "Admin"], ["bao cao", "Admin"], ["báo cáo", "Admin"],
-  ];
-  for (const [kw, type] of loaiKeywords) {
-    if (text.toLowerCase().includes(kw)) { loai = type; break; }
-  }
-
-  // Dọn text còn lại thành tên task
-  const name = text.replace(/\s+/g, " ").trim();
-  if (!name) return { error: "Tên task không được để trống." };
-
-  return { name, loai, uuTien, ngay, ghiChu, nguoiThucHien };
+function mapPriority(input: string): string {
+  const s = input.trim().toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if (["khan", "k"].includes(s)) return "Khẩn";
+  if (["cao", "c"].includes(s)) return "Cao";
+  if (["thap", "t"].includes(s)) return "Thấp";
+  return "Bình Thường";
 }
 
 // ─── Handler functions ──────────────────────────────────────────────────────
 
 async function handleTask(chatId: number, rawText: string) {
-  const parsed = parseTaskCommand(rawText);
-  if ("error" in parsed) {
-    await sendMessage(chatId, `❌ ${parsed.error}\n\nVí dụ: <code>/task mua giấy vệ sinh !cao ngay mai | mua ở Bách Hóa Xanh</code>`);
+  const parts = rawText.split("|").map((p: string) => p.trim());
+  const taskName = parts[0];
+  const ghiChu = parts[1] ?? "";
+  const uuTien = parts[2] ? mapPriority(parts[2]) : "Bình Thường";
+
+  if (!taskName) {
+    await sendMessage(chatId, "❌ Vui lòng nhập tên task.\n\nVí dụ:\n<code>/task Dọn phòng 101 | Thay khăn tắm | cao</code>");
     return;
   }
 
-  const pageId = await createNotionTask(parsed);
-  if (!pageId) {
+  const notionProperties: Record<string, unknown> = {
+    "Tên Task": { title: [{ text: { content: taskName } }] },
+    "Trạng Thái": { select: { name: "Cần Làm" } },
+    "Người Thực Hiện": { select: { name: "Lợi" } },
+    "Ưu Tiên": { select: { name: uuTien } },
+  };
+
+  if (ghiChu) {
+    notionProperties["Ghi Chú"] = { rich_text: [{ text: { content: ghiChu } }] };
+  }
+
+  const res = await fetch("https://api.notion.com/v1/pages", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${NOTION_TOKEN}`,
+      "Notion-Version": "2022-06-28",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      parent: { database_id: NOTION_TASK_DB_ID },
+      properties: notionProperties,
+    }),
+  });
+
+  if (!res.ok) {
+    console.error("handleTask failed:", await res.text());
     await sendMessage(chatId, "❌ Tạo task thất bại. Kiểm tra kết nối Notion.");
     return;
   }
 
-  const displayDate = new Date(parsed.ngay + "T12:00:00+07:00").toLocaleDateString("vi-VN", {
-    day: "2-digit", month: "2-digit",
-  });
-  const pIcon = PRIORITY_ICON[parsed.uuTien] ?? "🔵";
-  const tIcon = TYPE_ICON[parsed.loai] ?? "📌";
+  const priorityEmoji: Record<string, string> = {
+    "Khẩn": "🔴", "Cao": "🟠", "Bình Thường": "🔵", "Thấp": "⚪",
+  };
+  const emoji = priorityEmoji[uuTien] ?? "🔵";
 
   await sendMessage(
     chatId,
-    `✅ <b>Đã tạo task!</b>\n\n` +
-    `${pIcon} ${tIcon} <b>${parsed.name}</b>\n` +
-    `📅 ${displayDate} · 👤 ${parsed.nguoiThucHien} · 🏷 ${parsed.loai}\n` +
-    (parsed.ghiChu ? `📝 ${parsed.ghiChu}\n` : "") +
-    `\n<i>Hiện lên Notion ngay.</i>`,
+    `✅ Đã tạo task!\n📌 ${taskName}${ghiChu ? `\n📝 ${ghiChu}` : ""}\n${emoji} Ưu tiên: ${uuTien}`,
   );
 }
 
@@ -513,13 +458,13 @@ Deno.serve(async (req) => {
       `<b>📅 Lịch & phòng</b>\n` +
       `• <code>/availability dd/mm</code> — phòng trống\n\n` +
       `<b>📋 Tasks</b>\n` +
-      `• <code>/task &lt;nội dung&gt;</code> — tạo task mới\n` +
+      `• <code>/task &lt;tên&gt; [| &lt;ghi chú&gt;] [| &lt;ưu tiên&gt;]</code> — tạo task mới cho Lợi\n` +
+      `  Ưu tiên: khan | cao | bt | thap (mặc định: bt)\n` +
+      `  VD: <code>/task Dọn 101 | Thay khăn | cao</code>\n` +
       `• <code>/tasks</code> — xem tasks hôm nay\n` +
       `• <code>/done &lt;số&gt;</code> — đánh dấu hoàn thành\n` +
       `• <code>/skip &lt;số&gt;</code> — bỏ qua task\n` +
-      `• <code>/extend &lt;số&gt; &lt;dd/mm&gt;</code> — dời ngày\n\n` +
-      `<b>Ví dụ tạo task:</b>\n` +
-      `<code>/task mua giấy vệ sinh !cao ngay mai | mua ở Bách Hóa Xanh</code>`,
+      `• <code>/extend &lt;số&gt; &lt;dd/mm&gt;</code> — dời ngày`,
     );
     return new Response("OK", { status: 200 });
   }
