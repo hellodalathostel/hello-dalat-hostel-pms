@@ -191,6 +191,85 @@ async function saveSession(
     .upsert(rows, { onConflict: "session_date,task_index" });
 }
 
+// ─── Supabase query helpers ────────────────────────────────────────────────
+
+// Query lịch 1 ngày: check-in, check-out, đang ở, phòng trống
+async function queryDaySchedule(
+  supabase: ReturnType<typeof import("https://esm.sh/@supabase/supabase-js@2").createClient>,
+  date: string, // YYYY-MM-DD
+): Promise<{
+  checkIns: Array<{ room_id: string; guest_name: string }>;
+  checkOuts: Array<{ room_id: string; guest_name: string }>;
+  staying: Array<{ room_id: string; guest_name: string }>;
+  freeRooms: Array<{ id: string; name: string }>;
+}> {
+  const [roomsRes, bookingsRes, otaRes] = await Promise.all([
+    supabase.from("rooms").select("id, name").order("name"),
+    supabase
+      .from("bookings")
+      .select("room_id, guest_name, check_in, check_out, status")
+      .eq("is_deleted", false)
+      .neq("status", "cancelled")
+      .or(`check_in.eq.${date},check_out.eq.${date},and(check_in.lte.${date},check_out.gt.${date})`),
+    supabase
+      .from("ota_calendar_feed")
+      .select("room_id")
+      .lte("check_in", date)
+      .gt("check_out", date)
+      .eq("is_cancelled", false),
+  ]);
+
+  const rooms: Array<{ id: string; name: string }> = roomsRes.data ?? [];
+  const bookings: Array<{ room_id: string; guest_name: string; check_in: string; check_out: string }> =
+    bookingsRes.data ?? [];
+  const otaRoomIds = new Set((otaRes.data ?? []).map((o: { room_id: string }) => o.room_id));
+
+  const checkIns = bookings.filter((b) => b.check_in === date);
+  const checkOuts = bookings.filter((b) => b.check_out === date);
+  const staying = bookings.filter((b) => b.check_in < date && b.check_out > date);
+
+  const occupiedIds = new Set([
+    ...bookings
+      .filter((b) => b.check_in <= date && b.check_out > date)
+      .map((b) => b.room_id),
+    ...otaRoomIds,
+  ]);
+  const freeRooms = rooms.filter((r) => !occupiedIds.has(r.id));
+
+  return { checkIns, checkOuts, staying, freeRooms };
+}
+
+// Query phòng trống theo khoảng ngày (từ checkIn đến checkOut)
+async function queryRangeAvailability(
+  supabase: ReturnType<typeof import("https://esm.sh/@supabase/supabase-js@2").createClient>,
+  startDate: string, // YYYY-MM-DD
+  endDate: string,   // YYYY-MM-DD (exclusive — ngày check-out)
+): Promise<Array<{ id: string; name: string }>> {
+  const [roomsRes, bookingsRes, otaRes] = await Promise.all([
+    supabase.from("rooms").select("id, name").order("name"),
+    supabase
+      .from("bookings")
+      .select("room_id")
+      .eq("is_deleted", false)
+      .neq("status", "cancelled")
+      .lt("check_in", endDate)
+      .gt("check_out", startDate),
+    supabase
+      .from("ota_calendar_feed")
+      .select("room_id")
+      .eq("is_cancelled", false)
+      .lt("check_in", endDate)
+      .gt("check_out", startDate),
+  ]);
+
+  const rooms: Array<{ id: string; name: string }> = roomsRes.data ?? [];
+  const occupiedIds = new Set([
+    ...(bookingsRes.data ?? []).map((b: { room_id: string }) => b.room_id),
+    ...(otaRes.data ?? []).map((o: { room_id: string }) => o.room_id),
+  ]);
+  return rooms.filter((r) => !occupiedIds.has(r.id));
+}
+
 // ─── Icons ─────────────────────────────────────────────────────────────────
 
 const PRIORITY_ICON: Record<string, string> = {
@@ -427,6 +506,123 @@ async function handleTasks(
   await sendMessage(chatId, lines.join("\n"));
 }
 
+// Handler /today và /next
+async function handleDayView(
+  chatId: number,
+  date: string, // YYYY-MM-DD
+  label: string, // "Hôm nay" hoặc "Ngày mai"
+  supabase: ReturnType<typeof import("https://esm.sh/@supabase/supabase-js@2").createClient>,
+) {
+  const { checkIns, checkOuts, staying, freeRooms } = await queryDaySchedule(supabase, date);
+
+  const displayDate = new Date(date + "T12:00:00+07:00").toLocaleDateString("vi-VN", {
+    weekday: "long", day: "2-digit", month: "2-digit",
+  });
+
+  const lines: string[] = [
+    `📅 <b>${label} — ${displayDate}</b>`,
+    "",
+  ];
+
+  if (checkIns.length > 0) {
+    lines.push(`🟢 <b>Check-in (${checkIns.length})</b>`);
+    checkIns.forEach((b) => lines.push(`  • ${b.guest_name || "(chưa có tên)"}`));
+    lines.push("");
+  }
+
+  if (checkOuts.length > 0) {
+    lines.push(`🔴 <b>Check-out (${checkOuts.length})</b>`);
+    checkOuts.forEach((b) => lines.push(`  • ${b.guest_name || "(chưa có tên)"}`));
+    lines.push("");
+  }
+
+  if (staying.length > 0) {
+    lines.push(`🏠 <b>Đang ở (${staying.length})</b>`);
+    staying.forEach((b) => lines.push(`  • ${b.guest_name || "(chưa có tên)"}`));
+    lines.push("");
+  }
+
+  lines.push(`✅ <b>Phòng trống: ${freeRooms.length}/${TOTAL_ROOMS}</b>`);
+  if (freeRooms.length > 0) {
+    freeRooms.forEach((r) => lines.push(`  • ${r.name ?? r.id}`));
+  } else {
+    lines.push("  <i>Hết phòng</i>");
+  }
+
+  if (checkIns.length === 0 && checkOuts.length === 0 && staying.length === 0) {
+    lines.push("");
+    lines.push("<i>Không có khách nào.</i>");
+  }
+
+  await sendMessage(chatId, lines.join("\n"));
+}
+
+// Handler /a — 1 ngày hoặc khoảng ngày
+async function handleAvailability(
+  chatId: number,
+  args: string[], // mảng các token sau "/a"
+  supabase: ReturnType<typeof import("https://esm.sh/@supabase/supabase-js@2").createClient>,
+) {
+  if (args.length === 0) {
+    await sendMessage(
+      chatId,
+      "❌ Thiếu ngày.\n\nVí dụ:\n<code>/a 20/06</code> — 1 ngày\n<code>/a 20/06 25/06</code> — khoảng ngày",
+    );
+    return;
+  }
+
+  const startRaw = args[0];
+  const endRaw = args[1] ?? null;
+
+  const startDate = parseDate(startRaw);
+  if (!startDate) {
+    await sendMessage(chatId, `❌ Ngày không hợp lệ: <code>${startRaw}</code>\nDùng định dạng <code>dd/mm</code>`);
+    return;
+  }
+
+  // /a dd/mm — xem 1 ngày (giống /today nhưng chọn ngày)
+  if (!endRaw) {
+    await handleDayView(chatId, startDate, "Lịch ngày", supabase);
+    return;
+  }
+
+  // /a dd/mm dd/mm — xem phòng trống khoảng ngày
+  const endDate = parseDate(endRaw);
+  if (!endDate) {
+    await sendMessage(chatId, `❌ Ngày kết thúc không hợp lệ: <code>${endRaw}</code>\nDùng định dạng <code>dd/mm</code>`);
+    return;
+  }
+
+  if (endDate <= startDate) {
+    await sendMessage(chatId, "❌ Ngày kết thúc phải sau ngày bắt đầu.");
+    return;
+  }
+
+  const nights = Math.round(
+    (new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000,
+  );
+
+  const freeRooms = await queryRangeAvailability(supabase, startDate, endDate);
+
+  const startDisplay = new Date(startDate + "T12:00:00+07:00").toLocaleDateString("vi-VN", {
+    day: "2-digit", month: "2-digit",
+  });
+  const endDisplay = new Date(endDate + "T12:00:00+07:00").toLocaleDateString("vi-VN", {
+    day: "2-digit", month: "2-digit",
+  });
+
+  const lines: string[] = [
+    `📅 <b>Phòng trống ${startDisplay} → ${endDisplay} (${nights} đêm)</b>`,
+    "",
+    `✅ Còn trống: <b>${freeRooms.length}/${TOTAL_ROOMS} phòng</b>`,
+    ...(freeRooms.length > 0
+      ? freeRooms.map((r) => `  • ${r.name ?? r.id}`)
+      : ["  <i>Hết phòng trong khoảng này</i>"]),
+  ];
+
+  await sendMessage(chatId, lines.join("\n"));
+}
+
 // ─── Main handler ───────────────────────────────────────────────────────────
 
 Deno.serve(async (req) => {
@@ -456,7 +652,10 @@ Deno.serve(async (req) => {
       chatId,
       `🏨 <b>Hello Dalat Bot</b>\n\n` +
       `<b>📅 Lịch & phòng</b>\n` +
-      `• <code>/availability dd/mm</code> — phòng trống\n\n` +
+      `• <code>/today</code> — lịch hôm nay\n` +
+      `• <code>/next</code> — lịch ngày mai\n` +
+      `• <code>/a dd/mm</code> — lịch ngày cụ thể\n` +
+      `• <code>/a dd/mm dd/mm</code> — phòng trống khoảng ngày\n\n` +
       `<b>📋 Tasks</b>\n` +
       `• <code>/task &lt;tên&gt; [| &lt;ghi chú&gt;] [| &lt;ưu tiên&gt;]</code> — tạo task mới cho Lợi\n` +
       `  Ưu tiên: khan | cao | bt | thap (mặc định: bt)\n` +
@@ -510,67 +709,24 @@ Deno.serve(async (req) => {
     return new Response("OK", { status: 200 });
   }
 
-  // ── /availability ──
-  if (text.startsWith("/availability")) {
-    const parts = text.split(/\s+/);
-    const rawDate = parts[1];
+  // ── /today ──
+  if (text === "/today") {
+    await handleDayView(chatId, todayICT(), "Hôm nay", supabase);
+    return new Response("OK", { status: 200 });
+  }
 
-    if (!rawDate) {
-      await sendMessage(chatId, "❌ Thiếu ngày. Ví dụ: <code>/availability 3/6</code>");
-      return new Response("OK", { status: 200 });
-    }
+  // ── /next ──
+  if (text === "/next") {
+    const tomorrow = new Date(Date.now() + 7 * 3600000 + 86400000)
+      .toISOString().split("T")[0];
+    await handleDayView(chatId, tomorrow, "Ngày mai", supabase);
+    return new Response("OK", { status: 200 });
+  }
 
-    const targetDate = parseDate(rawDate);
-    if (!targetDate) {
-      await sendMessage(
-        chatId,
-        `❌ Ngày không hợp lệ: <code>${rawDate}</code>\nDùng định dạng: <code>dd/mm</code>`,
-      );
-      return new Response("OK", { status: 200 });
-    }
-
-    const [bookingsRes, otaRes, roomsRes] = await Promise.all([
-      supabase
-        .from("bookings")
-        .select("room_id")
-        .lte("check_in", targetDate)
-        .gt("check_out", targetDate)
-        .eq("is_deleted", false)
-        .neq("status", "cancelled"),
-      supabase
-        .from("ota_calendar_feed")
-        .select("room_id")
-        .lte("check_in", targetDate)
-        .gt("check_out", targetDate)
-        .eq("is_cancelled", false),
-      supabase.from("rooms").select("id, name").order("name"),
-    ]);
-
-    if (bookingsRes.error || otaRes.error || roomsRes.error) {
-      await sendMessage(chatId, "❌ Lỗi truy vấn dữ liệu phòng.");
-      return new Response("OK", { status: 200 });
-    }
-
-    const occupiedIds = new Set([
-      ...(bookingsRes.data ?? []).map((b: { room_id: string }) => b.room_id),
-      ...(otaRes.data ?? []).map((o: { room_id: string }) => o.room_id),
-    ]);
-    const freeRooms = (roomsRes.data ?? []).filter((r: { id: string }) => !occupiedIds.has(r.id));
-    const displayDate = new Date(targetDate + "T12:00:00+07:00").toLocaleDateString("vi-VN", {
-      day: "2-digit", month: "2-digit", year: "numeric",
-    });
-
-    const lines = [
-      `📅 <b>Phòng trống — ${displayDate}</b>`,
-      "",
-      `✅ Còn trống: <b>${freeRooms.length}/${TOTAL_ROOMS} phòng</b>`,
-      ...(freeRooms.length > 0
-        ? freeRooms.map((r: { name: string | null; id: string }) => `  • ${r.name ?? r.id}`)
-        : ["  <i>Hết phòng</i>"]),
-      ...(occupiedIds.size > 0 ? ["", `🔒 Đã có booking: ${occupiedIds.size} phòng`] : []),
-    ];
-
-    await sendMessage(chatId, lines.join("\n"));
+  // ── /a [dd/mm] [dd/mm] ──
+  if (text.startsWith("/a")) {
+    const args = text.slice(2).trim().split(/\s+/).filter(Boolean);
+    await handleAvailability(chatId, args, supabase);
     return new Response("OK", { status: 200 });
   }
 
