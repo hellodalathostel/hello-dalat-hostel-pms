@@ -544,7 +544,7 @@ async function handleDayView(
 
   lines.push(`✅ <b>Phòng trống: ${freeRooms.length}/${TOTAL_ROOMS}</b>`);
   if (freeRooms.length > 0) {
-    freeRooms.forEach((r) => lines.push(`  • ${r.name ?? r.id}`));
+    freeRooms.forEach((r) => lines.push(`  • ${r.id} - ${r.name}`));
   } else {
     lines.push("  <i>Hết phòng</i>");
   }
@@ -616,7 +616,7 @@ async function handleAvailability(
     "",
     `✅ Còn trống: <b>${freeRooms.length}/${TOTAL_ROOMS} phòng</b>`,
     ...(freeRooms.length > 0
-      ? freeRooms.map((r) => `  • ${r.name ?? r.id}`)
+      ? freeRooms.map((r) => `  • ${r.id} - ${r.name}`)
       : ["  <i>Hết phòng trong khoảng này</i>"]),
   ];
 
