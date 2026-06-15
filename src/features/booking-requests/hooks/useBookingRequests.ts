@@ -126,9 +126,11 @@ export function useConvertRequest() {
         throw availabilityError
       }
 
-      const isAvailable = typeof availabilityData === 'boolean'
-        ? availabilityData
-        : Boolean((availabilityData as CheckRoomAvailabilityResult | null)?.available)
+      // check_room_availability trả về composite type → Supabase JS trả array
+      const availResult = Array.isArray(availabilityData)
+        ? (availabilityData[0] as CheckRoomAvailabilityResult | undefined)
+        : (availabilityData as CheckRoomAvailabilityResult | null)
+      const isAvailable = availResult?.available === true
 
       if (!isAvailable) {
         throw new Error('CONFLICT')
