@@ -18,6 +18,7 @@ import {
   GuestsPage,
   HousekeepingPage,
   BookingRequestsPage,
+  S1aPage,
 } from '@/app/routes'
 
 export const appRouter = createBrowserRouter([
@@ -36,6 +37,7 @@ export const appRouter = createBrowserRouter([
       { path: 'finance', element: <Suspense fallback={null}><FinancePage /></Suspense> },
       { path: 'orevenue', element: <Suspense fallback={null}><RevenueDashboardPage /></Suspense> },
       { path: 'dk14-report', element: <Suspense fallback={null}><DK14ReportPage /></Suspense> },
+      { path: 's1a', element: <Suspense fallback={null}><S1aPage /></Suspense> },
       { path: 'checkin-import', element: <Suspense fallback={null}><CheckinImportPage /></Suspense> },
       { path: 'bookings', element: <Suspense fallback={null}><BookingsPage /></Suspense> },
       { path: 'booking-requests', element: <Suspense fallback={null}><BookingRequestsPage /></Suspense> },

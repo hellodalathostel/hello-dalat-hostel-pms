@@ -1,4 +1,5 @@
 import {
+  AuditOutlined,
   CalendarOutlined,
   CheckSquareOutlined,
   DollarOutlined,
@@ -44,6 +45,7 @@ function createMenuItems(pendingCount: number): ItemType[] {
     { key: '/finance', icon: <DollarOutlined />, label: 'Tài chính' },
     { key: '/revenue', icon: <RiseOutlined />, label: 'Doanh thu' },
     { key: '/dk14-report', icon: <FileExcelOutlined />, label: 'Báo cáo ĐK14' },
+    { key: '/s1a', icon: <AuditOutlined />, label: 'Sổ S1a — Doanh thu HKD' },
     { key: '/checkin-import', icon: <UserAddOutlined />, label: 'Import Check-in (Excel)' },
     { key: '/settings/ical', icon: <LinkOutlined />, label: 'iCal Feed' },
   ]
@@ -61,6 +63,7 @@ function resolveSelectedKeys(pathname: string): string[] {
     ['/revenue', '/revenue'],
     ['/orevenue', '/revenue'],
     ['/dk14-report', '/dk14-report'],
+    ['/s1a', '/s1a'],
     ['/checkin-import', '/checkin-import'],
     ['/settings', '/settings/ical'],
     ['/dashboard', '/'],

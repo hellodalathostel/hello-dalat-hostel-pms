@@ -12,3 +12,4 @@ export const BookingsPage = lazy(() => import('@/features/bookings/pages/Booking
 export const GuestsPage = lazy(() => import('@/pages/GuestsPage'))
 export const HousekeepingPage = lazy(() => import('@/features/housekeeping/pages/HousekeepingPage'))
 export const BookingRequestsPage = lazy(() => import('@/features/booking-requests/pages/BookingRequestsPage'))
+export const S1aPage = lazy(() => import('@/features/compliance/pages/S1aPage'))
