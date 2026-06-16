@@ -10,10 +10,11 @@ import {
   Typography,
   Divider,
   Spin,
+  Tag,
+  Alert,
 } from 'antd'
-import { useQuery } from '@tanstack/react-query'
-import { supabase } from '@/api/supabase'
-import { useAddService, SERVICE_CATALOG_KEY, type ServiceCatalogItem } from '../hooks/useAddService'
+import { useAddService, useServiceCatalog } from '../hooks/useAddService'
+import type { ServiceCatalogItem } from '../hooks/useAddService'
 
 const { Text } = Typography
 
@@ -25,6 +26,13 @@ interface Props {
 }
 
 type Mode = 'catalog' | 'custom'
+
+// Label hiển thị loại dịch vụ
+function ServiceTypeTag({ type }: { type: ServiceCatalogItem['service_type'] }) {
+  return type === 'own'
+    ? <Tag color="blue" style={{ marginLeft: 4 }}>HKD</Tag>
+    : <Tag color="orange" style={{ marginLeft: 4 }}>Đối tác</Tag>
+}
 
 export function AddServiceModal({ open, bookingId, onClose, onSuccess }: Props) {
   const [mode, setMode] = useState<Mode>('catalog')
@@ -38,33 +46,17 @@ export function AddServiceModal({ open, bookingId, onClose, onSuccess }: Props) 
   const [customPrice, setCustomPrice] = useState<number | null>(null)
   const [customQty, setCustomQty] = useState<number>(1)
 
-  // Fetch catalog
-  const { data: catalog = [], isLoading: catalogLoading } = useQuery<ServiceCatalogItem[]>({
-    queryKey: SERVICE_CATALOG_KEY,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('services')
-        .select('id, name, price')
-        .eq('is_deleted', false)
-        .order('name')
-
-      if (error) {
-        throw error
-      }
-
-      return data ?? []
-    },
-    staleTime: 5 * 60 * 1000,
-  })
+  // Fetch catalog (include service_type)
+  const { data: catalog = [], isLoading: catalogLoading } = useServiceCatalog()
 
   const { mutate: addService, isPending } = useAddService(bookingId)
 
-  // Giá hiển thị preview catalog
-  const selectedItem = catalog.find((serviceItem) => serviceItem.id === selectedId)
+  const selectedItem = catalog.find((item) => item.id === selectedId)
   const catalogTotal = selectedItem ? selectedItem.price * catalogQty : null
-  const customTotal = customPrice !== null && customPrice > 0 && customQty > 0
-    ? customPrice * customQty
-    : null
+  const customTotal =
+    customPrice !== null && customPrice > 0 && customQty > 0
+      ? customPrice * customQty
+      : null
 
   // Reset form khi đóng
   const handleClose = () => {
@@ -79,42 +71,28 @@ export function AddServiceModal({ open, bookingId, onClose, onSuccess }: Props) 
 
   const handleSubmit = () => {
     if (mode === 'catalog') {
-      if (!selectedId || catalogQty <= 0) {
-        return
-      }
-
+      if (!selectedId || catalogQty <= 0) return
       addService(
         { serviceId: selectedId, qty: catalogQty },
-        {
-          onSuccess: () => {
-            onSuccess?.()
-            handleClose()
-          },
-        },
+        { onSuccess: () => { onSuccess?.(); handleClose() } },
       )
-
       return
     }
 
-    if (!customName.trim() || customPrice === null || customPrice <= 0 || customQty <= 0) {
-      return
-    }
-
+    if (!customName.trim() || customPrice === null || customPrice <= 0 || customQty <= 0) return
     addService(
       { customName: customName.trim(), customPrice, qty: customQty },
-      {
-        onSuccess: () => {
-          onSuccess?.()
-          handleClose()
-        },
-      },
+      { onSuccess: () => { onSuccess?.(); handleClose() } },
     )
   }
 
-  // Validate để disable nút OK
-  const isValid = mode === 'catalog'
-    ? Boolean(selectedId) && catalogQty > 0
-    : Boolean(customName.trim()) && customPrice !== null && customPrice > 0 && customQty > 0
+  const isValid =
+    mode === 'catalog'
+      ? Boolean(selectedId) && catalogQty > 0
+      : Boolean(customName.trim()) && customPrice !== null && customPrice > 0 && customQty > 0
+
+  // Cảnh báo khi chọn dịch vụ đối tác
+  const isPartner = selectedItem?.service_type === 'partner'
 
   return (
     <Modal
@@ -123,9 +101,7 @@ export function AddServiceModal({ open, bookingId, onClose, onSuccess }: Props) 
       onCancel={handleClose}
       footer={(
         <Space>
-          <Button onClick={handleClose} disabled={isPending}>
-            Huỷ
-          </Button>
+          <Button onClick={handleClose} disabled={isPending}>Huỷ</Button>
           <Button
             type="primary"
             onClick={handleSubmit}
@@ -142,7 +118,7 @@ export function AddServiceModal({ open, bookingId, onClose, onSuccess }: Props) 
       {/* Chọn mode */}
       <Radio.Group
         value={mode}
-        onChange={(event) => setMode(event.target.value)}
+        onChange={(e) => setMode(e.target.value)}
         style={{ marginBottom: 20 }}
         optionType="button"
         buttonStyle="solid"
@@ -164,12 +140,36 @@ export function AddServiceModal({ open, bookingId, onClose, onSuccess }: Props) 
                 style={{ width: '100%' }}
                 value={selectedId}
                 onChange={(value) => setSelectedId(value)}
-                options={catalog.map((serviceItem) => ({
-                  value: serviceItem.id,
-                  label: `${serviceItem.name} — ${serviceItem.price.toLocaleString('vi-VN')}đ`,
+                optionLabelProp="label"
+                options={catalog.map((item) => ({
+                  value: item.id,
+                  // label dùng cho hiển thị khi đã chọn (gọn hơn)
+                  label: item.name,
+                  // render trong dropdown: tên + giá + badge
+                  item,
                 }))}
+                optionRender={(option) => {
+                  const item = option.data.item as ServiceCatalogItem
+                  return (
+                    <Space>
+                      <span>{item.name}</span>
+                      <Text type="secondary">{item.price.toLocaleString('vi-VN')}đ</Text>
+                      <ServiceTypeTag type={item.service_type} />
+                    </Space>
+                  )
+                }}
               />
             </div>
+
+            {/* Cảnh báo dịch vụ đối tác */}
+            {isPartner && (
+              <Alert
+                type="warning"
+                showIcon
+                message="Dịch vụ đối tác — không tính vào doanh thu HKD (Sổ S1a)"
+                style={{ padding: '6px 12px' }}
+              />
+            )}
 
             <div>
               <Text type="secondary" style={{ display: 'block', marginBottom: 6 }}>
@@ -201,9 +201,15 @@ export function AddServiceModal({ open, bookingId, onClose, onSuccess }: Props) 
         </Spin>
       )}
 
-      {/* Mode: custom */}
+      {/* Mode: custom — mặc định own, không cần field */}
       {mode === 'custom' && (
         <Space direction="vertical" style={{ width: '100%' }} size={16}>
+          <Alert
+            type="info"
+            showIcon
+            message="Dịch vụ tuỳ chỉnh được tính là doanh thu HKD (Sổ S1a)"
+            style={{ padding: '6px 12px' }}
+          />
           <div>
             <Text type="secondary" style={{ display: 'block', marginBottom: 6 }}>
               Tên dịch vụ
@@ -211,7 +217,7 @@ export function AddServiceModal({ open, bookingId, onClose, onSuccess }: Props) 
             <Input
               placeholder="VD: Thuê chăn thêm"
               value={customName}
-              onChange={(event) => setCustomName(event.target.value)}
+              onChange={(e) => setCustomName(e.target.value)}
               maxLength={100}
             />
           </div>
