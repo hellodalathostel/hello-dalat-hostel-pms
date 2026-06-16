@@ -33,6 +33,19 @@ function todayICT(): string {
   return new Date(Date.now() + 7 * 3600000).toISOString().split("T")[0];
 }
 
+// Format ngày dd/mm/yyyy cho hiển thị tiếng Việt
+function formatDateVN(dateStr: string): string {
+  const [y, m, d] = dateStr.split("-");
+  return `${d}/${m}/${y}`;
+}
+
+// Format tiền VND gọn: 1500000 → "1.5tr", 500000 → "500k"
+function formatVND(amount: number): string {
+  if (amount >= 1_000_000) return `${(amount / 1_000_000).toFixed(1)}tr`;
+  if (amount >= 1_000) return `${(amount / 1_000).toFixed(0)}k`;
+  return `${amount}đ`;
+}
+
 // ─── Notion helpers ────────────────────────────────────────────────────────
 
 // Lấy page_id từ session mapping (task_index hôm nay)
@@ -623,6 +636,139 @@ async function handleAvailability(
   await sendMessage(chatId, lines.join("\n"));
 }
 
+// ─── /checkin — Danh sách check-in hôm nay ───────────────────────────────
+async function handleCheckinList(
+  chatId: number,
+  supabase: ReturnType<typeof import("https://esm.sh/@supabase/supabase-js@2").createClient>,
+) {
+  const today = todayICT();
+
+  const { data, error } = await supabase
+    .from("bookings")
+    .select("room_id, guest_name, check_in, check_out, booking_status, nights, grand_total, groups(paid)")
+    .eq("check_in", today)
+    .in("booking_status", ["booked", "checked-in"])
+    .eq("is_deleted", false)
+    .order("room_id");
+
+  if (error) {
+    await sendMessage(chatId, "❌ Lỗi truy vấn. Thử lại nhé.");
+    return;
+  }
+
+  if (!data || data.length === 0) {
+    await sendMessage(chatId, `🛬 <b>Check-in hôm nay (${formatDateVN(today)})</b>\n\n✅ Không có khách check-in.`);
+    return;
+  }
+
+  const lines: string[] = [`🛬 <b>Check-in hôm nay (${formatDateVN(today)})</b>\n`];
+
+  for (const b of data) {
+    const paid = (b.groups as { paid?: number } | null)?.paid ?? 0;
+    const debt = (b.grand_total ?? 0) - paid;
+    const statusIcon = b.booking_status === "checked-in" ? "✅" : "⏳";
+    const debtStr = debt > 0 ? ` | 💰 Còn nợ: ${formatVND(debt)}` : " | ✅ Đã trả đủ";
+
+    lines.push(
+      `${statusIcon} <b>Phòng ${b.room_id}</b> — ${b.guest_name}\n` +
+      `   📆 ${formatDateVN(b.check_in)} → ${formatDateVN(b.check_out)} (${b.nights} đêm)${debtStr}`,
+    );
+  }
+
+  await sendMessage(chatId, lines.join("\n"));
+}
+
+// ─── /checkout — Danh sách check-out hôm nay ─────────────────────────────
+async function handleCheckoutList(
+  chatId: number,
+  supabase: ReturnType<typeof import("https://esm.sh/@supabase/supabase-js@2").createClient>,
+) {
+  const today = todayICT();
+
+  const { data, error } = await supabase
+    .from("bookings")
+    .select("room_id, guest_name, check_in, check_out, booking_status, nights, grand_total, groups(paid)")
+    .eq("check_out", today)
+    .eq("booking_status", "checked-in")
+    .eq("is_deleted", false)
+    .order("room_id");
+
+  if (error) {
+    await sendMessage(chatId, "❌ Lỗi truy vấn. Thử lại nhé.");
+    return;
+  }
+
+  if (!data || data.length === 0) {
+    await sendMessage(chatId, `🛫 <b>Check-out hôm nay (${formatDateVN(today)})</b>\n\n✅ Không có khách check-out.`);
+    return;
+  }
+
+  const lines: string[] = [`🛫 <b>Check-out hôm nay (${formatDateVN(today)})</b>\n`];
+
+  for (const b of data) {
+    const paid = (b.groups as { paid?: number } | null)?.paid ?? 0;
+    const debt = (b.grand_total ?? 0) - paid;
+    const debtStr = debt > 0
+      ? ` | ⚠️ Còn nợ: ${formatVND(debt)}`
+      : " | ✅ Đã trả đủ";
+
+    lines.push(
+      `🚪 <b>Phòng ${b.room_id}</b> — ${b.guest_name}\n` +
+      `   📆 ${formatDateVN(b.check_in)} → ${formatDateVN(b.check_out)} (${b.nights} đêm)${debtStr}`,
+    );
+  }
+
+  await sendMessage(chatId, lines.join("\n"));
+}
+
+// ─── /stay — Tất cả khách đang ở hiện tại ────────────────────────────────
+async function handleStay(
+  chatId: number,
+  supabase: ReturnType<typeof import("https://esm.sh/@supabase/supabase-js@2").createClient>,
+) {
+  const today = todayICT();
+
+  const { data, error } = await supabase
+    .from("bookings")
+    .select("room_id, guest_name, check_in, check_out, nights, grand_total, groups(paid)")
+    .eq("booking_status", "checked-in")
+    .eq("is_deleted", false)
+    .order("room_id");
+
+  if (error) {
+    await sendMessage(chatId, "❌ Lỗi truy vấn. Thử lại nhé.");
+    return;
+  }
+
+  if (!data || data.length === 0) {
+    await sendMessage(chatId, "🏨 <b>Khách đang ở</b>\n\n✅ Hiện không có khách nào.");
+    return;
+  }
+
+  const lines: string[] = [`🏨 <b>Khách đang ở (${formatDateVN(today)})</b>\n`];
+
+  for (const b of data) {
+    const paid = (b.groups as { paid?: number } | null)?.paid ?? 0;
+    const debt = (b.grand_total ?? 0) - paid;
+    const debtStr = debt > 0 ? ` | ⚠️ Nợ ${formatVND(debt)}` : "";
+
+    const msLeft = new Date(b.check_out).getTime() - new Date(today).getTime();
+    const nightsLeft = Math.round(msLeft / 86400000);
+    const nightsLeftStr = nightsLeft === 0
+      ? " <b>→ Ra hôm nay!</b>"
+      : nightsLeft === 1
+        ? " (còn 1 đêm)"
+        : ` (còn ${nightsLeft} đêm)`;
+
+    lines.push(
+      `🛏 <b>Phòng ${b.room_id}</b> — ${b.guest_name}\n` +
+      `   📆 Ra ngày ${formatDateVN(b.check_out)}${nightsLeftStr}${debtStr}`,
+    );
+  }
+
+  await sendMessage(chatId, lines.join("\n"));
+}
+
 // ─── Main handler ───────────────────────────────────────────────────────────
 
 Deno.serve(async (req) => {
@@ -655,7 +801,10 @@ Deno.serve(async (req) => {
       `• <code>/today</code> — lịch hôm nay\n` +
       `• <code>/next</code> — lịch ngày mai\n` +
       `• <code>/a dd/mm</code> — lịch ngày cụ thể\n` +
-      `• <code>/a dd/mm dd/mm</code> — phòng trống khoảng ngày\n\n` +
+      `• <code>/a dd/mm dd/mm</code> — phòng trống khoảng ngày\n` +
+      `• <code>/checkin</code> — check-in hôm nay\n` +
+      `• <code>/checkout</code> — check-out hôm nay\n` +
+      `• <code>/stay</code> — khách đang ở hiện tại\n\n` +
       `<b>📋 Tasks</b>\n` +
       `• <code>/task &lt;tên&gt; [| &lt;ghi chú&gt;] [| &lt;ưu tiên&gt;]</code> — tạo task mới cho Lợi\n` +
       `  Ưu tiên: khan | cao | bt | thap (mặc định: bt)\n` +
@@ -712,6 +861,24 @@ Deno.serve(async (req) => {
   // ── /today ──
   if (text === "/today") {
     await handleDayView(chatId, todayICT(), "Hôm nay", supabase);
+    return new Response("OK", { status: 200 });
+  }
+
+  // ── /checkin ──
+  if (text === "/checkin") {
+    await handleCheckinList(chatId, supabase);
+    return new Response("OK", { status: 200 });
+  }
+
+  // ── /checkout ──
+  if (text === "/checkout") {
+    await handleCheckoutList(chatId, supabase);
+    return new Response("OK", { status: 200 });
+  }
+
+  // ── /stay ──
+  if (text === "/stay") {
+    await handleStay(chatId, supabase);
     return new Response("OK", { status: 200 });
   }
 
