@@ -645,9 +645,9 @@ async function handleCheckinList(
 
   const { data, error } = await supabase
     .from("bookings")
-    .select("room_id, guest_name, check_in, check_out, booking_status, nights, grand_total, groups(paid)")
+    .select("room_id, guest_name, check_in, check_out, status, nights, grand_total, groups(paid)")
     .eq("check_in", today)
-    .in("booking_status", ["booked", "checked-in"])
+    .in("status", ["booked", "checked-in"])
     .eq("is_deleted", false)
     .order("room_id");
 
@@ -666,7 +666,7 @@ async function handleCheckinList(
   for (const b of data) {
     const paid = (b.groups as { paid?: number } | null)?.paid ?? 0;
     const debt = (b.grand_total ?? 0) - paid;
-    const statusIcon = b.booking_status === "checked-in" ? "✅" : "⏳";
+    const statusIcon = b.status === "checked-in" ? "✅" : "⏳";
     const debtStr = debt > 0 ? ` | 💰 Còn nợ: ${formatVND(debt)}` : " | ✅ Đã trả đủ";
 
     lines.push(
@@ -687,9 +687,9 @@ async function handleCheckoutList(
 
   const { data, error } = await supabase
     .from("bookings")
-    .select("room_id, guest_name, check_in, check_out, booking_status, nights, grand_total, groups(paid)")
+    .select("room_id, guest_name, check_in, check_out, status, nights, grand_total, groups(paid)")
     .eq("check_out", today)
-    .eq("booking_status", "checked-in")
+    .eq("status", "checked-in")
     .eq("is_deleted", false)
     .order("room_id");
 
@@ -731,7 +731,7 @@ async function handleStay(
   const { data, error } = await supabase
     .from("bookings")
     .select("room_id, guest_name, check_in, check_out, nights, grand_total, groups(paid)")
-    .eq("booking_status", "checked-in")
+    .eq("status", "checked-in")
     .eq("is_deleted", false)
     .order("room_id");
 
