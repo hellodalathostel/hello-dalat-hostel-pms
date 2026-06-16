@@ -1,14 +1,59 @@
-import "@supabase/functions-js/edge-runtime.d.ts";
+// FILE: supabase/functions/telegram-webhook/index.ts
 
-const TELEGRAM_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
-const ALLOWED_CHAT_ID = Deno.env.get("TELEGRAM_CHAT_ID")!;
-const NOTION_TOKEN = Deno.env.get("NOTION_TOKEN")!;
-const NOTION_TASK_DB_ID = "2b3cd2c9-6b3a-4f39-963e-de01d5ff28dc";
-const TOTAL_ROOMS = 8;
+// Deploy: supabase functions deploy telegram-webhook --no-verify-jwt
 
-// ─── Helpers ───────────────────────────────────────────────────────────────
+// v30 — thêm /rooms, /clean, /cleaned, /issue. /stay /checkin /checkout đã có v29, giữ nguyên.
 
-async function sendMessage(chatId: number, text: string) {
+import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+// ─── Config ────────────────────────────────────────────────────────────────
+
+const TELEGRAM_TOKEN   = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
+const ALLOWED_CHAT_ID  = Deno.env.get("ALLOWED_CHAT_ID")!;
+const SUPABASE_URL     = Deno.env.get("SUPABASE_URL")!;
+const SUPABASE_SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE);
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+function todayVN(): string {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Ho_Chi_Minh" });
+}
+
+function formatDateVN(dateStr: string): string {
+  const d = new Date(dateStr + "T00:00:00+07:00");
+  return d.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", timeZone: "Asia/Ho_Chi_Minh" });
+}
+
+function formatVND(amount: number): string {
+  return new Intl.NumberFormat("vi-VN").format(amount) + "đ";
+}
+
+// Icon trạng thái housekeeping
+function hkIcon(status: string): string {
+  const icons: Record<string, string> = {
+    clean:        "✅",
+    dirty:        "🧹",
+    cleaning:     "🔄",
+    out_of_order: "🚫",
+  };
+  return icons[status] ?? "❓";
+}
+
+// Icon trạng thái booking
+function bookingIcon(status: string): string {
+  const icons: Record<string, string> = {
+    "checked-in":  "🏠",
+    "booked":      "📋",
+    "checked-out": "🚪",
+    "cancelled":   "❌",
+  };
+  return icons[status] ?? "–";
+}
+
+async function sendMessage(chatId: string, text: string): Promise<void> {
   await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -16,888 +61,590 @@ async function sendMessage(chatId: number, text: string) {
   });
 }
 
-function parseDate(input: string): string | null {
-  if (/^\d{4}-\d{2}-\d{2}$/.test(input)) return input;
-  const match = input.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{4}))?$/);
-  if (!match) return null;
-  const day = match[1].padStart(2, "0");
-  const month = match[2].padStart(2, "0");
-  const year = match[3] ?? new Date().getFullYear().toString();
-  const d = parseInt(day), m = parseInt(month), y = parseInt(year);
-  if (m < 1 || m > 12 || d < 1 || d > 31 || y < 2020) return null;
-  return `${year}-${month}-${day}`;
-}
+// ─── Command Handlers ────────────────────────────────────────────────────────
 
-// Ngày hôm nay theo ICT
-function todayICT(): string {
-  return new Date(Date.now() + 7 * 3600000).toISOString().split("T")[0];
-}
-
-// Format ngày dd/mm/yyyy cho hiển thị tiếng Việt
-function formatDateVN(dateStr: string): string {
-  const [y, m, d] = dateStr.split("-");
-  return `${d}/${m}/${y}`;
-}
-
-// Format tiền VND gọn: 1500000 → "1.5tr", 500000 → "500k"
-function formatVND(amount: number): string {
-  if (amount >= 1_000_000) return `${(amount / 1_000_000).toFixed(1)}tr`;
-  if (amount >= 1_000) return `${(amount / 1_000).toFixed(0)}k`;
-  return `${amount}đ`;
-}
-
-// ─── Notion helpers ────────────────────────────────────────────────────────
-
-// Lấy page_id từ session mapping (task_index hôm nay)
-async function getTaskFromSession(
-  supabase: ReturnType<typeof import("https://esm.sh/@supabase/supabase-js@2").createClient>,
-  taskIndex: number,
-): Promise<{ notion_page_id: string; task_name: string } | null> {
+/** /today — check-in + check-out hôm nay */
+async function handleToday(chatId: string) {
+  const today = todayVN();
   const { data, error } = await supabase
-    .from("telegram_task_sessions")
-    .select("notion_page_id, task_name")
-    .eq("session_date", todayICT())
-    .eq("task_index", taskIndex)
-    .single();
-  if (error || !data) return null;
-  return data;
+    .from("bookings")
+    .select("room_id, guest_name, check_in, check_out, status, groups(paid, grand_total)")
+    .or(`check_in.eq.${today},check_out.eq.${today}`)
+    .neq("status", "cancelled")
+    .order("check_in");
+
+  if (error) return sendMessage(chatId, `❌ Lỗi: ${error.message}`);
+  if (!data?.length) return sendMessage(chatId, `📅 Hôm nay (${formatDateVN(today)}) không có check-in/out.`);
+
+  const checkins  = data.filter((b) => b.check_in  === today);
+  const checkouts = data.filter((b) => b.check_out === today);
+
+  let msg = `📅 <b>Hôm nay ${formatDateVN(today)}</b>\n`;
+  if (checkins.length) {
+    msg += `\n🟢 <b>Check-in (${checkins.length})</b>\n`;
+    for (const b of checkins) {
+      const paid = (b.groups as any)?.paid ?? 0;
+      const total = (b.groups as any)?.grand_total ?? 0;
+      const debt = total - paid;
+      msg += `  P${b.room_id} — ${b.guest_name} → out ${formatDateVN(b.check_out)}`;
+      if (debt > 0) msg += ` | Còn: ${formatVND(debt)}`;
+      msg += "\n";
+    }
+  }
+  if (checkouts.length) {
+    msg += `\n🔴 <b>Check-out (${checkouts.length})</b>\n`;
+    for (const b of checkouts) {
+      const paid = (b.groups as any)?.paid ?? 0;
+      const total = (b.groups as any)?.grand_total ?? 0;
+      const debt = total - paid;
+      msg += `  P${b.room_id} — ${b.guest_name}`;
+      if (debt > 0) msg += ` | ⚠️ Còn nợ: ${formatVND(debt)}`;
+      msg += "\n";
+    }
+  }
+  return sendMessage(chatId, msg.trim());
 }
 
-// Cập nhật Trạng Thái Notion
-async function updateNotionStatus(pageId: string, status: string, completedAt?: string) {
-  const properties: Record<string, unknown> = {
-    "Trạng Thái": { select: { name: status } },
-  };
-  if (completedAt) {
-    properties["Hoàn Thành Lúc"] = { date: { start: completedAt } };
-  }
-  const res = await fetch(`https://api.notion.com/v1/pages/${pageId}`, {
-    method: "PATCH",
-    headers: {
-      Authorization: `Bearer ${NOTION_TOKEN}`,
-      "Notion-Version": "2022-06-28",
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ properties }),
-  });
-  return res.ok;
-}
-
-// Dời ngày thực hiện Notion
-async function updateNotionDate(pageId: string, newDate: string) {
-  const res = await fetch(`https://api.notion.com/v1/pages/${pageId}`, {
-    method: "PATCH",
-    headers: {
-      Authorization: `Bearer ${NOTION_TOKEN}`,
-      "Notion-Version": "2022-06-28",
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      properties: {
-        "Ngày Thực Hiện": { date: { start: newDate } },
-      },
-    }),
-  });
-  return res.ok;
-}
-
-// Tạo task mới trên Notion
-async function createNotionTask(params: {
-  name: string;
-  loai: string;
-  uuTien: string;
-  ngay: string;
-  ghiChu: string;
-  nguoiThucHien: string;
-}): Promise<string | null> {
-  const properties: Record<string, unknown> = {
-    "Tên Task": { title: [{ text: { content: params.name } }] },
-    "Loại": { select: { name: params.loai } },
-    "Ưu Tiên": { select: { name: params.uuTien } },
-    "Ngày Thực Hiện": { date: { start: params.ngay } },
-    "Trạng Thái": { select: { name: "Cần Làm" } },
-    "Người Thực Hiện": { select: { name: params.nguoiThucHien } },
-  };
-  if (params.ghiChu) {
-    properties["Ghi Chú"] = {
-      rich_text: [{ text: { content: params.ghiChu } }],
-    };
-  }
-
-  const res = await fetch("https://api.notion.com/v1/pages", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${NOTION_TOKEN}`,
-      "Notion-Version": "2022-06-28",
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      parent: { database_id: NOTION_TASK_DB_ID },
-      properties,
-    }),
-  });
-
-  if (!res.ok) {
-    console.error("createNotionTask failed:", await res.text());
-    return null;
-  }
-  const data = await res.json();
-  return data.id as string;
-}
-
-// Query tasks hôm nay (cho /tasks)
-async function queryTodayTasks(): Promise<
-  Array<{ id: string; name: string; loai: string; uu_tien: string; trang_thai: string; ghi_chu: string }>
-> {
-  const res = await fetch(
-    `https://api.notion.com/v1/databases/${NOTION_TASK_DB_ID}/query`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${NOTION_TOKEN}`,
-        "Notion-Version": "2022-06-28",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        filter: {
-          and: [
-            { property: "Ngày Thực Hiện", date: { equals: todayICT() } },
-            { property: "Trạng Thái", select: { does_not_equal: "Bỏ Qua" } },
-          ],
-        },
-        sorts: [{ property: "Ưu Tiên", direction: "ascending" }],
-      }),
-    },
-  );
-
-  if (!res.ok) return [];
-  const data = await res.json();
-  return (data.results ?? []).map((page: Record<string, unknown>) => {
-    const props = page.properties as Record<string, unknown>;
-    const titleArr = (props["Tên Task"] as { title: Array<{ plain_text: string }> })?.title ?? [];
-    return {
-      id: page.id as string,
-      name: titleArr.map((t) => t.plain_text).join("") || "(Không tên)",
-      loai: (props["Loại"] as { select?: { name: string } })?.select?.name ?? "",
-      uu_tien: (props["Ưu Tiên"] as { select?: { name: string } })?.select?.name ?? "Bình Thường",
-      trang_thai: (props["Trạng Thái"] as { select?: { name: string } })?.select?.name ?? "Cần Làm",
-      ghi_chu: (props["Ghi Chú"] as { rich_text: Array<{ plain_text: string }> })?.rich_text
-        ?.map((t: { plain_text: string }) => t.plain_text).join("") ?? "",
-    };
-  });
-}
-
-// Lưu session mapping
-async function saveSession(
-  supabase: ReturnType<typeof import("https://esm.sh/@supabase/supabase-js@2").createClient>,
-  tasks: Array<{ id: string; name: string }>,
-) {
-  if (tasks.length === 0) return;
-  const rows = tasks.map((t, i) => ({
-    session_date: todayICT(),
-    task_index: i + 1,
-    notion_page_id: t.id,
-    task_name: t.name,
-  }));
-  await supabase
-    .from("telegram_task_sessions")
-    .upsert(rows, { onConflict: "session_date,task_index" });
-}
-
-// ─── Supabase query helpers ────────────────────────────────────────────────
-
-// Query lịch 1 ngày: check-in, check-out, đang ở, phòng trống
-async function queryDaySchedule(
-  supabase: ReturnType<typeof import("https://esm.sh/@supabase/supabase-js@2").createClient>,
-  date: string, // YYYY-MM-DD
-): Promise<{
-  checkIns: Array<{ room_id: string; guest_name: string }>;
-  checkOuts: Array<{ room_id: string; guest_name: string }>;
-  staying: Array<{ room_id: string; guest_name: string }>;
-  freeRooms: Array<{ id: string; name: string }>;
-}> {
-  const [roomsRes, bookingsRes, otaRes] = await Promise.all([
-    supabase.from("rooms").select("id, name").order("name"),
-    supabase
-      .from("bookings")
-      .select("room_id, guest_name, check_in, check_out, status")
-      .eq("is_deleted", false)
-      .neq("status", "cancelled")
-      .or(`check_in.eq.${date},check_out.eq.${date},and(check_in.lte.${date},check_out.gt.${date})`),
-    supabase
-      .from("ota_calendar_feed")
-      .select("room_id")
-      .lte("check_in", date)
-      .gt("check_out", date)
-      .eq("is_cancelled", false),
-  ]);
-
-  const rooms: Array<{ id: string; name: string }> = roomsRes.data ?? [];
-  const bookings: Array<{ room_id: string; guest_name: string; check_in: string; check_out: string }> =
-    bookingsRes.data ?? [];
-  const otaRoomIds = new Set((otaRes.data ?? []).map((o: { room_id: string }) => o.room_id));
-
-  const checkIns = bookings.filter((b) => b.check_in === date);
-  const checkOuts = bookings.filter((b) => b.check_out === date);
-  const staying = bookings.filter((b) => b.check_in < date && b.check_out > date);
-
-  const occupiedIds = new Set([
-    ...bookings
-      .filter((b) => b.check_in <= date && b.check_out > date)
-      .map((b) => b.room_id),
-    ...otaRoomIds,
-  ]);
-  const freeRooms = rooms.filter((r) => !occupiedIds.has(r.id));
-
-  return { checkIns, checkOuts, staying, freeRooms };
-}
-
-// Query phòng trống theo khoảng ngày (từ checkIn đến checkOut)
-async function queryRangeAvailability(
-  supabase: ReturnType<typeof import("https://esm.sh/@supabase/supabase-js@2").createClient>,
-  startDate: string, // YYYY-MM-DD
-  endDate: string,   // YYYY-MM-DD (exclusive — ngày check-out)
-): Promise<Array<{ id: string; name: string }>> {
-  const [roomsRes, bookingsRes, otaRes] = await Promise.all([
-    supabase.from("rooms").select("id, name").order("name"),
-    supabase
-      .from("bookings")
-      .select("room_id")
-      .eq("is_deleted", false)
-      .neq("status", "cancelled")
-      .lt("check_in", endDate)
-      .gt("check_out", startDate),
-    supabase
-      .from("ota_calendar_feed")
-      .select("room_id")
-      .eq("is_cancelled", false)
-      .lt("check_in", endDate)
-      .gt("check_out", startDate),
-  ]);
-
-  const rooms: Array<{ id: string; name: string }> = roomsRes.data ?? [];
-  const occupiedIds = new Set([
-    ...(bookingsRes.data ?? []).map((b: { room_id: string }) => b.room_id),
-    ...(otaRes.data ?? []).map((o: { room_id: string }) => o.room_id),
-  ]);
-  return rooms.filter((r) => !occupiedIds.has(r.id));
-}
-
-// ─── Icons ─────────────────────────────────────────────────────────────────
-
-const PRIORITY_ICON: Record<string, string> = {
-  "Khẩn": "🔴", "Cao": "🟠", "Bình Thường": "🔵", "Thấp": "⚪",
-};
-const TYPE_ICON: Record<string, string> = {
-  "Dọn Phòng": "🧹", "Check-in/out": "🔑", "Bảo Trì": "🔧",
-  "Mua Sắm": "🛒", "Admin": "📋", "Khác": "📌",
-};
-const STATUS_ICON: Record<string, string> = {
-  "Cần Làm": "⬜", "Đang Làm": "🟡", "Hoàn Thành": "✅", "Bỏ Qua": "⏭",
-};
-
-function mapPriority(input: string): string {
-  const s = input.trim().toLowerCase()
-    .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  if (["khan", "k"].includes(s)) return "Khẩn";
-  if (["cao", "c"].includes(s)) return "Cao";
-  if (["thap", "t"].includes(s)) return "Thấp";
-  return "Bình Thường";
-}
-
-// ─── Handler functions ──────────────────────────────────────────────────────
-
-async function handleTask(chatId: number, rawText: string) {
-  const parts = rawText.split("|").map((p: string) => p.trim());
-  const taskName = parts[0];
-  const ghiChu = parts[1] ?? "";
-  const uuTien = parts[2] ? mapPriority(parts[2]) : "Bình Thường";
-
-  if (!taskName) {
-    await sendMessage(chatId, "❌ Vui lòng nhập tên task.\n\nVí dụ:\n<code>/task Dọn phòng 101 | Thay khăn tắm | cao</code>");
-    return;
-  }
-
-  const notionProperties: Record<string, unknown> = {
-    "Tên Task": { title: [{ text: { content: taskName } }] },
-    "Trạng Thái": { select: { name: "Cần Làm" } },
-    "Người Thực Hiện": { select: { name: "Lợi" } },
-    "Ưu Tiên": { select: { name: uuTien } },
-  };
-
-  if (ghiChu) {
-    notionProperties["Ghi Chú"] = { rich_text: [{ text: { content: ghiChu } }] };
-  }
-
-  const res = await fetch("https://api.notion.com/v1/pages", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${NOTION_TOKEN}`,
-      "Notion-Version": "2022-06-28",
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      parent: { database_id: NOTION_TASK_DB_ID },
-      properties: notionProperties,
-    }),
-  });
-
-  if (!res.ok) {
-    console.error("handleTask failed:", await res.text());
-    await sendMessage(chatId, "❌ Tạo task thất bại. Kiểm tra kết nối Notion.");
-    return;
-  }
-
-  const priorityEmoji: Record<string, string> = {
-    "Khẩn": "🔴", "Cao": "🟠", "Bình Thường": "🔵", "Thấp": "⚪",
-  };
-  const emoji = priorityEmoji[uuTien] ?? "🔵";
-
-  await sendMessage(
-    chatId,
-    `✅ Đã tạo task!\n📌 ${taskName}${ghiChu ? `\n📝 ${ghiChu}` : ""}\n${emoji} Ưu tiên: ${uuTien}`,
-  );
-}
-
-async function handleDone(
-  chatId: number,
-  indexStr: string,
-  supabase: ReturnType<typeof import("https://esm.sh/@supabase/supabase-js@2").createClient>,
-) {
-  const idx = parseInt(indexStr);
-  if (isNaN(idx) || idx < 1) {
-    await sendMessage(chatId, `❌ Số task không hợp lệ.\nVí dụ: <code>/done 2</code>`);
-    return;
-  }
-
-  const session = await getTaskFromSession(supabase, idx);
-  if (!session) {
-    await sendMessage(
-      chatId,
-      `❌ Không tìm thấy task số <b>${idx}</b> hôm nay.\n` +
-      `Dùng <code>/tasks</code> để xem danh sách mới nhất.`,
-    );
-    return;
-  }
-
-  // Thời điểm hoàn thành (ICT)
-  const now = new Date(Date.now() + 7 * 3600000);
-  const completedAt = now.toISOString().replace("Z", "+07:00").slice(0, 19) + "+07:00";
-
-  const ok = await updateNotionStatus(session.notion_page_id, "Hoàn Thành", now.toISOString().split("T")[0]);
-  if (!ok) {
-    await sendMessage(chatId, "❌ Cập nhật Notion thất bại. Thử lại nhé.");
-    return;
-  }
-
-  await sendMessage(
-    chatId,
-    `✅ <b>Hoàn thành!</b>\n\n` +
-    `☑️ Task ${idx}: <b>${session.task_name}</b>\n` +
-    `🕐 Lúc ${now.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}`,
-  );
-}
-
-async function handleSkip(
-  chatId: number,
-  indexStr: string,
-  supabase: ReturnType<typeof import("https://esm.sh/@supabase/supabase-js@2").createClient>,
-) {
-  const idx = parseInt(indexStr);
-  if (isNaN(idx) || idx < 1) {
-    await sendMessage(chatId, `❌ Số task không hợp lệ.\nVí dụ: <code>/skip 3</code>`);
-    return;
-  }
-
-  const session = await getTaskFromSession(supabase, idx);
-  if (!session) {
-    await sendMessage(
-      chatId,
-      `❌ Không tìm thấy task số <b>${idx}</b> hôm nay.\n` +
-      `Dùng <code>/tasks</code> để xem danh sách mới nhất.`,
-    );
-    return;
-  }
-
-  const ok = await updateNotionStatus(session.notion_page_id, "Bỏ Qua");
-  if (!ok) {
-    await sendMessage(chatId, "❌ Cập nhật Notion thất bại. Thử lại nhé.");
-    return;
-  }
-
-  await sendMessage(
-    chatId,
-    `⏭ <b>Đã bỏ qua.</b>\n\nTask ${idx}: <i>${session.task_name}</i>`,
-  );
-}
-
-async function handleExtend(
-  chatId: number,
-  parts: string[],
-  supabase: ReturnType<typeof import("https://esm.sh/@supabase/supabase-js@2").createClient>,
-) {
-  // /extend <số> <ngày>
-  const idxStr = parts[0];
-  const dateRaw = parts[1];
-
-  if (!idxStr || !dateRaw) {
-    await sendMessage(chatId, `❌ Thiếu tham số.\nVí dụ: <code>/extend 2 18/06</code>`);
-    return;
-  }
-
-  const idx = parseInt(idxStr);
-  if (isNaN(idx) || idx < 1) {
-    await sendMessage(chatId, `❌ Số task không hợp lệ.`);
-    return;
-  }
-
-  const newDate = parseDate(dateRaw);
-  if (!newDate) {
-    await sendMessage(chatId, `❌ Ngày không hợp lệ: <code>${dateRaw}</code>\nDùng định dạng <code>dd/mm</code>`);
-    return;
-  }
-
-  const session = await getTaskFromSession(supabase, idx);
-  if (!session) {
-    await sendMessage(
-      chatId,
-      `❌ Không tìm thấy task số <b>${idx}</b> hôm nay.\n` +
-      `Dùng <code>/tasks</code> để xem danh sách mới nhất.`,
-    );
-    return;
-  }
-
-  const ok = await updateNotionDate(session.notion_page_id, newDate);
-  if (!ok) {
-    await sendMessage(chatId, "❌ Cập nhật Notion thất bại. Thử lại nhé.");
-    return;
-  }
-
-  const displayDate = new Date(newDate + "T12:00:00+07:00").toLocaleDateString("vi-VN", {
-    day: "2-digit", month: "2-digit",
-  });
-
-  await sendMessage(
-    chatId,
-    `📅 <b>Đã dời ngày.</b>\n\nTask ${idx}: <b>${session.task_name}</b>\n→ Chuyển sang <b>${displayDate}</b>`,
-  );
-}
-
-async function handleTasks(
-  chatId: number,
-  supabase: ReturnType<typeof import("https://esm.sh/@supabase/supabase-js@2").createClient>,
-) {
-  const tasks = await queryTodayTasks();
-
-  if (tasks.length === 0) {
-    await sendMessage(chatId, "✅ <b>Không có task nào hôm nay.</b>");
-    return;
-  }
-
-  // Lưu lại session mapping mới nhất (refresh)
-  await saveSession(supabase, tasks);
-
-  const now = new Date(Date.now() + 7 * 3600000);
-  const dateStr = now.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" });
-
-  const lines: string[] = [
-    `📋 <b>Tasks hôm nay (${dateStr})</b>`,
-    "",
-  ];
-
-  tasks.forEach((t, i) => {
-    const pIcon = PRIORITY_ICON[t.uu_tien] ?? "🔵";
-    const tIcon = TYPE_ICON[t.loai] ?? "📌";
-    const sIcon = STATUS_ICON[t.trang_thai] ?? "⬜";
-    lines.push(`${sIcon} ${pIcon} <b>${i + 1}.</b> ${tIcon} ${t.name}`);
-    if (t.ghi_chu) lines.push(`   <i>${t.ghi_chu}</i>`);
-  });
-
-  lines.push("");
-  lines.push(`<code>/done N</code> · <code>/skip N</code> · <code>/extend N dd/mm</code>`);
-
-  await sendMessage(chatId, lines.join("\n"));
-}
-
-// Handler /today và /next
-async function handleDayView(
-  chatId: number,
-  date: string, // YYYY-MM-DD
-  label: string, // "Hôm nay" hoặc "Ngày mai"
-  supabase: ReturnType<typeof import("https://esm.sh/@supabase/supabase-js@2").createClient>,
-) {
-  const { checkIns, checkOuts, staying, freeRooms } = await queryDaySchedule(supabase, date);
-
-  const displayDate = new Date(date + "T12:00:00+07:00").toLocaleDateString("vi-VN", {
-    weekday: "long", day: "2-digit", month: "2-digit",
-  });
-
-  const lines: string[] = [
-    `📅 <b>${label} — ${displayDate}</b>`,
-    "",
-  ];
-
-  if (checkIns.length > 0) {
-    lines.push(`🟢 <b>Check-in (${checkIns.length})</b>`);
-    checkIns.forEach((b) => lines.push(`  • ${b.guest_name || "(chưa có tên)"}`));
-    lines.push("");
-  }
-
-  if (checkOuts.length > 0) {
-    lines.push(`🔴 <b>Check-out (${checkOuts.length})</b>`);
-    checkOuts.forEach((b) => lines.push(`  • ${b.guest_name || "(chưa có tên)"}`));
-    lines.push("");
-  }
-
-  if (staying.length > 0) {
-    lines.push(`🏠 <b>Đang ở (${staying.length})</b>`);
-    staying.forEach((b) => lines.push(`  • ${b.guest_name || "(chưa có tên)"}`));
-    lines.push("");
-  }
-
-  lines.push(`✅ <b>Phòng trống: ${freeRooms.length}/${TOTAL_ROOMS}</b>`);
-  if (freeRooms.length > 0) {
-    freeRooms.forEach((r) => lines.push(`  • ${r.id} - ${r.name}`));
-  } else {
-    lines.push("  <i>Hết phòng</i>");
-  }
-
-  if (checkIns.length === 0 && checkOuts.length === 0 && staying.length === 0) {
-    lines.push("");
-    lines.push("<i>Không có khách nào.</i>");
-  }
-
-  await sendMessage(chatId, lines.join("\n"));
-}
-
-// Handler /a — 1 ngày hoặc khoảng ngày
-async function handleAvailability(
-  chatId: number,
-  args: string[], // mảng các token sau "/a"
-  supabase: ReturnType<typeof import("https://esm.sh/@supabase/supabase-js@2").createClient>,
-) {
-  if (args.length === 0) {
-    await sendMessage(
-      chatId,
-      "❌ Thiếu ngày.\n\nVí dụ:\n<code>/a 20/06</code> — 1 ngày\n<code>/a 20/06 25/06</code> — khoảng ngày",
-    );
-    return;
-  }
-
-  const startRaw = args[0];
-  const endRaw = args[1] ?? null;
-
-  const startDate = parseDate(startRaw);
-  if (!startDate) {
-    await sendMessage(chatId, `❌ Ngày không hợp lệ: <code>${startRaw}</code>\nDùng định dạng <code>dd/mm</code>`);
-    return;
-  }
-
-  // /a dd/mm — xem 1 ngày (giống /today nhưng chọn ngày)
-  if (!endRaw) {
-    await handleDayView(chatId, startDate, "Lịch ngày", supabase);
-    return;
-  }
-
-  // /a dd/mm dd/mm — xem phòng trống khoảng ngày
-  const endDate = parseDate(endRaw);
-  if (!endDate) {
-    await sendMessage(chatId, `❌ Ngày kết thúc không hợp lệ: <code>${endRaw}</code>\nDùng định dạng <code>dd/mm</code>`);
-    return;
-  }
-
-  if (endDate <= startDate) {
-    await sendMessage(chatId, "❌ Ngày kết thúc phải sau ngày bắt đầu.");
-    return;
-  }
-
-  const nights = Math.round(
-    (new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000,
-  );
-
-  const freeRooms = await queryRangeAvailability(supabase, startDate, endDate);
-
-  const startDisplay = new Date(startDate + "T12:00:00+07:00").toLocaleDateString("vi-VN", {
-    day: "2-digit", month: "2-digit",
-  });
-  const endDisplay = new Date(endDate + "T12:00:00+07:00").toLocaleDateString("vi-VN", {
-    day: "2-digit", month: "2-digit",
-  });
-
-  const lines: string[] = [
-    `📅 <b>Phòng trống ${startDisplay} → ${endDisplay} (${nights} đêm)</b>`,
-    "",
-    `✅ Còn trống: <b>${freeRooms.length}/${TOTAL_ROOMS} phòng</b>`,
-    ...(freeRooms.length > 0
-      ? freeRooms.map((r) => `  • ${r.id} - ${r.name}`)
-      : ["  <i>Hết phòng trong khoảng này</i>"]),
-  ];
-
-  await sendMessage(chatId, lines.join("\n"));
-}
-
-// ─── /checkin — Danh sách check-in hôm nay ───────────────────────────────
-async function handleCheckinList(
-  chatId: number,
-  supabase: ReturnType<typeof import("https://esm.sh/@supabase/supabase-js@2").createClient>,
-) {
-  const today = todayICT();
+/** /next — check-in 3 ngày tới */
+async function handleNext(chatId: string) {
+  const today = todayVN();
+  const d3 = new Date(today + "T00:00:00+07:00");
+  d3.setDate(d3.getDate() + 3);
+  const end = d3.toLocaleDateString("en-CA", { timeZone: "Asia/Ho_Chi_Minh" });
 
   const { data, error } = await supabase
     .from("bookings")
-    .select("room_id, guest_name, check_in, check_out, booking_status, nights, grand_total, groups(paid)")
+    .select("room_id, guest_name, check_in, check_out, status")
+    .gt("check_in", today)
+    .lte("check_in", end)
+    .neq("status", "cancelled")
+    .order("check_in");
+
+  if (error) return sendMessage(chatId, `❌ Lỗi: ${error.message}`);
+  if (!data?.length) return sendMessage(chatId, "📅 Không có check-in trong 3 ngày tới.");
+
+  let msg = "📅 <b>Check-in sắp tới (3 ngày)</b>\n\n";
+  for (const b of data) {
+    msg += `${formatDateVN(b.check_in)} — P${b.room_id} — ${b.guest_name} → ${formatDateVN(b.check_out)}\n`;
+  }
+  return sendMessage(chatId, msg.trim());
+}
+
+/** /a — tất cả booking active */
+async function handleAll(chatId: string) {
+  const { data, error } = await supabase
+    .from("bookings")
+    .select("room_id, guest_name, check_in, check_out, status")
+    .in("status", ["booked", "checked-in"])
+    .order("check_in");
+
+  if (error) return sendMessage(chatId, `❌ Lỗi: ${error.message}`);
+  if (!data?.length) return sendMessage(chatId, "📋 Không có booking active.");
+
+  let msg = "📋 <b>Tất cả booking active</b>\n\n";
+  for (const b of data) {
+    msg += `${bookingIcon(b.status)} P${b.room_id} — ${b.guest_name} | ${formatDateVN(b.check_in)} → ${formatDateVN(b.check_out)}\n`;
+  }
+  return sendMessage(chatId, msg.trim());
+}
+
+/** /checkin — check-in hôm nay */
+async function handleCheckin(chatId: string) {
+  const today = todayVN();
+  const { data, error } = await supabase
+    .from("bookings")
+    .select("room_id, guest_name, check_in, check_out, status, groups(paid, grand_total)")
     .eq("check_in", today)
-    .in("booking_status", ["booked", "checked-in"])
-    .eq("is_deleted", false)
+    .neq("status", "cancelled")
     .order("room_id");
 
-  if (error) {
-    await sendMessage(chatId, "❌ Lỗi truy vấn. Thử lại nhé.");
-    return;
-  }
+  if (error) return sendMessage(chatId, `❌ Lỗi: ${error.message}`);
+  if (!data?.length) return sendMessage(chatId, `🟢 Hôm nay (${formatDateVN(today)}) không có khách check-in.`);
 
-  if (!data || data.length === 0) {
-    await sendMessage(chatId, `🛬 <b>Check-in hôm nay (${formatDateVN(today)})</b>\n\n✅ Không có khách check-in.`);
-    return;
-  }
-
-  const lines: string[] = [`🛬 <b>Check-in hôm nay (${formatDateVN(today)})</b>\n`];
-
+  let msg = `🟢 <b>Check-in hôm nay ${formatDateVN(today)} (${data.length})</b>\n\n`;
   for (const b of data) {
-    const paid = (b.groups as { paid?: number } | null)?.paid ?? 0;
-    const debt = (b.grand_total ?? 0) - paid;
-    const statusIcon = b.booking_status === "checked-in" ? "✅" : "⏳";
-    const debtStr = debt > 0 ? ` | 💰 Còn nợ: ${formatVND(debt)}` : " | ✅ Đã trả đủ";
-
-    lines.push(
-      `${statusIcon} <b>Phòng ${b.room_id}</b> — ${b.guest_name}\n` +
-      `   📆 ${formatDateVN(b.check_in)} → ${formatDateVN(b.check_out)} (${b.nights} đêm)${debtStr}`,
-    );
+    const paid  = (b.groups as any)?.paid ?? 0;
+    const total = (b.groups as any)?.grand_total ?? 0;
+    const debt  = total - paid;
+    const statusLabel = b.status === "checked-in" ? " ✅ đã check-in" : "";
+    msg += `P${b.room_id} — ${b.guest_name} → out ${formatDateVN(b.check_out)}${statusLabel}`;
+    if (debt > 0) msg += ` | Còn: ${formatVND(debt)}`;
+    msg += "\n";
   }
-
-  await sendMessage(chatId, lines.join("\n"));
+  return sendMessage(chatId, msg.trim());
 }
 
-// ─── /checkout — Danh sách check-out hôm nay ─────────────────────────────
-async function handleCheckoutList(
-  chatId: number,
-  supabase: ReturnType<typeof import("https://esm.sh/@supabase/supabase-js@2").createClient>,
-) {
-  const today = todayICT();
-
+/** /checkout — check-out hôm nay */
+async function handleCheckout(chatId: string) {
+  const today = todayVN();
   const { data, error } = await supabase
     .from("bookings")
-    .select("room_id, guest_name, check_in, check_out, booking_status, nights, grand_total, groups(paid)")
+    .select("room_id, guest_name, check_in, check_out, status, groups(paid, grand_total)")
     .eq("check_out", today)
-    .eq("booking_status", "checked-in")
-    .eq("is_deleted", false)
+    .neq("status", "cancelled")
     .order("room_id");
 
-  if (error) {
-    await sendMessage(chatId, "❌ Lỗi truy vấn. Thử lại nhé.");
-    return;
-  }
+  if (error) return sendMessage(chatId, `❌ Lỗi: ${error.message}`);
+  if (!data?.length) return sendMessage(chatId, `🔴 Hôm nay (${formatDateVN(today)}) không có khách check-out.`);
 
-  if (!data || data.length === 0) {
-    await sendMessage(chatId, `🛫 <b>Check-out hôm nay (${formatDateVN(today)})</b>\n\n✅ Không có khách check-out.`);
-    return;
-  }
-
-  const lines: string[] = [`🛫 <b>Check-out hôm nay (${formatDateVN(today)})</b>\n`];
-
+  let msg = `🔴 <b>Check-out hôm nay ${formatDateVN(today)} (${data.length})</b>\n\n`;
   for (const b of data) {
-    const paid = (b.groups as { paid?: number } | null)?.paid ?? 0;
-    const debt = (b.grand_total ?? 0) - paid;
-    const debtStr = debt > 0
-      ? ` | ⚠️ Còn nợ: ${formatVND(debt)}`
-      : " | ✅ Đã trả đủ";
-
-    lines.push(
-      `🚪 <b>Phòng ${b.room_id}</b> — ${b.guest_name}\n` +
-      `   📆 ${formatDateVN(b.check_in)} → ${formatDateVN(b.check_out)} (${b.nights} đêm)${debtStr}`,
-    );
+    const paid  = (b.groups as any)?.paid ?? 0;
+    const total = (b.groups as any)?.grand_total ?? 0;
+    const debt  = total - paid;
+    msg += `P${b.room_id} — ${b.guest_name}`;
+    if (b.status === "checked-out") msg += " ✅ đã out";
+    else if (debt > 0)              msg += ` | ⚠️ Còn nợ: ${formatVND(debt)}`;
+    msg += "\n";
   }
-
-  await sendMessage(chatId, lines.join("\n"));
+  return sendMessage(chatId, msg.trim());
 }
 
-// ─── /stay — Tất cả khách đang ở hiện tại ────────────────────────────────
-async function handleStay(
-  chatId: number,
-  supabase: ReturnType<typeof import("https://esm.sh/@supabase/supabase-js@2").createClient>,
-) {
-  const today = todayICT();
+/** /stay — khách đang ở (checked-in) */
+async function handleStay(chatId: string) {
+  const { data, error } = await supabase
+    .from("bookings")
+    .select("room_id, guest_name, check_in, check_out, groups(paid, grand_total)")
+    .eq("status", "checked-in")
+    .order("check_out");
+
+  if (error) return sendMessage(chatId, `❌ Lỗi: ${error.message}`);
+  if (!data?.length) return sendMessage(chatId, "🏠 Hiện không có khách đang ở.");
+
+  let msg = `🏠 <b>Khách đang ở (${data.length})</b>\n\n`;
+  for (const b of data) {
+    const paid  = (b.groups as any)?.paid ?? 0;
+    const total = (b.groups as any)?.grand_total ?? 0;
+    const debt  = total - paid;
+    msg += `P${b.room_id} — ${b.guest_name} | out ${formatDateVN(b.check_out)}`;
+    if (debt > 0) msg += ` | Còn: ${formatVND(debt)}`;
+    msg += "\n";
+  }
+  return sendMessage(chatId, msg.trim());
+}
+
+/** /rooms — tất cả phòng + housekeeping + booking hôm nay */
+async function handleRooms(chatId: string) {
+  const today = todayVN();
+
+  // Query tất cả phòng
+  const { data: rooms, error: roomErr } = await supabase
+    .from("rooms")
+    .select("id, name, housekeeping_status, housekeeping_note")
+    .eq("is_active", true)
+    .order("id");
+
+  if (roomErr) return sendMessage(chatId, `❌ Lỗi: ${roomErr.message}`);
+
+  // Query booking active hôm nay (checked-in hoặc check-in hôm nay)
+  const { data: bookings } = await supabase
+    .from("bookings")
+    .select("room_id, guest_name, status, check_out")
+    .in("status", ["checked-in", "booked"])
+    .lte("check_in", today)
+    .gt("check_out", today)
+    .neq("status", "cancelled");
+
+  // Map room_id → booking
+  const bookingMap: Record<string, { guest_name: string; status: string; check_out: string }> = {};
+  for (const b of bookings ?? []) {
+    bookingMap[b.room_id] = b;
+  }
+
+  let msg = `🏨 <b>Tình trạng phòng</b>\n\n`;
+  for (const r of rooms ?? []) {
+    const hk = r.housekeeping_status ?? "clean";
+    const b  = bookingMap[r.id];
+    msg += `${hkIcon(hk)} <b>P${r.id}</b>`;
+    if (b) {
+      msg += ` — ${bookingIcon(b.status)} ${b.guest_name} (out ${formatDateVN(b.check_out)})`;
+    } else {
+      msg += " — Trống";
+    }
+    if (r.housekeeping_note) msg += `\n   📝 ${r.housekeeping_note}`;
+    msg += "\n";
+  }
+  msg += `\n✅ clean  🧹 dirty  🔄 cleaning  🚫 OOO`;
+  return sendMessage(chatId, msg.trim());
+}
+
+/** /clean — phòng cần dọn (dirty hoặc vừa check-out hôm nay) */
+async function handleClean(chatId: string) {
+  const today = todayVN();
+
+  // Phòng dirty/cleaning
+  const { data: dirtyRooms, error: e1 } = await supabase
+    .from("rooms")
+    .select("id, housekeeping_status, housekeeping_note")
+    .in("housekeeping_status", ["dirty", "cleaning"])
+    .eq("is_active", true)
+    .order("id");
+
+  if (e1) return sendMessage(chatId, `❌ Lỗi: ${e1.message}`);
+
+  // Booking check-out hôm nay (phòng sẽ cần dọn)
+  const { data: checkouts } = await supabase
+    .from("bookings")
+    .select("room_id, guest_name, status")
+    .eq("check_out", today)
+    .neq("status", "cancelled");
+
+  const checkoutRoomIds = new Set((checkouts ?? []).map((b) => b.room_id));
+  const dirtyIds = new Set((dirtyRooms ?? []).map((r) => r.id));
+
+  // Gộp: dirty rooms + checkout rooms chưa dirty
+  const checkoutOnlyIds = [...checkoutRoomIds].filter((id) => !dirtyIds.has(id));
+
+  if (!dirtyRooms?.length && !checkoutOnlyIds.length) {
+    return sendMessage(chatId, "✅ Không có phòng nào cần dọn!");
+  }
+
+  let msg = "🧹 <b>Phòng cần dọn</b>\n\n";
+
+  if (dirtyRooms?.length) {
+    for (const r of dirtyRooms) {
+      const status = r.housekeeping_status === "cleaning" ? "🔄 Đang dọn" : "🧹 Cần dọn";
+      msg += `${status}: <b>P${r.id}</b>`;
+      if (r.housekeeping_note) msg += ` — ${r.housekeeping_note}`;
+      msg += "\n";
+    }
+  }
+
+  if (checkoutOnlyIds.length) {
+    msg += "\n🚪 <b>Check-out hôm nay (chưa cập nhật)</b>\n";
+    for (const id of checkoutOnlyIds) {
+      msg += `  P${id}\n`;
+    }
+  }
+
+  msg += `\n💡 Dọn xong: /cleaned [phòng] (vd /cleaned 101)`;
+  return sendMessage(chatId, msg.trim());
+}
+
+/** /cleaned <room_id> — đánh dấu phòng đã dọn xong */
+async function handleCleaned(chatId: string, roomId: string) {
+  if (!roomId) {
+    return sendMessage(chatId, "❌ Thiếu số phòng. Dùng: /cleaned 101");
+  }
+
+  // Gọi RPC update_housekeeping_status
+  const { error } = await supabase.rpc("update_housekeeping_status", {
+    p_room_id: roomId,
+    p_status:  "clean",
+  });
+
+  if (error) return sendMessage(chatId, `❌ Lỗi: ${error.message}`);
+  return sendMessage(chatId, `✅ Phòng ${roomId} đã dọn xong — trạng thái: CLEAN`);
+}
+
+/** /issue <room_id> <mô tả> — log sự cố phòng */
+async function handleIssue(chatId: string, args: string[]) {
+  if (args.length < 2) {
+    return sendMessage(chatId, "❌ Thiếu thông tin. Dùng: /issue 101 Máy lạnh không lạnh");
+  }
+
+  const roomId     = args[0];
+  const description = args.slice(1).join(" ");
+
+  // Kiểm tra phòng tồn tại
+  const { data: room } = await supabase
+    .from("rooms")
+    .select("id")
+    .eq("id", roomId)
+    .single();
+
+  if (!room) {
+    return sendMessage(chatId, `❌ Phòng ${roomId} không tồn tại.`);
+  }
+
+  // Insert sự cố
+  const { error } = await supabase
+    .from("room_issues")
+    .insert({
+      room_id:     roomId,
+      reported_by: "staff_telegram",
+      description,
+      status:      "open",
+    });
+
+  if (error) return sendMessage(chatId, `❌ Lỗi: ${error.message}`);
+
+  // Cập nhật housekeeping_note để Hiếu thấy trong /rooms
+  await supabase
+    .from("rooms")
+    .update({ housekeeping_note: `⚠️ ${description}` })
+    .eq("id", roomId);
+
+  return sendMessage(
+    chatId,
+    `⚠️ Đã ghi sự cố <b>P${roomId}</b>:\n"${description}"\n\nHiếu sẽ xử lý sớm.`
+  );
+}
+
+// ─── Task Commands (giữ nguyên từ v29) ─────────────────────────────────────
+
+interface NotionTask { id: string; properties: Record<string, unknown> }
+
+async function getNotionTasks(chatId: string): Promise<NotionTask[]> {
+  const NOTION_TOKEN   = Deno.env.get("NOTION_TOKEN")!;
+  const NOTION_DB_ID   = Deno.env.get("NOTION_TASK_DB_ID")!;
+  const today          = todayVN();
+
+  const res = await fetch(`https://api.notion.com/v1/databases/${NOTION_DB_ID}/query`, {
+    method: "POST",
+    headers: {
+      Authorization:        `Bearer ${NOTION_TOKEN}`,
+      "Notion-Version":     "2022-06-28",
+      "Content-Type":       "application/json",
+    },
+    body: JSON.stringify({
+      filter: {
+        and: [
+          { property: "Date", date: { equals: today } },
+          { property: "Status", status: { does_not_equal: "Done" } },
+        ],
+      },
+      sorts: [{ property: "Date", direction: "ascending" }],
+    }),
+  });
+  const json = await res.json();
+  return json.results ?? [];
+}
+
+async function updateNotionTaskStatus(pageId: string, newStatus: string): Promise<boolean> {
+  const NOTION_TOKEN = Deno.env.get("NOTION_TOKEN")!;
+  const res = await fetch(`https://api.notion.com/v1/pages/${pageId}`, {
+    method:  "PATCH",
+    headers: {
+      Authorization:    `Bearer ${NOTION_TOKEN}`,
+      "Notion-Version": "2022-06-28",
+      "Content-Type":   "application/json",
+    },
+    body: JSON.stringify({ properties: { Status: { status: { name: newStatus } } } }),
+  });
+  return res.ok;
+}
+
+async function saveSession(chatId: string, tasks: NotionTask[]): Promise<void> {
+  const sessionData = tasks.map((t, i) => ({
+    idx:    i + 1,
+    pageId: t.id,
+    name:   (t.properties?.["Task Name"] as any)?.title?.[0]?.plain_text ?? `Task ${i + 1}`,
+  }));
+  await supabase.from("telegram_task_sessions").upsert(
+    { chat_id: chatId, session_data: sessionData, updated_at: new Date().toISOString() },
+    { onConflict: "chat_id" }
+  );
+}
+
+async function loadSession(chatId: string): Promise<{ idx: number; pageId: string; name: string }[]> {
+  const { data } = await supabase
+    .from("telegram_task_sessions")
+    .select("session_data")
+    .eq("chat_id", chatId)
+    .single();
+  return (data?.session_data as { idx: number; pageId: string; name: string }[]) ?? [];
+}
+
+async function handleTask(chatId: string) {
+  const tasks = await getNotionTasks(chatId);
+  if (!tasks.length) {
+    await supabase.from("telegram_task_sessions").delete().eq("chat_id", chatId);
+    return sendMessage(chatId, "✅ Không còn task nào hôm nay!");
+  }
+  await saveSession(chatId, tasks);
+  const today = todayVN();
+  let msg = `📋 <b>Tasks hôm nay ${formatDateVN(today)}</b>\n\n`;
+  for (let i = 0; i < tasks.length; i++) {
+    const name = (tasks[i].properties?.["Task Name"] as any)?.title?.[0]?.plain_text ?? `Task ${i + 1}`;
+    const room = (tasks[i].properties?.["Room"] as any)?.select?.name ?? "";
+    msg += `${i + 1}. ${name}${room ? ` (${room})` : ""}\n`;
+  }
+  msg += `\n✅ /done N  ⏭ /skip N  📅 /extend N`;
+  return sendMessage(chatId, msg.trim());
+}
+
+async function handleTasks(chatId: string) {
+  return handleTask(chatId);
+}
+
+async function handleDone(chatId: string, idxStr: string) {
+  const idx = parseInt(idxStr);
+  if (isNaN(idx)) return sendMessage(chatId, "❌ Dùng: /done 1");
+  const session = await loadSession(chatId);
+  const item = session.find((s) => s.idx === idx);
+  if (!item) return sendMessage(chatId, `❌ Không tìm thấy task ${idx}. Chạy /tasks để xem danh sách.`);
+  const ok = await updateNotionTaskStatus(item.pageId, "Done");
+  if (!ok) return sendMessage(chatId, `❌ Lỗi khi cập nhật task ${idx}.`);
+  return sendMessage(chatId, `✅ Xong: ${item.name}`);
+}
+
+async function handleSkip(chatId: string, idxStr: string) {
+  const idx = parseInt(idxStr);
+  if (isNaN(idx)) return sendMessage(chatId, "❌ Dùng: /skip 1");
+  const session = await loadSession(chatId);
+  const item = session.find((s) => s.idx === idx);
+  if (!item) return sendMessage(chatId, `❌ Không tìm thấy task ${idx}.`);
+  const ok = await updateNotionTaskStatus(item.pageId, "Cancelled");
+  if (!ok) return sendMessage(chatId, `❌ Lỗi khi skip task ${idx}.`);
+  return sendMessage(chatId, `⏭ Đã bỏ qua: ${item.name}`);
+}
+
+async function handleExtend(chatId: string, idxStr: string) {
+  const idx = parseInt(idxStr);
+  if (isNaN(idx)) return sendMessage(chatId, "❌ Dùng: /extend 1");
+  const session = await loadSession(chatId);
+  const item = session.find((s) => s.idx === idx);
+  if (!item) return sendMessage(chatId, `❌ Không tìm thấy task ${idx}.`);
+
+  // Dời sang ngày mai
+  const NOTION_TOKEN = Deno.env.get("NOTION_TOKEN")!;
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowStr = tomorrow.toLocaleDateString("en-CA", { timeZone: "Asia/Ho_Chi_Minh" });
+
+  const res = await fetch(`https://api.notion.com/v1/pages/${item.pageId}`, {
+    method:  "PATCH",
+    headers: {
+      Authorization:    `Bearer ${NOTION_TOKEN}`,
+      "Notion-Version": "2022-06-28",
+      "Content-Type":   "application/json",
+    },
+    body: JSON.stringify({ properties: { Date: { date: { start: tomorrowStr } } } }),
+  });
+  if (!res.ok) return sendMessage(chatId, `❌ Lỗi khi dời task ${idx}.`);
+  return sendMessage(chatId, `📅 Dời sang ngày mai: ${item.name}`);
+}
+
+/** /revenue — doanh thu tháng */
+async function handleRevenue(chatId: string) {
+  const now   = new Date();
+  const year  = now.getFullYear();
+  const month = now.getMonth() + 1;
+  const start = `${year}-${String(month).padStart(2, "0")}-01`;
+  const end   = new Date(year, month, 0).toLocaleDateString("en-CA", { timeZone: "Asia/Ho_Chi_Minh" });
 
   const { data, error } = await supabase
     .from("bookings")
-    .select("room_id, guest_name, check_in, check_out, nights, grand_total, groups(paid)")
-    .eq("booking_status", "checked-in")
-    .eq("is_deleted", false)
-    .order("room_id");
+    .select("net_revenue, check_out")
+    .eq("status", "checked-out")
+    .gte("check_out", start)
+    .lte("check_out", end);
 
-  if (error) {
-    await sendMessage(chatId, "❌ Lỗi truy vấn. Thử lại nhé.");
-    return;
-  }
-
-  if (!data || data.length === 0) {
-    await sendMessage(chatId, "🏨 <b>Khách đang ở</b>\n\n✅ Hiện không có khách nào.");
-    return;
-  }
-
-  const lines: string[] = [`🏨 <b>Khách đang ở (${formatDateVN(today)})</b>\n`];
-
-  for (const b of data) {
-    const paid = (b.groups as { paid?: number } | null)?.paid ?? 0;
-    const debt = (b.grand_total ?? 0) - paid;
-    const debtStr = debt > 0 ? ` | ⚠️ Nợ ${formatVND(debt)}` : "";
-
-    const msLeft = new Date(b.check_out).getTime() - new Date(today).getTime();
-    const nightsLeft = Math.round(msLeft / 86400000);
-    const nightsLeftStr = nightsLeft === 0
-      ? " <b>→ Ra hôm nay!</b>"
-      : nightsLeft === 1
-        ? " (còn 1 đêm)"
-        : ` (còn ${nightsLeft} đêm)`;
-
-    lines.push(
-      `🛏 <b>Phòng ${b.room_id}</b> — ${b.guest_name}\n` +
-      `   📆 Ra ngày ${formatDateVN(b.check_out)}${nightsLeftStr}${debtStr}`,
-    );
-  }
-
-  await sendMessage(chatId, lines.join("\n"));
+  if (error) return sendMessage(chatId, `❌ Lỗi: ${error.message}`);
+  const total = (data ?? []).reduce((s, b) => s + (b.net_revenue ?? 0), 0);
+  return sendMessage(
+    chatId,
+    `💰 <b>Doanh thu tháng ${month}/${year}</b>\n${formatVND(total)} (${data?.length ?? 0} booking checked-out)`
+  );
 }
 
-// ─── Main handler ───────────────────────────────────────────────────────────
+/** /debt — nhóm còn nợ */
+async function handleDebt(chatId: string) {
+  const { data, error } = await supabase
+    .from("groups")
+    .select("id, grand_total, paid, bookings(room_id, guest_name, status)")
+    .eq("is_deleted", false)
+    .filter("paid", "lt", "grand_total")
+    .in("bookings.status", ["booked", "checked-in"]);
 
-Deno.serve(async (req) => {
-  if (req.method !== "POST") return new Response("OK", { status: 200 });
-
-  let update: { message?: { chat: { id: number }; text?: string } };
-  try {
-    update = await req.json();
-  } catch {
-    return new Response("Bad request", { status: 400 });
-  }
-
-  const msg = update.message;
-  if (!msg?.text) return new Response("OK", { status: 200 });
-
-  const chatId = msg.chat.id;
-  if (chatId.toString() !== ALLOWED_CHAT_ID) {
-    await sendMessage(chatId, "⛔ Không có quyền truy cập.");
-    return new Response("OK", { status: 200 });
-  }
-
-  const text = msg.text.trim();
-
-  // ── /help ──
-  if (text === "/start" || text === "/help") {
-    await sendMessage(
-      chatId,
-      `🏨 <b>Hello Dalat Bot</b>\n\n` +
-      `<b>📅 Lịch & phòng</b>\n` +
-      `• <code>/today</code> — lịch hôm nay\n` +
-      `• <code>/next</code> — lịch ngày mai\n` +
-      `• <code>/a dd/mm</code> — lịch ngày cụ thể\n` +
-      `• <code>/a dd/mm dd/mm</code> — phòng trống khoảng ngày\n` +
-      `• <code>/checkin</code> — check-in hôm nay\n` +
-      `• <code>/checkout</code> — check-out hôm nay\n` +
-      `• <code>/stay</code> — khách đang ở hiện tại\n\n` +
-      `<b>📋 Tasks</b>\n` +
-      `• <code>/task &lt;tên&gt; [| &lt;ghi chú&gt;] [| &lt;ưu tiên&gt;]</code> — tạo task mới cho Lợi\n` +
-      `  Ưu tiên: khan | cao | bt | thap (mặc định: bt)\n` +
-      `  VD: <code>/task Dọn 101 | Thay khăn | cao</code>\n` +
-      `• <code>/tasks</code> — xem tasks hôm nay\n` +
-      `• <code>/done &lt;số&gt;</code> — đánh dấu hoàn thành\n` +
-      `• <code>/skip &lt;số&gt;</code> — bỏ qua task\n` +
-      `• <code>/extend &lt;số&gt; &lt;dd/mm&gt;</code> — dời ngày`,
+  if (error) return sendMessage(chatId, `❌ Lỗi: ${error.message}`);
+  const groups = (data ?? []).filter((g) => {
+    const hasActive = (g.bookings as any[]).some((b) =>
+      ["booked", "checked-in"].includes(b.status)
     );
-    return new Response("OK", { status: 200 });
+    return hasActive && (g.grand_total ?? 0) > (g.paid ?? 0);
+  });
+
+  if (!groups.length) return sendMessage(chatId, "✅ Không có nhóm nào còn nợ.");
+  let msg = `⚠️ <b>Nhóm còn nợ (${groups.length})</b>\n\n`;
+  for (const g of groups) {
+    const debt  = (g.grand_total ?? 0) - (g.paid ?? 0);
+    const names = (g.bookings as any[]).map((b) => `P${b.room_id} ${b.guest_name}`).join(", ");
+    msg += `${names} — Còn: ${formatVND(debt)}\n`;
   }
+  return sendMessage(chatId, msg.trim());
+}
 
-  // Khởi tạo Supabase (dùng chung cho các lệnh cần DB)
-  const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2");
-  const supabase = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-  );
+/** /help */
+async function handleHelp(chatId: string) {
+  const msg = `
+🤖 <b>Hello Dalat Bot — Lệnh</b>
 
-  // ── /task <nội dung> ──
-  if (text.startsWith("/task ") || text === "/task") {
-    const rawText = text.slice(6).trim(); // bỏ "/task "
-    await handleTask(chatId, rawText);
-    return new Response("OK", { status: 200 });
+📅 <b>Lịch</b>
+/today — check-in + check-out hôm nay
+/next — check-in 3 ngày tới
+/a — tất cả booking active
+/checkin — check-in hôm nay
+/checkout — check-out hôm nay
+/stay — khách đang ở
+
+🏨 <b>Phòng</b>
+/rooms — tình trạng tất cả phòng
+/clean — phòng cần dọn
+/cleaned [phòng] — đánh dấu đã dọn (vd /cleaned 101)
+/issue [phòng] [mô tả] — báo sự cố (vd /issue 101 Đèn hỏng)
+
+💰 <b>Tài chính</b>
+/revenue — doanh thu tháng này
+/debt — nhóm còn nợ
+
+📋 <b>Tasks</b>
+/task hoặc /tasks — xem tasks hôm nay
+/done [N] — đánh dấu xong
+/skip [N] — bỏ qua task
+/extend [N] — dời sang ngày mai
+
+/help — xem lệnh này
+`.trim();
+  return sendMessage(chatId, msg);
+}
+
+// ─── Router ──────────────────────────────────────────────────────────────────
+
+serve(async (req) => {
+  try {
+    const body = await req.json();
+    const message = body?.message;
+    if (!message) return new Response("ok");
+
+    const chatId  = String(message.chat?.id ?? "");
+    const text    = (message.text ?? "").trim();
+
+    // Security: chỉ cho phép ALLOWED_CHAT_ID
+    if (chatId !== ALLOWED_CHAT_ID) {
+      console.warn(`Blocked chat_id: ${chatId}`);
+      return new Response("ok");
+    }
+
+    // Parse lệnh
+    const parts   = text.split(/\s+/);
+    const command = parts[0]?.toLowerCase() ?? "";
+    const arg1    = parts[1] ?? "";
+    const args    = parts.slice(1);
+
+    if      (command === "/today")    await handleToday(chatId);
+    else if (command === "/next")     await handleNext(chatId);
+    else if (command === "/a")        await handleAll(chatId);
+    else if (command === "/checkin")  await handleCheckin(chatId);
+    else if (command === "/checkout") await handleCheckout(chatId);
+    else if (command === "/stay")     await handleStay(chatId);
+    else if (command === "/rooms")    await handleRooms(chatId);
+    else if (command === "/clean")    await handleClean(chatId);
+    else if (command === "/cleaned")  await handleCleaned(chatId, arg1);
+    else if (command === "/issue")    await handleIssue(chatId, args);
+    else if (command === "/revenue")  await handleRevenue(chatId);
+    else if (command === "/debt")     await handleDebt(chatId);
+    else if (command === "/task")     await handleTask(chatId);
+    else if (command === "/tasks")    await handleTasks(chatId);
+    else if (command === "/done")     await handleDone(chatId, arg1);
+    else if (command === "/skip")     await handleSkip(chatId, arg1);
+    else if (command === "/extend")   await handleExtend(chatId, arg1);
+    else if (command === "/help")     await handleHelp(chatId);
+
+    return new Response("ok");
+  } catch (err) {
+    console.error("Webhook error:", err);
+    return new Response("ok"); // Luôn trả 200 để Telegram không retry
   }
-
-  // ── /tasks ──
-  if (text === "/tasks") {
-    await handleTasks(chatId, supabase);
-    return new Response("OK", { status: 200 });
-  }
-
-  // ── /done <số> ──
-  if (text.startsWith("/done")) {
-    const parts = text.split(/\s+/);
-    await handleDone(chatId, parts[1] ?? "", supabase);
-    return new Response("OK", { status: 200 });
-  }
-
-  // ── /skip <số> ──
-  if (text.startsWith("/skip")) {
-    const parts = text.split(/\s+/);
-    await handleSkip(chatId, parts[1] ?? "", supabase);
-    return new Response("OK", { status: 200 });
-  }
-
-  // ── /extend <số> <ngày> ──
-  if (text.startsWith("/extend")) {
-    const parts = text.split(/\s+/).slice(1); // bỏ "/extend"
-    await handleExtend(chatId, parts, supabase);
-    return new Response("OK", { status: 200 });
-  }
-
-  // ── /today ──
-  if (text === "/today") {
-    await handleDayView(chatId, todayICT(), "Hôm nay", supabase);
-    return new Response("OK", { status: 200 });
-  }
-
-  // ── /checkin ──
-  if (text === "/checkin") {
-    await handleCheckinList(chatId, supabase);
-    return new Response("OK", { status: 200 });
-  }
-
-  // ── /checkout ──
-  if (text === "/checkout") {
-    await handleCheckoutList(chatId, supabase);
-    return new Response("OK", { status: 200 });
-  }
-
-  // ── /stay ──
-  if (text === "/stay") {
-    await handleStay(chatId, supabase);
-    return new Response("OK", { status: 200 });
-  }
-
-  // ── /next ──
-  if (text === "/next") {
-    const tomorrow = new Date(Date.now() + 7 * 3600000 + 86400000)
-      .toISOString().split("T")[0];
-    await handleDayView(chatId, tomorrow, "Ngày mai", supabase);
-    return new Response("OK", { status: 200 });
-  }
-
-  // ── /a [dd/mm] [dd/mm] ──
-  if (text.startsWith("/a")) {
-    const args = text.slice(2).trim().split(/\s+/).filter(Boolean);
-    await handleAvailability(chatId, args, supabase);
-    return new Response("OK", { status: 200 });
-  }
-
-  // ── Unknown ──
-  await sendMessage(chatId, `❓ Lệnh không nhận ra.\nGõ <code>/help</code> để xem danh sách.`);
-  return new Response("OK", { status: 200 });
 });
