@@ -2,7 +2,7 @@
 
 // Deploy: supabase functions deploy telegram-webhook --no-verify-jwt
 
-// v31 — handleToday shows staying guests; handleNext shows tomorrow; handleAll supports /a dd/mm availability; /task creates tasks; handleTaskList renamed
+// v31 — /today redesigned icons+format; /next tomorrow only + source; /a uses check_room_availability; /task -N urgency flag
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -29,6 +29,12 @@ function formatDateVN(dateStr: string): string {
 
 function formatVND(amount: number): string {
   return new Intl.NumberFormat("vi-VN").format(amount) + "đ";
+}
+
+function nightsBetween(from: string, to: string): number {
+  const d1 = new Date(from + "T00:00:00+07:00");
+  const d2 = new Date(to + "T00:00:00+07:00");
+  return Math.round((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24));
 }
 
 // Icon trạng thái housekeeping
@@ -69,61 +75,69 @@ async function handleToday(chatId: string) {
 
   const { data, error } = await supabase
     .from("bookings")
-    .select("room_id, guest_name, check_in, check_out, status, grand_total, groups(paid)")
-    .or(`check_in.eq.${today},check_out.eq.${today},status.eq.checked-in`)
+    .select("room_id, guest_name, check_in, check_out, status, grand_total, nights, groups(paid)")
+    .or(`check_in.eq.${today},check_out.eq.${today},and(status.eq.checked-in,check_in.lt.${today},check_out.gt.${today})`)
+    .or("is_deleted.is.null,is_deleted.eq.false")
     .neq("status", "cancelled")
     .order("room_id");
 
   if (error) return sendMessage(chatId, `❌ Lỗi: ${error.message}`);
-  if (!data?.length) return sendMessage(chatId, `📅 Hôm nay (${formatDateVN(today)}) không có hoạt động.`);
 
-  // status.eq.checked-in in .or() breaks Supabase type inference — cast explicitly
-  type BRow = { room_id: string; guest_name: string; check_in: string; check_out: string; status: string; grand_total: number | null; groups: { paid: number } | null };
-  const rows = data as BRow[];
-  const checkins  = rows.filter((b) => b.check_in === today && b.status !== "checked-in");
+  type BRow = {
+    room_id: string; guest_name: string; check_in: string; check_out: string;
+    status: string; grand_total: number | null; nights: number | null;
+    groups: { paid: number } | null;
+  };
+  const rows = (data ?? []) as BRow[];
+
+  const checkins  = rows.filter((b) => b.check_in === today);
   const checkouts = rows.filter((b) => b.check_out === today);
-  const staying   = rows.filter((b) => b.status === "checked-in" && b.check_in !== today && b.check_out !== today);
+  const staying   = rows.filter((b) => b.status === "checked-in" && b.check_in < today && b.check_out > today);
 
-  let msg = `📅 <b>Hôm nay ${formatDateVN(today)}</b>\n`;
+  let msg = `📅 <b>Hôm nay — ${formatDateVN(today)}</b>\n`;
 
+  msg += `\n🛎 <b>Check-in (${checkins.length})</b>\n`;
   if (checkins.length) {
-    msg += `\n🟢 <b>Check-in (${checkins.length})</b>\n`;
     for (const b of checkins) {
       const paid = (b.groups as any)?.paid ?? 0;
-      const debt = (b.grand_total as number ?? 0) - paid;
-      msg += `  P${b.room_id} — ${b.guest_name} → out ${formatDateVN(b.check_out)}`;
-      if (debt > 0) msg += ` | Còn: ${formatVND(debt)}`;
+      const debt = (b.grand_total ?? 0) - paid;
+      msg += `• P${b.room_id} — ${b.guest_name}`;
+      if (b.nights) msg += ` (${b.nights}đ)`;
+      if (b.status === "checked-in") msg += " ✅";
+      else if (debt > 0) msg += ` | Còn: ${formatVND(debt)}`;
       msg += "\n";
     }
+  } else {
+    msg += `<i>(không có)</i>\n`;
   }
 
+  msg += `\n🏁 <b>Check-out (${checkouts.length})</b>\n`;
   if (checkouts.length) {
-    msg += `\n🔴 <b>Check-out (${checkouts.length})</b>\n`;
     for (const b of checkouts) {
       const paid = (b.groups as any)?.paid ?? 0;
-      const debt = (b.grand_total as number ?? 0) - paid;
-      msg += `  P${b.room_id} — ${b.guest_name}`;
+      const debt = (b.grand_total ?? 0) - paid;
+      msg += `• P${b.room_id} — ${b.guest_name}`;
       if (b.status === "checked-out") msg += " ✅";
       else if (debt > 0) msg += ` | ⚠️ Còn nợ: ${formatVND(debt)}`;
       msg += "\n";
     }
+  } else {
+    msg += `<i>(không có)</i>\n`;
   }
 
+  msg += `\n🏠 <b>Đang ở (${staying.length})</b>\n`;
   if (staying.length) {
-    msg += `\n🏠 <b>Đang ở (${staying.length})</b>\n`;
     for (const b of staying) {
-      const paid = (b.groups as any)?.paid ?? 0;
-      const debt = (b.grand_total as number ?? 0) - paid;
-      msg += `  P${b.room_id} — ${b.guest_name} → out ${formatDateVN(b.check_out)}`;
-      if (debt > 0) msg += ` | Còn: ${formatVND(debt)}`;
-      msg += "\n";
+      msg += `• P${b.room_id} — ${b.guest_name} (→ ${formatDateVN(b.check_out)})\n`;
     }
+  } else {
+    msg += `<i>(không có)</i>\n`;
   }
 
   return sendMessage(chatId, msg.trim());
 }
 
-/** /next — check-in, check-out, đang ở ngày mai */
+/** /next — check-in, check-out ngày mai */
 async function handleNext(chatId: string) {
   const today = todayVN();
   const d = new Date(today + "T00:00:00+07:00");
@@ -132,122 +146,124 @@ async function handleNext(chatId: string) {
 
   const { data, error } = await supabase
     .from("bookings")
-    .select("room_id, guest_name, check_in, check_out, status, grand_total, groups(paid)")
-    .or(`check_in.eq.${tomorrow},check_out.eq.${tomorrow},and(status.eq.checked-in,check_in.lt.${tomorrow},check_out.gt.${tomorrow})`)
+    .select("room_id, guest_name, check_in, check_out, status, grand_total, nights, groups(paid, source)")
+    .or(`check_in.eq.${tomorrow},check_out.eq.${tomorrow}`)
     .neq("status", "cancelled")
     .order("room_id");
 
   if (error) return sendMessage(chatId, `❌ Lỗi: ${error.message}`);
   if (!data?.length) return sendMessage(chatId, `📅 Ngày mai (${formatDateVN(tomorrow)}) không có hoạt động.`);
 
-  // nested and() in .or() breaks Supabase type inference — cast explicitly
-  type BRow = { room_id: string; guest_name: string; check_in: string; check_out: string; status: string; grand_total: number | null; groups: { paid: number } | null };
+  type BRow = {
+    room_id: string; guest_name: string; check_in: string; check_out: string;
+    status: string; grand_total: number | null; nights: number | null;
+    groups: { paid: number; source: string | null } | null;
+  };
   const rows = data as BRow[];
   const checkins  = rows.filter((b) => b.check_in === tomorrow);
   const checkouts = rows.filter((b) => b.check_out === tomorrow);
-  const staying   = rows.filter((b) => b.status === "checked-in" && b.check_in !== tomorrow && b.check_out !== tomorrow);
 
-  let msg = `📅 <b>Ngày mai ${formatDateVN(tomorrow)}</b>\n`;
+  let msg = `📅 <b>Ngày mai — ${formatDateVN(tomorrow)}</b>\n`;
 
+  msg += `\n🛎 <b>Check-in (${checkins.length})</b>\n`;
   if (checkins.length) {
-    msg += `\n🟢 <b>Check-in (${checkins.length})</b>\n`;
     for (const b of checkins) {
-      msg += `  P${b.room_id} — ${b.guest_name} → out ${formatDateVN(b.check_out)}\n`;
+      const source = (b.groups as any)?.source ?? null;
+      msg += `• P${b.room_id} — ${b.guest_name}`;
+      const parts: string[] = [];
+      if (b.nights) parts.push(`${b.nights}đ`);
+      if (source) parts.push(source);
+      if (parts.length) msg += ` (${parts.join(", ")})`;
+      msg += "\n";
     }
+  } else {
+    msg += `<i>(không có)</i>\n`;
   }
 
+  msg += `\n🏁 <b>Check-out (${checkouts.length})</b>\n`;
   if (checkouts.length) {
-    msg += `\n🔴 <b>Check-out (${checkouts.length})</b>\n`;
     for (const b of checkouts) {
+      const source = (b.groups as any)?.source ?? null;
       const paid = (b.groups as any)?.paid ?? 0;
-      const debt = (b.grand_total as number ?? 0) - paid;
-      msg += `  P${b.room_id} — ${b.guest_name}`;
+      const debt = (b.grand_total ?? 0) - paid;
+      msg += `• P${b.room_id} — ${b.guest_name}`;
+      if (source) msg += ` (${source})`;
       if (debt > 0) msg += ` | ⚠️ Còn nợ: ${formatVND(debt)}`;
       msg += "\n";
     }
-  }
-
-  if (staying.length) {
-    msg += `\n🏠 <b>Đang ở (${staying.length})</b>\n`;
-    for (const b of staying) {
-      msg += `  P${b.room_id} — ${b.guest_name} → out ${formatDateVN(b.check_out)}\n`;
-    }
+  } else {
+    msg += `<i>(không có)</i>\n`;
   }
 
   return sendMessage(chatId, msg.trim());
 }
 
-/** /a [dd/mm] [dd/mm] — tất cả booking active hoặc phòng trống */
+/** /a [dd/mm] [dd/mm] — availability checker */
 async function handleAll(chatId: string, args: string[]) {
-  // Parse args: /a dd/mm hoặc /a dd/mm dd/mm
-  // Nếu không có arg → show tất cả booking active (fallback cũ)
-  const currentYear = new Date().getFullYear();
+  const now = new Date();
+  const currentYear  = now.getFullYear();
+  const currentMonth = now.getMonth() + 1;
 
-  function parseDate(str: string): string | null {
+  function parseDateArg(str: string): string | null {
     const m = str.match(/^(\d{1,2})\/(\d{1,2})$/);
     if (!m) return null;
-    const day = m[1].padStart(2, "0");
-    const month = m[2].padStart(2, "0");
-    return `${currentYear}-${month}-${day}`;
+    const day   = m[1].padStart(2, "0");
+    const month = parseInt(m[2]);
+    const year  = month < currentMonth ? currentYear + 1 : currentYear;
+    return `${year}-${String(month).padStart(2, "0")}-${day}`;
   }
 
-  // Không có arg → active bookings
+  const today = todayVN();
+  let checkIn: string;
+  let checkOut: string;
+  let label: string;
+
   if (!args.length) {
-    const { data, error } = await supabase
-      .from("bookings")
-      .select("room_id, guest_name, check_in, check_out, status")
-      .in("status", ["booked", "checked-in"])
-      .order("check_in");
-    if (error) return sendMessage(chatId, `❌ Lỗi: ${error.message}`);
-    if (!data?.length) return sendMessage(chatId, "📋 Không có booking active.");
-    let msg = "📋 <b>Tất cả booking active</b>\n\n";
-    for (const b of data) {
-      msg += `${bookingIcon(b.status)} P${b.room_id} — ${b.guest_name} | ${formatDateVN(b.check_in)} → ${formatDateVN(b.check_out)}\n`;
-    }
-    return sendMessage(chatId, msg.trim());
+    checkIn = today;
+    const d = new Date(today + "T00:00:00+07:00");
+    d.setDate(d.getDate() + 1);
+    checkOut = d.toLocaleDateString("en-CA", { timeZone: "Asia/Ho_Chi_Minh" });
+    label = `hôm nay`;
+  } else if (args.length === 1) {
+    checkIn = parseDateArg(args[0]) ?? "";
+    if (!checkIn) return sendMessage(chatId, "❌ Sai định dạng. Dùng: /a 17/06 hoặc /a 17/06 20/06");
+    const d = new Date(checkIn + "T00:00:00+07:00");
+    d.setDate(d.getDate() + 1);
+    checkOut = d.toLocaleDateString("en-CA", { timeZone: "Asia/Ho_Chi_Minh" });
+    label = args[0];
+  } else {
+    checkIn  = parseDateArg(args[0]) ?? "";
+    checkOut = parseDateArg(args[1]) ?? "";
+    if (!checkIn || !checkOut) return sendMessage(chatId, "❌ Sai định dạng. Dùng: /a 17/06 hoặc /a 17/06 20/06");
+    label = `${args[0]} → ${args[1]}`;
   }
 
-  // 1 arg: /a dd/mm → phòng trống ngày đó
-  // 2 args: /a dd/mm dd/mm → phòng trống giai đoạn
-  const dateFrom = parseDate(args[0]);
-  const dateTo   = args[1] ? parseDate(args[1]) : dateFrom;
+  const nights = nightsBetween(checkIn, checkOut);
+  const ROOMS  = ["101", "102", "103", "201", "202", "203", "301", "302"];
 
-  if (!dateFrom || !dateTo) {
-    return sendMessage(chatId, "❌ Sai định dạng. Dùng: /a 17/06 hoặc /a 17/06 20/06");
-  }
+  const results = await Promise.all(
+    ROOMS.map(async (roomId) => {
+      const { data, error } = await supabase.rpc("check_room_availability", {
+        p_room_id:              roomId,
+        p_check_in:             checkIn,
+        p_check_out:            checkOut,
+        p_exclude_booking_id:   null,
+      });
+      const available = !error && (data as any)?.[0]?.available === true;
+      return { roomId, available };
+    })
+  );
 
-  // Lấy tất cả phòng active
-  const { data: rooms } = await supabase
-    .from("rooms")
-    .select("id, name")
-    .eq("is_active", true)
-    .order("id");
+  const availableRooms = results.filter((r) => r.available).map((r) => r.roomId);
+  const occupiedRooms  = results.filter((r) => !r.available).map((r) => r.roomId);
 
-  // Lấy bookings có overlap với khoảng [dateFrom, dateTo]
-  const { data: bookings, error } = await supabase
-    .from("bookings")
-    .select("room_id")
-    .neq("status", "cancelled")
-    .lt("check_in", dateTo)    // check_in < dateTo
-    .gt("check_out", dateFrom); // check_out > dateFrom
+  const nightLabel = nights === 1 ? "1 đêm" : `${nights} đêm`;
+  let msg = `🔍 <b>Phòng trống ${label} (${nightLabel})</b>\n\n`;
+  msg += `✅ <b>Trống (${availableRooms.length})</b>:\n`;
+  msg += availableRooms.length ? availableRooms.join(" · ") : "<i>(không có)</i>";
+  msg += `\n\n❌ <b>Đã đặt (${occupiedRooms.length})</b>:\n`;
+  msg += occupiedRooms.length ? occupiedRooms.join(" · ") : "<i>(không có)</i>";
 
-  if (error) return sendMessage(chatId, `❌ Lỗi: ${error.message}`);
-
-  const occupiedRooms = new Set((bookings ?? []).map((b: { room_id: string }) => b.room_id));
-  const available = (rooms ?? []).filter((r: { id: string; name: string }) => !occupiedRooms.has(r.id));
-
-  const label = dateFrom === dateTo
-    ? formatDateVN(dateFrom)
-    : `${formatDateVN(dateFrom)} → ${formatDateVN(dateTo)}`;
-
-  if (!available.length) {
-    return sendMessage(chatId, `🏨 <b>Phòng trống ${label}</b>\n\nKhông có phòng trống.`);
-  }
-
-  let msg = `🏨 <b>Phòng trống ${label} (${available.length}/${rooms?.length})</b>\n\n`;
-  for (const r of available) {
-    msg += `✅ P${r.id}\n`;
-  }
   return sendMessage(chatId, msg.trim());
 }
 
@@ -484,7 +500,7 @@ async function handleIssue(chatId: string, args: string[]) {
   );
 }
 
-// ─── Task Commands (giữ nguyên từ v29) ─────────────────────────────────────
+// ─── Task Commands ────────────────────────────────────────────────────────────
 
 interface NotionTask { id: string; properties: Record<string, unknown> }
 
@@ -568,37 +584,27 @@ async function handleTaskList(chatId: string) {
 }
 
 async function handleCreateTask(chatId: string, args: string[]) {
-  // Format: /task -N [nội dung] [urgency: cao/tb/thap]
-  // Urgency cuối cùng nếu là từ khoá: cao, tb, thap, high, medium, low
   if (!args.length) {
-    return sendMessage(chatId, "❌ Dùng: /task -1 Dọn phòng 101 cao\nUrgency: cao / tb / thap");
+    return sendMessage(chatId, "❌ Dùng: /task -1 Sửa máy lạnh\nMức độ: -1 🔴 Khẩn · -2 🟡 Cao · -3 🟢 Thường");
   }
 
-  const URGENCY_MAP: Record<string, string> = {
-    cao: "High", high: "High",
-    tb: "Medium", medium: "Medium",
-    thap: "Low", low: "Low",
+  // Parse urgency flag -N → Notion priority
+  const FLAG_URGENCY: Record<string, { notion: string; icon: string; label: string }> = {
+    "-1": { notion: "High",   icon: "🔴", label: "Khẩn"   },
+    "-2": { notion: "Medium", icon: "🟡", label: "Cao"     },
+    "-3": { notion: "Low",    icon: "🟢", label: "Thường"  },
   };
 
-  // Parse số thứ tự (-N)
-  let priority = "";
+  let urgencyInfo = { notion: "Low", icon: "🟢", label: "Thường" };
   let contentArgs = [...args];
-  if (args[0].startsWith("-")) {
-    priority = args[0]; // e.g. -1, -2
+  if (args[0]?.startsWith("-") && FLAG_URGENCY[args[0]]) {
+    urgencyInfo = FLAG_URGENCY[args[0]];
     contentArgs = args.slice(1);
   }
 
-  // Parse urgency (từ cuối)
-  let urgency = "Medium";
-  const lastWord = contentArgs[contentArgs.length - 1]?.toLowerCase();
-  if (lastWord && URGENCY_MAP[lastWord]) {
-    urgency = URGENCY_MAP[lastWord];
-    contentArgs = contentArgs.slice(0, -1);
-  }
-
-  const taskName = (priority ? `${priority} ` : "") + contentArgs.join(" ");
-  if (!taskName.trim()) {
-    return sendMessage(chatId, "❌ Thiếu nội dung task.");
+  const taskName = contentArgs.join(" ").trim();
+  if (!taskName) {
+    return sendMessage(chatId, "❌ Thiếu nội dung task.\nDùng: /task -1 Sửa máy lạnh");
   }
 
   const NOTION_TOKEN = Deno.env.get("NOTION_TOKEN")!;
@@ -617,7 +623,7 @@ async function handleCreateTask(chatId: string, args: string[]) {
       properties: {
         "Task Name": { title: [{ text: { content: taskName } }] },
         "Date":      { date: { start: today } },
-        "Priority":  { select: { name: urgency } },
+        "Priority":  { select: { name: urgencyInfo.notion } },
         "Status":    { status: { name: "Not started" } },
       },
     }),
@@ -628,10 +634,9 @@ async function handleCreateTask(chatId: string, args: string[]) {
     return sendMessage(chatId, `❌ Lỗi tạo task: ${err.message ?? res.status}`);
   }
 
-  const icons: Record<string, string> = { High: "🔴", Medium: "🟡", Low: "🟢" };
   return sendMessage(
     chatId,
-    `${icons[urgency]} Task đã tạo:\n<b>${taskName}</b>\nUrgency: ${urgency}`
+    `${urgencyInfo.icon} Task đã tạo:\n<b>${taskName}</b>\nUrgency: ${urgencyInfo.label}`
   );
 }
 
@@ -753,8 +758,8 @@ async function handleHelp(chatId: string) {
 
 📅 <b>Lịch</b>
 /today — check-in, check-out, đang ở hôm nay
-/next — check-in, check-out, đang ở ngày mai
-/a — tất cả booking active
+/next — check-in, check-out ngày mai
+/a — phòng trống hôm nay
 /a [dd/mm] — phòng trống ngày cụ thể
 /a [dd/mm] [dd/mm] — phòng trống giai đoạn
 /checkin — check-in hôm nay
@@ -772,7 +777,9 @@ async function handleHelp(chatId: string) {
 /debt — nhóm còn nợ
 
 📋 <b>Tasks</b>
-/task -N [nội dung] [urgency] — tạo task mới
+/task -1 [nội dung] — tạo task 🔴 Khẩn
+/task -2 [nội dung] — tạo task 🟡 Cao
+/task -3 [nội dung] — tạo task 🟢 Thường
 /tasks — xem tasks hôm nay
 /done [N] — đánh dấu xong
 /skip [N] — bỏ qua task
