@@ -68,7 +68,7 @@ async function handleToday(chatId: string) {
   const today = todayVN();
   const { data, error } = await supabase
     .from("bookings")
-    .select("room_id, guest_name, check_in, check_out, status, groups(paid, grand_total)")
+    .select("room_id, guest_name, check_in, check_out, status, grand_total, groups(paid)")
     .or(`check_in.eq.${today},check_out.eq.${today}`)
     .neq("status", "cancelled")
     .order("check_in");
@@ -84,7 +84,7 @@ async function handleToday(chatId: string) {
     msg += `\n🟢 <b>Check-in (${checkins.length})</b>\n`;
     for (const b of checkins) {
       const paid = (b.groups as any)?.paid ?? 0;
-      const total = (b.groups as any)?.grand_total ?? 0;
+      const total = (b.grand_total as number) ?? 0;
       const debt = total - paid;
       msg += `  P${b.room_id} — ${b.guest_name} → out ${formatDateVN(b.check_out)}`;
       if (debt > 0) msg += ` | Còn: ${formatVND(debt)}`;
@@ -95,7 +95,7 @@ async function handleToday(chatId: string) {
     msg += `\n🔴 <b>Check-out (${checkouts.length})</b>\n`;
     for (const b of checkouts) {
       const paid = (b.groups as any)?.paid ?? 0;
-      const total = (b.groups as any)?.grand_total ?? 0;
+      const total = (b.grand_total as number) ?? 0;
       const debt = total - paid;
       msg += `  P${b.room_id} — ${b.guest_name}`;
       if (debt > 0) msg += ` | ⚠️ Còn nợ: ${formatVND(debt)}`;
@@ -153,7 +153,7 @@ async function handleCheckin(chatId: string) {
   const today = todayVN();
   const { data, error } = await supabase
     .from("bookings")
-    .select("room_id, guest_name, check_in, check_out, status, groups(paid, grand_total)")
+    .select("room_id, guest_name, check_in, check_out, status, grand_total, groups(paid)")
     .eq("check_in", today)
     .neq("status", "cancelled")
     .order("room_id");
@@ -164,7 +164,7 @@ async function handleCheckin(chatId: string) {
   let msg = `🟢 <b>Check-in hôm nay ${formatDateVN(today)} (${data.length})</b>\n\n`;
   for (const b of data) {
     const paid  = (b.groups as any)?.paid ?? 0;
-    const total = (b.groups as any)?.grand_total ?? 0;
+    const total = (b.grand_total as number) ?? 0;
     const debt  = total - paid;
     const statusLabel = b.status === "checked-in" ? " ✅ đã check-in" : "";
     msg += `P${b.room_id} — ${b.guest_name} → out ${formatDateVN(b.check_out)}${statusLabel}`;
@@ -179,7 +179,7 @@ async function handleCheckout(chatId: string) {
   const today = todayVN();
   const { data, error } = await supabase
     .from("bookings")
-    .select("room_id, guest_name, check_in, check_out, status, groups(paid, grand_total)")
+    .select("room_id, guest_name, check_in, check_out, status, grand_total, groups(paid)")
     .eq("check_out", today)
     .neq("status", "cancelled")
     .order("room_id");
@@ -190,7 +190,7 @@ async function handleCheckout(chatId: string) {
   let msg = `🔴 <b>Check-out hôm nay ${formatDateVN(today)} (${data.length})</b>\n\n`;
   for (const b of data) {
     const paid  = (b.groups as any)?.paid ?? 0;
-    const total = (b.groups as any)?.grand_total ?? 0;
+    const total = (b.grand_total as number) ?? 0;
     const debt  = total - paid;
     msg += `P${b.room_id} — ${b.guest_name}`;
     if (b.status === "checked-out") msg += " ✅ đã out";
@@ -204,7 +204,7 @@ async function handleCheckout(chatId: string) {
 async function handleStay(chatId: string) {
   const { data, error } = await supabase
     .from("bookings")
-    .select("room_id, guest_name, check_in, check_out, groups(paid, grand_total)")
+    .select("room_id, guest_name, check_in, check_out, grand_total, groups(paid)")
     .eq("status", "checked-in")
     .order("check_out");
 
@@ -214,7 +214,7 @@ async function handleStay(chatId: string) {
   let msg = `🏠 <b>Khách đang ở (${data.length})</b>\n\n`;
   for (const b of data) {
     const paid  = (b.groups as any)?.paid ?? 0;
-    const total = (b.groups as any)?.grand_total ?? 0;
+    const total = (b.grand_total as number) ?? 0;
     const debt  = total - paid;
     msg += `P${b.room_id} — ${b.guest_name} | out ${formatDateVN(b.check_out)}`;
     if (debt > 0) msg += ` | Còn: ${formatVND(debt)}`;
