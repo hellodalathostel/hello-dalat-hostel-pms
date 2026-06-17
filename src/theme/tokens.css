@@ -1,0 +1,130 @@
+/* FILE: src/theme/tokens.css */
+/**
+ * Hello Dalat PMS — Design Tokens
+ * Direction: "Bảng điều khiển sân bay" (Operator Board)
+ * Principle: density + scan speed first. Color = signal, not decoration.
+ */
+
+:root {
+  /* ---- Surface & ink (Light) ---- */
+  --bg: #F5F5F3;
+  --surface: #FFFFFF;
+  --surface-raised: #FFFFFF;
+  --ink: #14141A;
+  --ink-dim: #6B6B66;
+  --ink-faint: #A3A39C;
+  --rule: #DEDDD6;
+  --rule-strong: #C7C6BC;
+
+  /* ---- Signal colors (functional, not decorative) ---- */
+  --signal-go: #5C6B4F;       /* rêu — phòng trống / sẵn sàng */
+  --signal-go-bg: #E7EBE2;
+  --signal-hold: #B5552E;     /* đất nung — đang dọn / chờ xử lý */
+  --signal-hold-bg: #F3E3DA;
+  --signal-stop: #9B2C2C;     /* đỏ đậm — quá hạn / cần xử lý ngay */
+  --signal-stop-bg: #F5DEDE;
+  --signal-occupied: #4A4A52; /* xám than — đang ở */
+  --signal-occupied-bg: #E7E7E5;
+
+  /* ---- Brand accent — đã tách khỏi --signal-hold (brain.decisions, 2026-06-17) ---- */
+  --accent: #14141A;          /* = --ink */
+  --accent-ink: #FFFFFF;
+  --accent-soft: #E7E7E5;
+
+  /* ---- Typography ---- */
+  --font-ui: 'IBM Plex Sans', -apple-system, sans-serif;
+  --font-mono: 'IBM Plex Mono', 'JetBrains Mono', monospace;
+
+  --text-xs: 11px;
+  --text-sm: 13px;
+  --text-base: 14px;
+  --text-lg: 16px;
+  --text-xl: 20px;
+  --text-2xl: 28px;
+
+  --leading-tight: 1.2;
+  --leading-base: 1.45;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  --row-height: 44px;
+  --row-height-compact: 36px;
+
+  --radius-sm: 2px;
+  --radius-md: 4px;
+
+  --focus-ring: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
+  --shadow-overlay: 0 8px 24px rgba(20, 20, 26, 0.16);
+}
+
+/* ---- Dark mode ---- */
+[data-theme='dark'] {
+  --bg: #121212;
+  --surface: #1B1B1A;
+  --surface-raised: #232322;
+  --ink: #F0F0EC;
+  --ink-dim: #9A9A93;
+  --ink-faint: #6B6B66;
+  --rule: #2E2E2B;
+  --rule-strong: #3D3D38;
+
+  --signal-go: #8FA37D;
+  --signal-go-bg: #232A1F;
+  --signal-hold: #D98256;
+  --signal-hold-bg: #2E2018;
+  --signal-stop: #E06A6A;
+  --signal-stop-bg: #2E1A1A;
+  --signal-occupied: #ACACB4;
+  --signal-occupied-bg: #232325;
+
+  --accent: #F0F0EC;          /* = --ink dark mode — đã tách khỏi --signal-hold */
+  --accent-ink: #14141A;
+  --accent-soft: #232325;
+
+  --shadow-overlay: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+/* ---- Base reset for operator board feel ---- */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: var(--text-base);
+  line-height: var(--leading-base);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Tabular numerals — lever thật cho tốc độ đọc số liệu */
+.num, .price, td.num-cell {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ---- Calendar block — clipped indicator khi booking vắt qua biên khung nhìn ---- */
+.cal-block.clipped-start {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  border-left: 2px dashed var(--ink-dim);
+}
+.cal-block.clipped-end {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  border-right: 2px dashed var(--ink-dim);
+}
