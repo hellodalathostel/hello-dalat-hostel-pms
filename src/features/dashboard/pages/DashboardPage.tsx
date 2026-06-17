@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import dayjs from 'dayjs'
 import { useQueryClient } from '@tanstack/react-query'
-import { Button, Flex, Spin, Typography } from 'antd'
+import { Button, Col, Flex, Row, Spin, Typography } from 'antd'
 import { ReloadOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { CheckInModal } from '@/features/checkin/components/CheckInModal'
 import { QuickCheckoutModal, type CheckoutTarget } from '@/features/checkout/components/QuickCheckoutModal'
-import { RoomBoard } from '@/features/dashboard/components/RoomBoard'
+import { RoomCard } from '@/features/dashboard/components/RoomCard'
 import { BlockedRoomDrawer } from '@/features/dashboard/components/BlockedRoomDrawer'
 import BookingDetailDrawer from '@/features/bookings/components/BookingDetailDrawer'
 import { PaymentModal } from '@/features/payment/components/PaymentModal'
@@ -188,13 +188,20 @@ export default function Dashboard(): React.JSX.Element {
       <StatsBar stats={stats} />
 
       <Spin spinning={isLoading || isFetching}>
-        <RoomBoard
-          rooms={rooms}
-          onCheckinClick={handleRoomClick}
-          onCheckoutClick={handleRoomClick}
-          onDetailsClick={handleDetailsClick}
-          onPaymentClick={handlePaymentClick}
-        />
+        <Row gutter={[16, 16]}>
+          {rooms.map((room) => (
+            <Col key={room.room_id} xs={24} md={12} xl={8}>
+              <RoomCard
+                room={room}
+                onClick={() => handleRoomClick(room)}
+                onPaymentClick={handlePaymentClick}
+                onCheckinClick={handleRoomClick}
+                onCheckoutClick={handleRoomClick}
+                onDetailsClick={handleDetailsClick}
+              />
+            </Col>
+          ))}
+        </Row>
       </Spin>
 
       {selectedRoom ? (
