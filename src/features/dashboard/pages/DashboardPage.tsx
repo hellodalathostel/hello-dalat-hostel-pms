@@ -1,33 +1,26 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import dayjs from 'dayjs'
 import { useQueryClient } from '@tanstack/react-query'
-import { Button, Col, Flex, Row, Spin, Typography } from 'antd'
+import { Button, Flex, Spin, Typography } from 'antd'
 import { ReloadOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { CheckInModal } from '@/features/checkin/components/CheckInModal'
 import { QuickCheckoutModal, type CheckoutTarget } from '@/features/checkout/components/QuickCheckoutModal'
-import { RoomCard } from '@/features/dashboard/components/RoomCard'
+import { RoomBoard } from '@/features/dashboard/components/RoomBoard'
 import { BlockedRoomDrawer } from '@/features/dashboard/components/BlockedRoomDrawer'
 import BookingDetailDrawer from '@/features/bookings/components/BookingDetailDrawer'
 import { PaymentModal } from '@/features/payment/components/PaymentModal'
-import { StatsBar } from '@/features/dashboard/components/StatsBar'
 import { getRoomStatus, useDashboard } from '@/features/dashboard/hooks/useDashboard'
 import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
-import type { DashboardRoom, DashboardStats } from '@/types/dashboard'
-
-const initialStats: DashboardStats = {
-  vacant: 0,
-  arriving: 0,
-  occupied: 0,
-  checkoutToday: 0,
-  debt: 0,
-}
+import { useBreakpoint } from '@/shared/hooks/useBreakpoint'
+import type { DashboardRoom } from '@/types/dashboard'
 
 // Trang dashboard tổng quan: hiển thị thống kê và danh sách phòng theo thời gian thực.
 export default function Dashboard(): React.JSX.Element {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { notification } = useAppFeedback()
+  const { isMobile } = useBreakpoint()
   const { data: rooms = [], isLoading, isFetching, error } = useDashboard()
   const [selectedRoom, setSelectedRoom] = useState<DashboardRoom | null>(null)
   const [blockedDetailsRoom, setBlockedDetailsRoom] = useState<DashboardRoom | null>(null)
@@ -35,35 +28,6 @@ export default function Dashboard(): React.JSX.Element {
   const [isCheckInVisible, setIsCheckInVisible] = useState(false)
   const [isPaymentVisible, setIsPaymentVisible] = useState(false)
   const [checkoutTarget, setCheckoutTarget] = useState<CheckoutTarget | null>(null)
-
-  const stats = useMemo<DashboardStats>(() => {
-    const today = dayjs().format('YYYY-MM-DD')
-
-    const checkoutTodayRooms = rooms.filter(
-      (room) => room.status === 'checked-in' && room.check_out?.startsWith(today),
-    )
-
-    const occupiedRooms = rooms.filter(
-      (room) => room.status === 'checked-in' && !room.check_out?.startsWith(today),
-    )
-
-    const vacantRooms = rooms.filter((room) => getRoomStatus(room) === 'vacant')
-    const arrivingRooms = rooms.filter((room) => getRoomStatus(room) === 'arriving')
-
-    const debt = rooms.filter((room) => {
-      const status = getRoomStatus(room)
-      return status === 'occupied' && (room.balance_due ?? 0) > 0
-    }).length
-
-    return {
-      ...initialStats,
-      vacant: vacantRooms.length,
-      arriving: arrivingRooms.length,
-      occupied: occupiedRooms.length,
-      checkoutToday: checkoutTodayRooms.length,
-      debt,
-    }
-  }, [rooms])
 
   const handleCloseImportModal = useCallback(() => {
     setIsCheckInVisible(false)
@@ -176,7 +140,7 @@ export default function Dashboard(): React.JSX.Element {
   return (
     <div className="page-grid">
       <Flex justify="space-between" align="center" gap={12} wrap>
-        <Typography.Title level={2} style={{ margin: 0 }}>
+        <Typography.Title level={isMobile ? 4 : 2} style={{ margin: 0 }}>
           Dashboard tổng quan
         </Typography.Title>
 
@@ -185,23 +149,14 @@ export default function Dashboard(): React.JSX.Element {
         </Button>
       </Flex>
 
-      <StatsBar stats={stats} />
-
       <Spin spinning={isLoading || isFetching}>
-        <Row gutter={[16, 16]}>
-          {rooms.map((room) => (
-            <Col key={room.room_id} xs={24} md={12} xl={8}>
-              <RoomCard
-                room={room}
-                onClick={() => handleRoomClick(room)}
-                onPaymentClick={handlePaymentClick}
-                onCheckinClick={handleRoomClick}
-                onCheckoutClick={handleRoomClick}
-                onDetailsClick={handleDetailsClick}
-              />
-            </Col>
-          ))}
-        </Row>
+        <RoomBoard
+          rooms={rooms}
+          onCheckinClick={handleRoomClick}
+          onCheckoutClick={handleRoomClick}
+          onDetailsClick={handleDetailsClick}
+          onPaymentClick={handlePaymentClick}
+        />
       </Spin>
 
       {selectedRoom ? (

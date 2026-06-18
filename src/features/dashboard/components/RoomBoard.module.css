@@ -1,0 +1,139 @@
+/* FILE: src/features/dashboard/components/RoomBoard.module.css */
+.summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  background: var(--rule);
+  margin-bottom: var(--space-4);
+}
+
+.summaryCell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface);
+  padding: var(--space-3) var(--space-2);
+}
+
+.summaryNum {
+  font-size: var(--text-xl);
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+.summaryLabel {
+  font-size: var(--text-xs);
+  color: var(--ink-dim);
+  margin-top: 2px;
+}
+
+.board {
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+/* ĐÃ SỬA: 5 track -> 6 track, thêm 110px cho cột Action (bug v1 đã fix). */
+.row {
+  display: grid;
+  grid-template-columns: 56px 1fr 150px 150px 160px;
+  align-items: center;
+  height: var(--row-height);
+  padding: 0 var(--space-4);
+  border-bottom: 2px solid var(--rule);
+  font-size: var(--text-base);
+  gap: var(--space-2);
+}
+
+.row:last-child {
+  border-bottom: none;
+}
+
+.head {
+  height: auto;
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--ink);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: var(--surface-raised);
+  border-bottom: 2px solid var(--ink);
+}
+
+.id {
+  font-weight: 600;
+}
+
+.guest {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.guestEmpty {
+  color: var(--ink-dim);
+}
+
+.price {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  white-space: nowrap;
+}
+
+.dotGo { color: var(--signal-go); }
+.dotHold { color: var(--signal-hold); }
+.dotOcc { color: var(--signal-occupied); }
+.dotStop { color: var(--signal-stop); }
+
+/* ĐÃ SỬA: debtBadge giờ là <button> thật (bấm mở PaymentModal), không còn là <span> tĩnh. */
+.debtBadge {
+  color: var(--signal-stop);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  border: none;
+  background: none;
+  padding: 0;
+}
+
+.action {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+@media (max-width: 640px) {
+  .row {
+    grid-template-columns: 48px 1fr 110px;
+    height: auto;
+    padding: var(--space-2) var(--space-3);
+    row-gap: 4px;
+  }
+  .price {
+    display: none;
+  }
+  .status {
+    justify-content: flex-end;
+    font-size: var(--text-sm);
+  }
+  .action {
+    grid-column: 1 / -1;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 4px;
+  }
+  /* Header chỉ còn 3 track như .row, nên 2 span dư (Giá/đêm + span trống cuối)
+     phải ẩn hẳn — không có chỗ chứa, để mặc định sẽ tự xuống dòng đè lên dữ liệu. */
+  .head span:nth-child(3),
+  .head span:nth-child(5) {
+    display: none;
+  }
+}

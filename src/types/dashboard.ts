@@ -1,3 +1,5 @@
+import type { HousekeepingStatus } from '@/types/database'
+
 // Định nghĩa trạng thái hiển thị cho phòng trên dashboard.
 export type RoomStatus = 'vacant' | 'arriving' | 'occupied' | 'blocked'
 
@@ -7,6 +9,9 @@ export interface DashboardRoom {
   room_name: string
   room_type: string
   capacity: number
+  // Housekeeping — mới thêm cho Room Board
+  housekeeping_status: HousekeepingStatus
+  housekeeping_note: string | null
   // Booking fields — null nếu phòng trống hoặc bị block
   booking_id: string | null
   check_in: string | null
@@ -18,7 +23,8 @@ export interface DashboardRoom {
   source: string | null
   paid: number | null
   net_revenue: number | null
-  price: number | null
+  price: number | null            // legacy field — KHÔNG khớp tên cột thật (price_per_night), giữ nguyên không sửa, ngoài scope việc này
+  price_per_night: number | null  // đúng tên cột thật trong view, Room Board dùng field này
   grand_total: number | null
   balance_due: number | null
   // Group field
