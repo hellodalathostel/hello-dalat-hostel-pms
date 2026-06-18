@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react'
 import dayjs from 'dayjs'
 import { Button, Flex, Select, Spin, Table, Typography } from 'antd'
-import { DownloadOutlined } from '@ant-design/icons'
+import { DownloadOutlined, FileExcelOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import { useS1aReport, type S1aRow } from '../hooks/useS1aReport'
 import { TaxThresholdBanner } from '../components/TaxThresholdBanner'
+import { exportS1aExcel } from '../utils/exportS1aExcel'
 
 const { Title, Paragraph, Text } = Typography
 
@@ -55,6 +56,7 @@ type S1aTableRow = S1aRow & { key: string }
 
 export default function S1aPage() {
   const [selectedYear, setSelectedYear] = useState<number>(dayjs().year())
+  const [isExportingExcel, setIsExportingExcel] = useState(false)
   const { data, isLoading, isFetching, error } = useS1aReport(selectedYear)
 
   const rows = data ?? []
@@ -117,6 +119,15 @@ export default function S1aPage() {
     </Table.Summary>
   )
 
+  const handleExportExcel = async () => {
+    setIsExportingExcel(true)
+    try {
+      await exportS1aExcel(rows, selectedYear)
+    } finally {
+      setIsExportingExcel(false)
+    }
+  }
+
   return (
     <div className="page-grid">
       <TaxThresholdBanner year={selectedYear} />
@@ -145,6 +156,14 @@ export default function S1aPage() {
             disabled={isLoading || rows.length === 0}
           >
             Xuất CSV
+          </Button>
+          <Button
+            icon={<FileExcelOutlined />}
+            onClick={handleExportExcel}
+            loading={isExportingExcel}
+            disabled={isLoading || rows.length === 0}
+          >
+            Xuất Excel
           </Button>
         </Flex>
       </Flex>
