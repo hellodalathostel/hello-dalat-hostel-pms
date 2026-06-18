@@ -1,4 +1,5 @@
-// Hook CRUD booking_services — trigger tự recalc grand_total
+// FILE: src/features/bookings/hooks/useServiceActions.ts
+// Hook CRUD booking_services qua RPC — trigger tự recalc grand_total
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/api/supabase'
 import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
@@ -6,8 +7,8 @@ import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
 interface AddServicePayload {
   bookingId: string
   serviceId?: string   // null nếu nhập tay
-  name: string
-  price: number
+  name?: string        // chỉ dùng khi serviceId null (custom)
+  price?: number        // chỉ dùng khi serviceId null (custom)
   qty: number
 }
 
@@ -23,14 +24,15 @@ export function useServiceActions(bookingId: string, groupId: string) {
 
   const addService = useMutation({
     mutationFn: async (payload: AddServicePayload) => {
-      const { error } = await supabase.from('booking_services').insert({
-        booking_id: payload.bookingId,
-        service_id: payload.serviceId ?? null,
-        name: payload.name,
-        price: payload.price,
-        qty: payload.qty,
+      const { data, error } = await supabase.rpc('add_booking_service_txn', {
+        p_booking_id: payload.bookingId,
+        p_service_id: payload.serviceId ?? null,
+        p_qty: payload.qty,
+        p_custom_name: payload.serviceId ? null : payload.name,
+        p_custom_price: payload.serviceId ? null : payload.price,
       })
       if (error) throw error
+      return data
     },
     onSuccess: () => { message.success('Đã thêm dịch vụ'); invalidate() },
     onError: (err: Error) => { message.error(`Lỗi thêm dịch vụ: ${err.message}`) },
@@ -38,10 +40,9 @@ export function useServiceActions(bookingId: string, groupId: string) {
 
   const deleteService = useMutation({
     mutationFn: async (serviceRowId: string) => {
-      const { error } = await supabase
-        .from('booking_services')
-        .delete()
-        .eq('id', serviceRowId)
+      const { error } = await supabase.rpc('delete_booking_service_txn', {
+        p_service_row_id: serviceRowId,
+      })
       if (error) throw error
     },
     onSuccess: () => { message.success('Đã xóa dịch vụ'); invalidate() },

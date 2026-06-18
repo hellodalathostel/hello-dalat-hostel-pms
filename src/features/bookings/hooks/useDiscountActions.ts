@@ -1,4 +1,5 @@
-// Hook CRUD booking_discounts — trigger tự recalc grand_total
+// FILE: src/features/bookings/hooks/useDiscountActions.ts
+// Hook CRUD booking_discounts qua RPC — trigger tự recalc grand_total
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/api/supabase'
 import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
@@ -21,12 +22,13 @@ export function useDiscountActions(bookingId: string, groupId: string) {
 
   const addDiscount = useMutation({
     mutationFn: async (payload: AddDiscountPayload) => {
-      const { error } = await supabase.from('booking_discounts').insert({
-        booking_id: payload.bookingId,
-        amount: payload.amount,
-        description: payload.description ?? null,
+      const { data, error } = await supabase.rpc('add_discount_txn', {
+        p_booking_id: payload.bookingId,
+        p_amount: payload.amount,
+        p_description: payload.description ?? null,
       })
       if (error) throw error
+      return data
     },
     onSuccess: () => { message.success('Đã thêm giảm giá'); invalidate() },
     onError: (err: Error) => { message.error(`Lỗi thêm giảm giá: ${err.message}`) },
@@ -34,10 +36,9 @@ export function useDiscountActions(bookingId: string, groupId: string) {
 
   const deleteDiscount = useMutation({
     mutationFn: async (discountId: string) => {
-      const { error } = await supabase
-        .from('booking_discounts')
-        .delete()
-        .eq('id', discountId)
+      const { error } = await supabase.rpc('delete_booking_discount_txn', {
+        p_discount_row_id: discountId,
+      })
       if (error) throw error
     },
     onSuccess: () => { message.success('Đã xóa giảm giá'); invalidate() },
