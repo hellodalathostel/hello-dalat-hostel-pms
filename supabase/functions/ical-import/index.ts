@@ -188,7 +188,7 @@ serve(async (req) => {
         .from('bookings')
         .select('check_in, check_out, external_ical_uid')
         .eq('room_id', room.id)
-        .in('status', ['confirmed', 'checked-in'])
+        .in('status', ['booked', 'checked-in'])  // FIX 2026-06-18: enum booking_status không có 'confirmed', đúng là booked|checked-in|checked-out|cancelled
         .is('external_ical_uid', null)  // chỉ booking nội bộ
 
       // 2e. Upsert từng VEVENT
