@@ -1766,6 +1766,8 @@ export function renderGroupConfirmation(data: GroupDocumentData, lang: 'vi' | 'e
       </table>
     </div>` : '';
 
+  const balGroup = Math.max(0, data.totalGrandTotal - data.totalPaid);
+  const hasDepositGroup = data.totalPaid > 0;
   const totalSection = `
     <table class="line-table" style="margin-bottom:20px;">
       <tbody>
@@ -1773,6 +1775,15 @@ export function renderGroupConfirmation(data: GroupDocumentData, lang: 'vi' | 'e
           <td>${t.totalLabel}</td>
           <td class="tr">${fmtMoney(data.totalGrandTotal)}</td>
         </tr>
+        ${hasDepositGroup ? `
+        <tr class="paid-row">
+          <td>${isEn ? 'Deposit paid' : 'Đã đặt cọc'}</td>
+          <td class="tr">−${fmtMoney(data.totalPaid)}</td>
+        </tr>
+        <tr class="due-row">
+          <td><strong>${isEn ? 'Balance due at check-in' : 'Còn lại khi check-in'}</strong></td>
+          <td class="tr"><strong>${fmtMoney(balGroup)}</strong></td>
+        </tr>` : ''}
       </tbody>
     </table>`;
 
@@ -1803,21 +1814,23 @@ export function renderGroupConfirmation(data: GroupDocumentData, lang: 'vi' | 'e
       </table>
     </div>`;
 
-  const qrSection = `
+  const qrSection = balGroup > 0 ? `
     <div class="section">
       <div class="section-label">${t.bankTitle}</div>
       <div class="qr-block">
         <div class="qr-img">
-          <img src="${vietQrUrl(0, `HD ${removeDiacritics(data.guestName)}`)}" alt="VietQR" />
+          <img src="${vietQrUrl(balGroup, `HD ${removeDiacritics(data.guestName)}`)}" alt="VietQR" />
         </div>
         <div class="qr-info">
+          <div class="qr-row"><span class="qr-key">${isEn ? 'Amount' : 'Số tiền'}</span><span class="qr-val" style="font-weight:700">${fmtMoney(balGroup)}</span></div>
           <div class="qr-row"><span class="qr-key">${isEn ? 'Bank' : 'Ngân hàng'}</span><span class="qr-val">Vietcombank (VCB)</span></div>
           <div class="qr-row"><span class="qr-key">${isEn ? 'Account' : 'Số tài khoản'}</span><span class="qr-val">${VQR_ACCOUNT_DISPLAY}</span></div>
-          <div class="qr-row"><span class="qr-key">${isEn ? 'Name' : 'Chủ tài khoản'}</span><span class="qr-val">${VQR_OWNER}</span></div>
+          <div class="qr-row"><span class="qr-key">${isEn ? 'Account Name' : 'Chủ TK'}</span><span class="qr-val">${VQR_OWNER}</span></div>
+          <div class="qr-row"><span class="qr-key">${isEn ? 'Reference' : 'Nội dung CK'}</span><span class="qr-val" style="color:#0a3d1a;font-weight:600">HD ${removeDiacritics(data.guestName)}</span></div>
           <div class="qr-note">${t.bankNote}</div>
         </div>
       </div>
-    </div>`;
+    </div>` : '';
 
   const calloutSection = `
     <div class="callout callout-amber">
