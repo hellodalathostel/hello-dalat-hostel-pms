@@ -1,5 +1,7 @@
 export * from './database'
-export * from './calendar'
+// RoomBlock của calendar.ts (khối lịch đã merge để render) trùng tên với
+// RoomBlock của database.ts (row của bảng room_blocks) — export riêng để tránh ambiguity.
+export type { CalendarEvent, RoomRow } from './calendar'
 export * from './dashboard'
 
 // Chỉ export những gì checkin.ts có mà database.ts không có

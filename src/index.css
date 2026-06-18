@@ -105,28 +105,33 @@ body {
   box-shadow: var(--shadow-lg);
 }
 
-.calendar-table-wrapper {
+/* ============================================================
+   CALENDAR TIMELINE v2 — CSS Grid + absolute block
+   Thay thế hoàn toàn .calendar-table / .calendar-slot cũ (đã xóa khỏi component).
+   Class .cal-block dùng convention clipped-start/clipped-end từ tokens.css.
+   ============================================================ */
+.calendar-grid-wrapper {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-x: contain;
   cursor: grab;
 }
 
-.calendar-table-wrapper:active {
+.calendar-grid-wrapper:active {
   cursor: grabbing;
 }
 
-.calendar-table-wrapper::-webkit-scrollbar {
+.calendar-grid-wrapper::-webkit-scrollbar {
   height: 4px;
 }
 
-.calendar-table-wrapper::-webkit-scrollbar-track {
+.calendar-grid-wrapper::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.calendar-table-wrapper::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 2px;
+.calendar-grid-wrapper::-webkit-scrollbar-thumb {
+  background: var(--rule-strong);
+  border-radius: var(--radius-sm);
 }
 
 .calendar-table-wrapper--dragging {
@@ -134,69 +139,93 @@ body {
   -webkit-user-select: none;
 }
 
-.calendar-table {
-  width: auto;
-  min-width: 980px;
-  table-layout: fixed;
-  border-collapse: separate;
-  border-spacing: 0;
+.calendar-grid {
+  display: grid;
+  position: relative;
+  background: var(--surface);
+  border-radius: var(--radius-md);
 }
 
-.calendar-table th,
-.calendar-table td {
-  border-right: 1px solid rgba(12, 105, 88, 0.1);
-  border-bottom: 1px solid rgba(12, 105, 88, 0.1);
-}
-
-.calendar-table thead th {
+.calendar-grid-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-2) var(--space-1);
+  text-align: center;
+  border-right: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  background: var(--surface-raised);
   position: sticky;
   top: 0;
-  z-index: 1;
-  padding: 14px 10px;
-  text-align: center;
-  background: #f4fbf8;
+  z-index: 3;
+  color: var(--ink);
+  font-size: var(--text-sm);
 }
 
-.calendar-room-header,
-.calendar-room-cell {
+.calendar-room-header {
   position: sticky;
   left: 0;
-  z-index: 2;
-  min-width: 116px;
-  width: 116px;
-  background: #f9fffc;
-}
-
-.calendar-room-cell {
-  padding: 12px;
+  top: 0;
+  z-index: 4;
   text-align: left;
-}
-
-.calendar-room-name {
-  font-weight: 700;
-  color: #113c33;
+  align-items: flex-start;
+  font-weight: 600;
 }
 
 .calendar-date-header {
-  width: 92px;
-  color: #163d34;
+  color: var(--ink-dim);
 }
 
-.calendar-slot {
-  height: 86px;
-  padding: 6px;
-  vertical-align: middle;
-  background: rgba(255, 255, 255, 0.86);
+/* ---- Room row: container relative để chứa 2 layer (vacant + block) ---- */
+.calendar-room-row {
+  position: relative;
+  display: flex;
+  border-bottom: 1px solid var(--rule);
 }
 
-.calendar-slot__vacant {
+.calendar-room-cell {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  flex-shrink: 0;
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-raised);
+  border-right: 1px solid var(--rule-strong);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+}
+
+.calendar-room-name {
+  font-weight: 600;
+  color: var(--ink);
+  font-size: var(--text-base);
+}
+
+/* ---- Vacant layer: nền lưới ô trống, z-index thấp ---- */
+.calendar-vacant-layer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  z-index: 1;
+}
+
+.calendar-vacant-cell {
+  position: relative;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 100%;
-  height: 100%;
-  border-radius: 12px;
-  transition: background-color 0.2s ease;
+  border-right: 1px solid var(--rule);
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.calendar-vacant-cell:hover {
+  background: var(--accent-soft);
 }
 
 .calendar-add-button {
@@ -205,65 +234,131 @@ body {
   transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
-.calendar-slot:hover .calendar-add-button {
+.calendar-vacant-cell:hover .calendar-add-button {
   opacity: 1;
   transform: translateY(0);
 }
 
-.calendar-slot:hover .calendar-slot__vacant {
-  background: rgba(13, 138, 106, 0.07);
+/* ---- Block layer: absolute-positioned div, z-index cao hơn vacant ---- */
+.calendar-block-layer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 2;
+  pointer-events: none; /* chỉ .cal-block bên trong mới bắt click */
 }
 
-.calendar-slot__content {
-  display: grid;
-  gap: 6px;
+/* ---- .cal-block — convention clipped-start/clipped-end trong tokens.css ---- */
+.cal-block {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  pointer-events: auto;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  cursor: pointer;
+  box-shadow: var(--shadow-overlay);
+  transition: filter 0.15s ease;
+}
+
+.cal-block:hover {
+  filter: brightness(0.97);
+}
+
+.cal-block__content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   height: 100%;
-  padding: 10px 12px;
-  border-radius: 12px;
+  padding: var(--space-1) var(--space-2);
+  justify-content: center;
 }
 
-.calendar-slot__content--blocked {
-  place-content: center;
-  justify-items: center;
+.cal-block__content--blocked {
+  align-items: center;
   text-align: center;
+  justify-content: center;
 }
 
-.calendar-slot__title-row {
+.cal-block__title-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--space-1);
 }
 
-.calendar-slot__title {
+.cal-block__title {
   overflow: hidden;
-  font-weight: 700;
+  font-weight: 600;
+  font-size: var(--text-sm);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.calendar-slot__meta {
-  color: rgba(255, 255, 255, 0.88) !important;
+.cal-block__meta {
+  font-size: var(--text-xs);
+  opacity: 0.85;
+  color: inherit !important;
 }
 
-.calendar-slot--booked .calendar-slot__content {
-  color: #fff;
-  background: linear-gradient(135deg, #3b82f6, #2563eb);
+/* ---- Signal màu theo variant (đã chốt với Hiếu 2026-06-18) ---- */
+.cal-block--booked {
+  background: var(--signal-go-bg);
+  color: var(--signal-go);
 }
 
-.calendar-slot--checked-in .calendar-slot__content {
-  color: #fff;
-  background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+.cal-block--checked-in {
+  background: var(--signal-occupied-bg);
+  color: var(--signal-occupied);
 }
 
-.calendar-slot--blocked .calendar-slot__content {
-  color: #7f1d1d;
-  background: linear-gradient(135deg, #fee2e2, #fecaca);
+.cal-block--checked-out {
+  background: var(--bg);
+  color: var(--ink-faint);
+  border: 1px solid var(--rule);
+}
+
+.cal-block--cancelled {
+  background: var(--bg);
+  color: var(--ink-faint);
+  border: 1px dashed var(--rule);
+  text-decoration: line-through;
+}
+
+.cal-block--blocked {
+  background: var(--signal-stop-bg);
+  color: var(--signal-stop);
+}
+
+/* Checked-in — đổi sang xanh lá đậm theo yêu cầu 2026-06-18 */
+.cal-block--checked-in {
+  background: #1B5E3A;
+  color: #FFFFFF;
+}
+
+/* Cancelled không còn render (đã filter ở component) — rule này giữ lại
+   làm fallback an toàn, phòng trường hợp filter bị bỏ sót ở nơi khác */
+.cal-block--cancelled {
+  display: none;
+}
+
+/* Cột "hôm nay" — viền tín hiệu nổi bật, dùng xanh dương không trùng
+   với bất kỳ --signal-* nào hiện có (tránh nhầm là trạng thái booking) */
+.calendar-date-header--today {
+  border-left: 2px solid #2563EB;
+  border-right: 2px solid #2563EB;
+  background: #EFF6FF;
+}
+
+.calendar-vacant-cell--today {
+  border-left: 1px solid rgba(37, 99, 235, 0.3);
+  border-right: 1px solid rgba(37, 99, 235, 0.3);
+  background: rgba(37, 99, 235, 0.04);
 }
 
 @media (max-width: 992px) {
-  .calendar-slot {
-    height: 74px;
+  .calendar-room-row {
+    height: 56px !important;
   }
 }
 

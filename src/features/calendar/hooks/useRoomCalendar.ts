@@ -2,7 +2,7 @@ import dayjs from 'dayjs'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/api/supabase'
 import { normalizeError } from '@/shared/utils/normalizeError'
-import type { CalendarEvent, RoomRow } from '@/types/calendar'
+import type { CalendarEvent, RoomBlock, RoomRow } from '@/types/calendar'
 import type { HousekeepingStatus } from '@/types/database'
 
 // Thứ tự mặc định chỉ dùng khi chưa có dữ liệu phòng từ DB
@@ -79,6 +79,60 @@ function buildMergeKey(event: CalendarEvent | null): string | null {
   return `${event.booking_id ?? event.guest_name ?? event.checkin_at ?? event.date}:${event.status}`
 }
 
+// Gộp các ngày liên tiếp cùng booking/block thành 1 RoomBlock — thay thế
+// vòng lặp colSpan cũ. Mỗi block lưu rawStart/rawEnd (index ngày trong viewport)
+// để CalendarTimeline render bằng computeCalendarBlockLayout.
+function buildRoomBlocks(dates: string[], roomEvents: Map<string, CalendarEvent>): RoomBlock[] {
+  const blocks: RoomBlock[] = []
+  let dateIndex = 0
+
+  while (dateIndex < dates.length) {
+    const currentDate = dates[dateIndex]
+    const currentEvent = roomEvents.get(currentDate) ?? null
+    const currentVariant = currentEvent?.is_blocked ? 'blocked' : currentEvent?.status
+
+    // Vacant — không tạo block, để CalendarTimeline render ô nền trống
+    if (!currentVariant) {
+      dateIndex += 1
+      continue
+    }
+
+    if (currentVariant === 'blocked') {
+      blocks.push({
+        event: currentEvent!,
+        variant: 'blocked',
+        rawStart: dateIndex,
+        rawEnd: dateIndex + 1,
+        shortLabel: 'Blocked',
+      })
+      dateIndex += 1
+      continue
+    }
+
+    const mergeKey = buildMergeKey(currentEvent)
+    let span = 1
+    while (dateIndex + span < dates.length) {
+      const nextEvent = roomEvents.get(dates[dateIndex + span]) ?? null
+      const nextVariant = nextEvent?.is_blocked ? 'blocked' : nextEvent?.status
+      if (nextVariant !== currentVariant || buildMergeKey(nextEvent) !== mergeKey) {
+        break
+      }
+      span += 1
+    }
+
+    blocks.push({
+      event: currentEvent!,
+      variant: currentVariant,
+      rawStart: dateIndex,
+      rawEnd: dateIndex + span,
+      shortLabel: buildShortGuestName(currentEvent?.guest_name ?? null),
+    })
+    dateIndex += span
+  }
+
+  return blocks
+}
+
 function transformCalendarRows(
   records: CalendarEvent[],
   startDate: string,
@@ -125,79 +179,17 @@ function transformCalendarRows(
     eventsByRoom.set(record.room_id, dateMap)
   }
 
-  // Bước 3: render row cho mỗi phòng — phòng không có event vẫn xuất hiện (vacant)
-  const rooms: RoomRow[] = orderedRooms.map(
-    ({ id: roomId, name: roomName, housekeeping_status, housekeeping_note }) => {
-      const roomEvents = eventsByRoom.get(roomId) ?? new Map<string, CalendarEvent>()
-      const days: RoomRow['days'] = []
-
-    let dateIndex = 0
-    while (dateIndex < dates.length) {
-      const currentDate = dates[dateIndex]
-      const currentEvent = roomEvents.get(currentDate) ?? null
-      const currentVariant = currentEvent?.is_blocked
-        ? 'blocked'
-        : (currentEvent?.status ?? 'vacant')
-
-      if (currentVariant === 'vacant' || currentVariant === 'blocked') {
-        days.push({
-          date: currentDate,
-          event: currentEvent,
-          variant: currentVariant,
-          isVisible: true,
-          colSpan: 1,
-          shortLabel: currentVariant === 'blocked' ? 'Blocked' : '',
-        })
-        dateIndex += 1
-        continue
-      }
-
-      const mergeKey = buildMergeKey(currentEvent)
-      let span = 1
-
-      while (dateIndex + span < dates.length) {
-        const nextEvent = roomEvents.get(dates[dateIndex + span]) ?? null
-        const nextVariant = nextEvent?.is_blocked ? 'blocked' : (nextEvent?.status ?? 'vacant')
-
-        if (nextVariant !== currentVariant || buildMergeKey(nextEvent) !== mergeKey) {
-          break
-        }
-
-        span += 1
-      }
-
-      days.push({
-        date: currentDate,
-        event: currentEvent,
-        variant: currentVariant,
-        isVisible: true,
-        colSpan: span,
-        shortLabel: buildShortGuestName(currentEvent?.guest_name ?? null),
-      })
-
-      for (let hiddenIndex = 1; hiddenIndex < span; hiddenIndex += 1) {
-        days.push({
-          date: dates[dateIndex + hiddenIndex],
-          event: roomEvents.get(dates[dateIndex + hiddenIndex]) ?? null,
-          variant: currentVariant,
-          isVisible: false,
-          colSpan: 0,
-          shortLabel: '',
-        })
-      }
-
-      dateIndex += span
+  // Bước 3: render blocks cho mỗi phòng — phòng không có event vẫn xuất hiện (toàn vacant)
+  const rooms: RoomRow[] = orderedRooms.map(({ id: roomId, name: roomName, housekeeping_status, housekeeping_note }) => {
+    const roomEvents = eventsByRoom.get(roomId) ?? new Map<string, CalendarEvent>()
+    return {
+      room_id: roomId,
+      room_name: roomName,
+      housekeeping_status,
+      housekeeping_note,
+      blocks: buildRoomBlocks(dates, roomEvents),
     }
-
-      return {
-        room_id: roomId,
-        room_name: roomName,
-        housekeeping_status,
-        housekeeping_note,
-        days,
-      }
-    },
-  )
+  })
 
   return { dates, rooms }
 }

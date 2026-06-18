@@ -22,18 +22,25 @@ export interface CalendarEvent {
   block_reason: string | null
 }
 
+// Một khối liên tục (booking/block) đã gộp nhiều ngày liên tiếp, dùng để render
+// absolute-positioned div trên lưới calendar. Thay thế cơ chế colSpan cũ.
+export interface RoomBlock {
+  /** Event đại diện cho khối (event của ngày đầu tiên trong khối) */
+  event: CalendarEvent
+  variant: 'blocked' | 'booked' | 'checked-in' | 'checked-out' | 'cancelled'
+  /** Index ngày bắt đầu, tính từ ngày đầu khung nhìn (luôn trong [0, dates.length)) */
+  rawStart: number
+  /** Index ngày kết thúc (exclusive), có thể > dates.length nếu bị clip ở hook */
+  rawEnd: number
+  shortLabel: string
+}
+
 // Một hàng phòng đã được chuẩn hóa để render lên timeline.
 export interface RoomRow {
   room_id: string
   room_name: string
   housekeeping_status: HousekeepingStatus
   housekeeping_note: string | null
-  days: Array<{
-    date: string
-    event: CalendarEvent | null
-    variant: 'vacant' | 'blocked' | 'booked' | 'checked-in' | 'checked-out' | 'cancelled'
-    isVisible: boolean
-    colSpan: number
-    shortLabel: string
-  }>
+  /** Danh sách khối booking/block liên tục — dùng để render absolute block */
+  blocks: RoomBlock[]
 }
