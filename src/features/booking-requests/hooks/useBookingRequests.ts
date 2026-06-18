@@ -20,15 +20,11 @@ export interface BookingRequest {
   updated_at: string
 }
 
-interface CheckRoomAvailabilityResult {
-  available: boolean
-}
-
-interface CreateGroupBookingTxnResult {
+interface ConfirmBookingRequestTxnResult {
   success: boolean
   error?: string
   group_id?: string
-  booking_ids?: string[]
+  booking_id?: string
 }
 
 const bookingRequestKeys = {
@@ -112,84 +108,21 @@ export function useConvertRequest() {
       request: BookingRequest,
       pricePerNight: number,
     }) => {
-      const { data: availabilityData, error: availabilityError } = await supabase.rpc(
-        'check_room_availability',
-        {
-          p_room_id: request.room_id,
-          p_check_in: request.check_in,
-          p_check_out: request.check_out,
-          p_exclude_booking_id: null,
-        },
-      )
+      const { data, error } = await supabase.rpc('confirm_booking_request_txn', {
+        p_request_id: request.id,
+        p_price_per_night: pricePerNight,
+      })
 
-      if (availabilityError) {
-        throw availabilityError
+      if (error) {
+        throw error
       }
 
-      // check_room_availability trả về composite type → Supabase JS trả array
-      const availResult = Array.isArray(availabilityData)
-        ? (availabilityData[0] as CheckRoomAvailabilityResult | undefined)
-        : (availabilityData as CheckRoomAvailabilityResult | null)
-      const isAvailable = availResult?.available === true
-
-      if (!isAvailable) {
-        throw new Error('CONFLICT')
+      const result = data as ConfirmBookingRequestTxnResult | null
+      if (!result?.success) {
+        throw new Error(result?.error ?? 'confirm_booking_request_txn thất bại')
       }
 
-      const { data: bookingData, error: bookingError } = await supabase.rpc(
-        'create_group_booking_txn',
-        {
-          p_group: {
-            customer_name: request.name,
-            customer_phone: request.phone,
-            customer_note: `Convert từ booking request ${request.id}`,
-            customer_cccd: '',
-            source: 'Walk-in',
-            channel_fee_rate: 0,
-          },
-          p_bookings: [
-            {
-              room_id: request.room_id,
-              check_in: request.check_in,
-              check_out: request.check_out,
-              price_per_night: pricePerNight,
-              guest_name: request.name,
-              guests_count: 1,
-              note: request.note ?? '',
-            },
-          ],
-          p_services: null,
-          p_discounts: null,
-        },
-      )
-
-      if (bookingError) {
-        throw bookingError
-      }
-
-      const bookingResult = bookingData as CreateGroupBookingTxnResult | null
-      if (!bookingResult?.success) {
-        throw new Error(bookingResult?.error ?? 'create_group_booking_txn thất bại')
-      }
-
-      const groupId = bookingResult.group_id
-      if (!groupId) {
-        throw new Error('Thiếu group_id từ create_group_booking_txn')
-      }
-
-      const { error: updateError } = await supabase
-        .from('booking_requests')
-        .update({
-          status: 'confirmed',
-          converted_group_id: groupId,
-        })
-        .eq('id', request.id)
-
-      if (updateError) {
-        throw updateError
-      }
-
-      return groupId
+      return result.group_id
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: bookingRequestKeys.all })
@@ -199,8 +132,12 @@ export function useConvertRequest() {
       message.success('Đã tạo booking thành công!')
     },
     onError: (error: Error) => {
-      if (error.message === 'CONFLICT') {
+      if (error.message.includes('ROOM_CONFLICT')) {
         message.error('Phòng đã có booking trùng lịch, hãy từ chối request hoặc đổi phòng khác')
+        return
+      }
+      if (error.message.includes('REQUEST_ALREADY_PROCESSED')) {
+        message.error('Request này đã được xử lý trước đó')
         return
       }
 
