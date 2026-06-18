@@ -4,6 +4,7 @@ import { Button, Flex, Select, Spin, Table, Typography } from 'antd'
 import { DownloadOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import { useS1aReport, type S1aRow } from '../hooks/useS1aReport'
+import { TaxThresholdBanner } from '../components/TaxThresholdBanner'
 
 const { Title, Paragraph, Text } = Typography
 
@@ -118,6 +119,8 @@ export default function S1aPage() {
 
   return (
     <div className="page-grid">
+      <TaxThresholdBanner year={selectedYear} />
+
       <Flex justify="space-between" align="center" gap={12} wrap>
         <div>
           <Title level={2} style={{ margin: 0 }}>
