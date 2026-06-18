@@ -91,12 +91,12 @@ async function callGeminiVision(body: OcrRequestBody, apiKey: string): Promise<s
 
   const data = await response.json();
 
-  // DEBUG: log Gemini response structure (khong log image data / PII)
+  // DEBUG: log chi metadata, KHONG log text_preview vi day la noi dung trich xuat tu CCCD/Passport (PII)
   console.log("[checkin-processor] Gemini response:", JSON.stringify({
     candidates_count: data?.candidates?.length,
     finish_reason: data?.candidates?.[0]?.finishReason,
     parts_count: data?.candidates?.[0]?.content?.parts?.length,
-    text_preview: (data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "").substring(0, 500),
+    has_text: Boolean(data?.candidates?.[0]?.content?.parts?.[0]?.text),
     prompt_feedback: data?.promptFeedback,
     usage: data?.usageMetadata,
   }));
@@ -167,8 +167,8 @@ function parseGeminiOutput(raw: string): Array<Record<string, unknown>> {
     extractBalanced(cleaned, "{", "}") ??
     cleaned;
 
-  // DEBUG: log truoc khi parse
-  console.log("[checkin-processor] parseGeminiOutput preview:", jsonStr.substring(0, 300));
+  // DEBUG: log do dai string truoc khi parse, KHONG log noi dung (chua PII tu CCCD/Passport)
+  console.log("[checkin-processor] parseGeminiOutput length:", jsonStr.length);
 
   try {
     const parsed = JSON.parse(jsonStr);
@@ -262,14 +262,13 @@ Deno.serve(async (req: Request) => {
   try {
     result = parseGeminiOutput(rawOutput);
   } catch (err) {
-    // Log day du de debug — raw output khong chua PII vi la JSON schema
+    // Khong log raw output / raw_preview ra response hoac console — day la PII tu CCCD/Passport
     console.error("[checkin-processor] Parse failed:", (err as Error).message);
-    console.error("[checkin-processor] Raw output (500 chars):", rawOutput.substring(0, 500));
+    console.error("[checkin-processor] Raw output length:", rawOutput.length);
     return new Response(
       JSON.stringify({
         error: "Khong doc duoc thong tin tu anh. Vui long chup lai ro hon.",
         detail: (err as Error).message,
-        raw_preview: rawOutput.substring(0, 200),
       }),
       { status: 422, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
     );

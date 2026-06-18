@@ -24,9 +24,10 @@ export function useCheckIn() {
 	return useMutation({
 		mutationFn: async ({ booking_id, guests }: CheckinPayload) => {
 			if (import.meta.env.DEV) {
-				console.log('checkin payload:', JSON.stringify({ p_booking_id: booking_id, p_guests: guests }, null, 2))
+				// Chỉ log metadata, KHÔNG log nội dung guests (chứa PII: document_number, full_name, ngày sinh)
+				console.log('checkin payload:', { booking_id, guests_count: guests.length })
 			}
-			
+
 			const { data, error } = await supabase.rpc('checkin_booking_txn', {
 				p_booking_id: booking_id,
 				p_guests: guests,
