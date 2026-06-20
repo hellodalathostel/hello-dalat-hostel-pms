@@ -177,7 +177,8 @@ export function useGuests(search: string) {
   return useQuery({
     queryKey: ['guests', search],
     queryFn: () => fetchGuests(search),
-    staleTime: 30_000,
+    staleTime: 30_000, // 30s — danh sách khách ít thay đổi trong phiên làm việc
+    gcTime: 5 * 60_000,
   })
 }
 
@@ -186,5 +187,7 @@ export function useGuestBookings(customerId: string | null) {
     queryKey: ['guest-bookings', customerId],
     enabled: Boolean(customerId),
     queryFn: () => fetchGuestBookings(customerId as string),
+    staleTime: 60_000, // 60s — lịch sử booking của khách hầu như không đổi trong phiên xem
+    gcTime: 10 * 60_000,
   })
 }

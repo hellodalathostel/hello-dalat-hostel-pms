@@ -98,6 +98,7 @@ export function useBookingsList() {
   return useQuery({
     queryKey: ['bookings-list'],
     queryFn: fetchBookingsList,
-    staleTime: 30_000,
+    staleTime: 30_000, // 30s — danh sách booking thay đổi khi staff thao tác
+    gcTime: 5 * 60_000, // 5 phút — giữ cache khi chuyển tab/trang rồi quay lại
   })
 }

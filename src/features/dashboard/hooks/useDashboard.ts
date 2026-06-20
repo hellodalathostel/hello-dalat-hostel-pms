@@ -39,6 +39,8 @@ export function useDashboard() {
   return useQuery({
     queryKey: ['dashboard', 'today'],
     queryFn: fetchDashboardRooms,
+    staleTime: 0, // Tường minh: dashboard cần luôn fresh khi focus lại tab (real-time tình trạng phòng)
+    gcTime: 60_000, // 1 phút — không cần giữ cache lâu vì luôn refetch khi mount
     refetchInterval: 300000,
     refetchOnWindowFocus: true,
   })
