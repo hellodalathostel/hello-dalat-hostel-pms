@@ -9,7 +9,7 @@ import { EditBookingModal } from '@/features/bookings/components/EditBookingModa
 import { BlockRoomModal } from '@/features/bookings/components/BlockRoomModal'
 import { useRoomCalendar } from '@/features/calendar/hooks/useRoomCalendar'
 import { useRooms } from '@/features/bookings/hooks/useRooms'
-import { useDeleteBlock } from '@/features/calendar/hooks/useRoomBlocks'
+import { useDeleteBlock } from '@/hooks/useRoomBlocks'
 import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
 import type { CalendarEvent } from '@/types/calendar'
 import type { BookingDetailItem } from '@/features/bookings/hooks/useBookingDetail'

@@ -3,8 +3,8 @@ import type { Dayjs } from 'dayjs'
 import type { JSX } from 'react'
 import { z } from 'zod'
 import { Button, DatePicker, Form, Input, Modal, Select } from 'antd'
-import type { BlockReason } from '@/features/calendar/hooks/useRoomBlocks'
-import { useCreateBlock } from '@/features/calendar/hooks/useRoomBlocks'
+import type { BlockReason } from '@/hooks/useRoomBlocks'
+import { useCreateBlock } from '@/hooks/useRoomBlocks'
 import { useRooms } from '@/features/bookings/hooks/useRooms'
 
 type DateRange = [Dayjs, Dayjs]
