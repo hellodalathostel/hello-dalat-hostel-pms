@@ -6,7 +6,8 @@
       "Bash(git commit -m ' *)",
       "Bash(git push *)",
       "Bash(supabase secrets *)",
-      "Bash(supabase db *)"
+      "Bash(supabase db *)",
+      "Bash(git rm *)"
     ],
     "additionalDirectories": [
       "/tmp"
