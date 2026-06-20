@@ -81,6 +81,24 @@ export function ServiceSection({
       ),
     },
     {
+      // Cho phép sửa tay đơn giá, khác giá catalog
+      title: 'Đơn giá',
+      dataIndex: 'price',
+      width: 150,
+      render: (price: number, _record, idx) => (
+        <InputNumber<number>
+          min={0}
+          step={5000}
+          value={price}
+          style={{ width: '100%' }}
+          formatter={(v) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+          parser={(v) => Number(v?.replace(/,/g, '') ?? 0)}
+          addonAfter="₫"
+          onChange={(newPrice) => handleChange(idx, { price: newPrice ?? 0 })}
+        />
+      ),
+    },
+    {
       title: 'SL',
       dataIndex: 'qty',
       width: 80,
