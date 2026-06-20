@@ -7,7 +7,10 @@
       "Bash(git push *)",
       "Bash(supabase secrets *)",
       "Bash(supabase db *)",
-      "Bash(git rm *)"
+      "Bash(git rm *)",
+      "Bash(supabase --version)",
+      "Bash(supabase projects *)",
+      "mcp__claude_ai_Supabase__get_logs"
     ],
     "additionalDirectories": [
       "/tmp"
