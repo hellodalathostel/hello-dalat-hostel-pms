@@ -11,4 +11,6 @@ export interface Room {
   housekeeping_status: HousekeepingStatus
   housekeeping_note: string | null
   ical_export_token: string
+  ota_feed_url: string | null
+  ota_last_synced_at: string | null
 }

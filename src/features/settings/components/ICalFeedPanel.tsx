@@ -1,8 +1,7 @@
 import { CopyOutlined, LinkOutlined } from '@ant-design/icons'
-import { useQuery } from '@tanstack/react-query'
 import { Button, Card, Space, Table, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import { supabase } from '@/api/supabase'
+import { useRooms, type RoomsQueryItem } from '@/features/bookings/hooks/useRooms'
 import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
 
 const { Text, Link } = Typography
@@ -10,29 +9,11 @@ const { Text, Link } = Typography
 const ICAL_BASE_URL =
   'https://rcfhhgywjdwqcgnpkbtl.supabase.co/functions/v1/ical-feed'
 
-interface Room {
-  id: string
-  name: string
-  type: string
-}
-
 export function ICalFeedPanel() {
   const { message } = useAppFeedback()
-  const { data: rooms, isLoading } = useQuery<Room[]>({
-    queryKey: ['rooms', 'ical'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('rooms')
-        .select('id, name, type')
-        .order('id')
-
-      if (error) {
-        throw error
-      }
-
-      return data ?? []
-    },
-  })
+  // M1 fix: dùng canonical useRooms() thay vì tự query riêng.
+  // onlyActive=false để giữ behavior gốc: hiển thị cả phòng inactive (vẫn cần tạo feed URL khi reactivate).
+  const { data: rooms, isLoading } = useRooms(false)
 
   const handleCopy = async (roomId: string, roomName: string) => {
     try {
@@ -45,7 +26,7 @@ export function ICalFeedPanel() {
     }
   }
 
-  const columns: ColumnsType<Room> = [
+  const columns: ColumnsType<RoomsQueryItem> = [
     {
       title: 'Phong',
       dataIndex: 'id',
@@ -109,7 +90,7 @@ export function ICalFeedPanel() {
         </Text>
       }
     >
-      <Table<Room>
+      <Table<RoomsQueryItem>
         dataSource={rooms ?? []}
         columns={columns}
         rowKey="id"

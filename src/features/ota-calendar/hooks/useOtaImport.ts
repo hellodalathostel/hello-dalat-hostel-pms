@@ -54,7 +54,8 @@ export function useOtaImport() {
 
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ['ota-events'] })
-      qc.invalidateQueries({ queryKey: ['ota-rooms'] })
+      // M1 fix: 'ota-rooms' đã merge vào canonical 'rooms' query key (useRooms hook)
+      qc.invalidateQueries({ queryKey: ['rooms'] })
       if (data.totalConflicts > 0) {
         message.warning(
           `Sync xong — ${data.totalUpserted} events, ⚠️ ${data.totalConflicts} conflict cần xử lý`

@@ -6,8 +6,8 @@ import dayjs, { Dayjs } from 'dayjs';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/api/supabase';
+import { useRooms } from '@/features/bookings/hooks/useRooms';
 import { useAddRoomToGroup } from '@/hooks/useAddRoomToGroup';
 import { useAppFeedback } from '@/shared/hooks/useAppFeedback';
 
@@ -34,19 +34,8 @@ export function AddRoomModal({ open, groupId, defaultCheckIn, defaultCheckOut, o
   const { message } = useAppFeedback();
   const { mutate: addRoom, isPending } = useAddRoomToGroup();
 
-  const { data: rooms = [], isLoading: roomsLoading } = useQuery({
-    queryKey: ['rooms-active'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('rooms')
-        .select('id, name')
-        .eq('is_active', true)
-        .order('id');
-      if (error) throw error;
-      return data as { id: string; name: string }[];
-    },
-    staleTime: 5 * 60 * 1000,
-  });
+  // M1 fix: dùng canonical useRooms() thay vì tự query riêng (chỉ phòng active).
+  const { data: rooms = [], isLoading: roomsLoading } = useRooms();
 
   const { control, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),

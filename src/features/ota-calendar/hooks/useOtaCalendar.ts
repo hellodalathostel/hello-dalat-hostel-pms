@@ -4,13 +4,13 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { message } from 'antd'
 import { supabase } from '@/api/supabase'
+import { useRooms } from '@/features/bookings/hooks/useRooms'
 import type { OtaCalendarEvent, RoomWithFeed } from '../types'
 
 // ─── Query keys ──────────────────────────────────────────────────────────────
 export const otaKeys = {
   events: (filters?: { status?: string; room_id?: string }) =>
     ['ota-events', filters] as const,
-  rooms: () => ['ota-rooms'] as const,
 }
 
 // ─── Lấy danh sách OTA events (có filter) ────────────────────────────────────
@@ -34,19 +34,19 @@ export function useOtaEvents(filters?: { status?: OtaCalendarEvent['status']; ro
 }
 
 // ─── Lấy rooms có ota_feed_url ────────────────────────────────────────────────
+// M1 fix: dùng canonical useRooms() (đã mở rộng select thêm ota_feed_url/
+// ota_last_synced_at) thay vì tự query riêng — tránh lệch cache key với nơi khác.
 export function useRoomsWithFeed() {
-  return useQuery({
-    queryKey: otaKeys.rooms(),
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('rooms')
-        .select('id, name, ota_feed_url, ota_last_synced_at')
-        .eq('is_active', true)
-        .order('name')
-      if (error) throw error
-      return data as RoomWithFeed[]
-    },
-  })
+  const { data, isLoading, error } = useRooms()
+
+  const rooms: RoomWithFeed[] = (data ?? []).map((room) => ({
+    id: room.id,
+    name: room.name,
+    ota_feed_url: room.ota_feed_url,
+    ota_last_synced_at: room.ota_last_synced_at,
+  }))
+
+  return { data: rooms, isLoading, error }
 }
 
 // ─── Dismiss event (đánh dấu đã xử lý) ──────────────────────────────────────
