@@ -3,7 +3,7 @@ import "@supabase/functions-js/edge-runtime.d.ts";
 const TELEGRAM_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
 const TELEGRAM_CHAT_ID = Deno.env.get("TELEGRAM_CHAT_ID")!;
 const NOTION_TOKEN = Deno.env.get("NOTION_TOKEN")!;
-const NOTION_TASK_DB_ID = "2b3cd2c9-6b3a-4f39-963e-de01d5ff28dc";
+const NOTION_TASK_DB_ID = Deno.env.get("NOTION_TASK_DB_ID")!;
 
 // Gửi tin Telegram
 async function sendTelegram(text: string) {

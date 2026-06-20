@@ -1,7 +1,7 @@
 -- Migration: Room Blocks RLS policies only
 
 -- Enable RLS on room_blocks
-aLTER TABLE room_blocks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE room_blocks ENABLE ROW LEVEL SECURITY;
 
 -- Policy: Allow read for all authenticated users
 CREATE POLICY "Allow read room_blocks for all" ON room_blocks

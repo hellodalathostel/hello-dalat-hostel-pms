@@ -102,7 +102,7 @@ async function handleToday(chatId: string) {
       const paid = (b.groups as any)?.paid ?? 0;
       const debt = (b.grand_total ?? 0) - paid;
       msg += `• P${b.room_id} — ${b.guest_name}`;
-      if (b.nights) msg += ` (${b.nights}đ)`;
+      if (b.nights) msg += ` (${b.nights} đêm)`;
       if (b.status === "checked-in") msg += " ✅";
       else if (debt > 0) msg += ` | Còn: ${formatVND(debt)}`;
       msg += "\n";
@@ -171,7 +171,7 @@ async function handleNext(chatId: string) {
       const source = (b.groups as any)?.source ?? null;
       msg += `• P${b.room_id} — ${b.guest_name}`;
       const parts: string[] = [];
-      if (b.nights) parts.push(`${b.nights}đ`);
+      if (b.nights) parts.push(`${b.nights} đêm`);
       if (source) parts.push(source);
       if (parts.length) msg += ` (${parts.join(", ")})`;
       msg += "\n";
