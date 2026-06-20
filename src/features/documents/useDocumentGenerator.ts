@@ -14,7 +14,6 @@ import { useState } from 'react';
 import { message } from 'antd';
 import dayjs from 'dayjs';
 import { supabase } from '@/api/supabase';
-import type { DepositRequestOptions } from './documentTemplates';
 import {
   renderBookingConfirmation,
   renderDepositRequest,
