@@ -29,8 +29,11 @@ export function useServiceActions(bookingId: string, groupId: string) {
           p_booking_id: payload.bookingId,
           p_service_id: payload.serviceId ?? null,
           p_qty: payload.qty,
+          // p_custom_name chỉ cần khi KHÔNG có serviceId (dịch vụ custom hoàn toàn)
           p_custom_name: payload.serviceId ? null : payload.name,
-          p_custom_price: payload.serviceId ? null : payload.price,
+          // Luôn forward payload.price nếu có — RPC tự ưu tiên dùng giá này để
+          // override giá catalog khi có p_service_id.
+          p_custom_price: payload.price ?? null,
         })
         if (error) throw error
         return data
