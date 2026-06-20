@@ -80,39 +80,41 @@ async function fetchDocumentData(
   bookingId: string,
   groupId: string
 ): Promise<DocumentPreviewData> {
-  // Booking + room (JOIN thủ công vì không có foreign key tới rooms table)
-  const { data: booking, error: bErr } = await supabase
-    .from('bookings')
-    .select(`
-      id, group_id, room_id, check_in, check_out, nights,
-      price_per_night, room_subtotal, surcharge, grand_total, tax_rate, tax_amount,
-      has_early_check_in, has_late_check_out,
-      guest_name, guests_count, status, note
-    `)
-    .eq('id', bookingId)
-    .single();
+  // M2 fix: bookings và groups độc lập với nhau (cả 2 chỉ cần tham số đầu vào),
+  // chạy song song để giảm 1 round-trip tuần tự. rooms phải đợi vì cần booking.room_id
+  // vừa nhận được (không có foreign key tới rooms table để JOIN trực tiếp).
+  const [bookingRes, groupRes] = await Promise.all([
+    supabase
+      .from('bookings')
+      .select(`
+        id, group_id, room_id, check_in, check_out, nights,
+        price_per_night, room_subtotal, surcharge, grand_total, tax_rate, tax_amount,
+        has_early_check_in, has_late_check_out,
+        guest_name, guests_count, status, note
+      `)
+      .eq('id', bookingId)
+      .single(),
+    supabase
+      .from('groups')
+      .select('id, customer_name, customer_phone, source, ota_booking_number, paid, deposit_method')
+      .eq('id', groupId)
+      .single(),
+  ]);
 
+  const { data: booking, error: bErr } = bookingRes;
   if (bErr || !booking) throw new Error('Không tìm thấy booking: ' + bErr?.message);
 
-  // Group (khách + tài chính tổng)
-  const { data: group, error: gErr } = await supabase
-    .from('groups')
-    .select('id, customer_name, customer_phone, source, ota_booking_number, paid, deposit_method')
-    .eq('id', groupId)
-    .single();
-
+  const { data: group, error: gErr } = groupRes;
   if (gErr || !group) throw new Error('Không tìm thấy group: ' + gErr?.message);
 
-  // Room info
-  const { data: room, error: rErr } = await supabase
-    .from('rooms')
-    .select('id, name, type')
-    .eq('id', booking.room_id)
-    .single();
-
-  if (rErr || !room) throw new Error('Không tìm thấy phòng: ' + rErr?.message);
-
-  const [servicesRes, discountsRes, paymentsRes] = await Promise.all([
+  // Room info + services/discounts/payments — tất cả độc lập với nhau,
+  // chỉ phụ thuộc booking.room_id/bookingId/groupId đã có sẵn → chạy song song.
+  const [roomRes, servicesRes, discountsRes, paymentsRes] = await Promise.all([
+    supabase
+      .from('rooms')
+      .select('id, name, type')
+      .eq('id', booking.room_id)
+      .single(),
     supabase
       .from('booking_services')
       .select('name, price, qty')
@@ -127,6 +129,9 @@ async function fetchDocumentData(
       .eq('group_id', groupId)
       .order('date', { ascending: true }),
   ]);
+
+  const { data: room, error: rErr } = roomRes;
+  if (rErr || !room) throw new Error('Không tìm thấy phòng: ' + rErr?.message);
 
   if (servicesRes.error) throw servicesRes.error;
   if (discountsRes.error) throw discountsRes.error;
@@ -582,7 +587,7 @@ export function useDocumentGeneratorByGroup(
             roomCount: groupData.bookings.length,
             generatedAt: groupData.generatedAt,
           };
-          await supabase.rpc('create_document_log', {
+          const { error: logErr1 } = await supabase.rpc('create_document_log', {
             p_group_id: groupId,
             p_booking_id: null,
             p_doc_type: 'group_invoice',
@@ -593,6 +598,8 @@ export function useDocumentGeneratorByGroup(
             p_recipient_phone: groupData.guestPhone || null,
             p_note: null,
           });
+          // Log lỗi nhưng không throw — document đã render/in thành công rồi
+          if (logErr1) console.error('[useDocumentGeneratorByGroup] Lỗi ghi log group_invoice:', logErr1.message);
           return null;
         }
 
@@ -612,7 +619,7 @@ export function useDocumentGeneratorByGroup(
             roomCount: groupData.bookings.length,
             generatedAt: groupData.generatedAt,
           };
-          await supabase.rpc('create_document_log', {
+          const { error: logErr2 } = await supabase.rpc('create_document_log', {
             p_group_id: groupId,
             p_booking_id: null,
             p_doc_type: 'group_confirmation',
@@ -623,6 +630,7 @@ export function useDocumentGeneratorByGroup(
             p_recipient_phone: groupData.guestPhone || null,
             p_note: null,
           });
+          if (logErr2) console.error('[useDocumentGeneratorByGroup] Lỗi ghi log group_confirmation:', logErr2.message);
           return null;
         }
 
@@ -633,12 +641,32 @@ export function useDocumentGeneratorByGroup(
           await copyZaloText(zaloMsg);
           message.success('Đã sao chép nội dung Zalo vào clipboard!');
           setZaloText(zaloMsg);
-          await supabase.rpc('create_document_log', {
+          // Bug fix (M2): RPC create_document_log không có params p_doc_kind/p_lang —
+          // signature thật là p_doc_type/p_doc_format/p_content_snapshot/... Lệnh gọi
+          // cũ chạy "thành công" vì mọi param có default, nhưng ghi log sai hoàn toàn
+          // (luôn ghi doc_type='booking_confirmation', format='pdf', mất snapshot).
+          const snapshot = {
+            guestName: groupData.guestName,
+            checkIn: groupData.checkIn,
+            checkOut: groupData.checkOut,
+            totalGrandTotal: groupData.totalGrandTotal,
+            totalPaid: groupData.totalPaid,
+            depositAmount,
+            roomCount: groupData.bookings.length,
+            generatedAt: groupData.generatedAt,
+          };
+          const { error: logErr3 } = await supabase.rpc('create_document_log', {
             p_group_id: groupId,
             p_booking_id: null,
-            p_doc_kind: 'group_deposit_request',
-            p_lang: 'vi',
+            p_doc_type: 'group_deposit_request',
+            p_doc_format: 'zalo_text',
+            p_content_snapshot: snapshot,
+            p_sent_via: 'zalo_clipboard',
+            p_recipient_name: groupData.guestName,
+            p_recipient_phone: groupData.guestPhone || null,
+            p_note: null,
           });
+          if (logErr3) console.error('[useDocumentGeneratorByGroup] Lỗi ghi log group_deposit_request:', logErr3.message);
           return zaloMsg;
         }
 
