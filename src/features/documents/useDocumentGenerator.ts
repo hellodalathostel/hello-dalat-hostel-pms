@@ -99,47 +99,6 @@ export function useDocumentGenerator(): UseDocumentGeneratorReturn {
   return { generating, generate };
 }
 
-// ─── Convenience hook cho 1 booking cụ thể ─────────────────────────────────────
-// Dùng trong BookingRow / BookingListPanel để tránh truyền bookingId/groupId mỗi lần
-
-export interface UseBookingDocumentsReturn {
-  generating: boolean;
-  printConfirmation: () => Promise<void>;
-  copyConfirmationZalo: () => Promise<void>;
-  printDepositRequest: (depositOpts: DepositRequestOptions) => Promise<void>;
-  copyDepositRequestZalo: (depositOpts: DepositRequestOptions) => Promise<void>;
-  printDepositConfirmation: () => Promise<void>;
-  copyDepositConfirmationZalo: () => Promise<void>;
-  printInvoice: () => Promise<void>;
-  copyInvoiceZalo: () => Promise<void>;
-  printArrivalNotice: () => Promise<void>;
-  copyArrivalNoticeZalo: () => Promise<void>;
-}
-
-export function useBookingDocuments(
-  bookingId: string,
-  groupId: string
-): UseBookingDocumentsReturn {
-  const { generating, generate } = useDocumentGenerator();
-
-  const run = (docKind: DocKind, docFormat: DocFormat, depositOptions?: DepositRequestOptions) =>
-    generate({ bookingId, groupId, docKind, docFormat, depositOptions });
-
-  return {
-    generating,
-    printConfirmation: () => run('booking_confirmation', 'pdf'),
-    copyConfirmationZalo: () => run('booking_confirmation', 'zalo_text'),
-    printDepositRequest: (o) => run('deposit_request', 'pdf', o),
-    copyDepositRequestZalo: (o) => run('deposit_request', 'zalo_text', o),
-    printDepositConfirmation: () => run('deposit_confirmation', 'pdf'),
-    copyDepositConfirmationZalo: () => run('deposit_confirmation', 'zalo_text'),
-    printInvoice: () => run('invoice', 'pdf'),
-    copyInvoiceZalo: () => run('invoice', 'zalo_text'),
-    printArrivalNotice: () => run('arrival_notice', 'pdf'),
-    copyArrivalNoticeZalo: () => run('arrival_notice', 'zalo_text'),
-  };
-}
-
 // ─── Adapter cho DocumentActionsMenu ───────────────────────────────────────────
 // Dùng interface { groupId } + generateAndPrint/generateAndCopyZalo
 // Hook này bridge sang useDocumentGenerator bên dưới
