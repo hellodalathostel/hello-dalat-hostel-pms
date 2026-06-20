@@ -64,6 +64,7 @@ async function createBookingMutationFn(input: CreateBookingMutationInput): Promi
         service_id: service.service_id,
         qty: service.qty,
         booking_index: Math.min(Math.max(service.booking_index, 0), maxBookingIndex),
+        price: service.price,
       }))
 
     const normalizedDiscounts = discounts
@@ -98,6 +99,8 @@ async function createBookingMutationFn(input: CreateBookingMutationInput): Promi
               service_id: service.service_id,
               qty: service.qty,
               booking_index: service.booking_index,
+              // Forward giá đã sửa tay trên ServiceSection — RPC đã hỗ trợ override
+              custom_price: service.price,
             }))
           : null,
       p_discounts:
