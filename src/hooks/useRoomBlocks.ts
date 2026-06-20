@@ -88,7 +88,9 @@ export function useCreateBlock() {
 
         return data
       } catch (error) {
-        throw normalizeError(error, describeBlockError(error))
+        // describeBlockError đã map message tiếng Việt cho mã lỗi P0040-P0042;
+        // không đi qua normalizeError nữa vì message đã xử lý xong.
+        throw new Error(describeBlockError(error))
       }
     },
     onSuccess: async () => {
@@ -124,7 +126,7 @@ export function useDeleteBlock() {
 
         return data
       } catch (error) {
-        throw normalizeError(error, describeBlockError(error))
+        throw new Error(describeBlockError(error))
       }
     },
     onSuccess: () => {
