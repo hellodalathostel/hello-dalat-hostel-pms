@@ -40,6 +40,7 @@ export function AddServiceModal({ open, bookingId, onClose, onSuccess }: Props) 
   // --- catalog mode state ---
   const [selectedId, setSelectedId] = useState<string | undefined>()
   const [catalogQty, setCatalogQty] = useState<number>(1)
+  const [catalogPrice, setCatalogPrice] = useState<number | null>(null)
 
   // --- custom mode state ---
   const [customName, setCustomName] = useState('')
@@ -52,7 +53,8 @@ export function AddServiceModal({ open, bookingId, onClose, onSuccess }: Props) 
   const { mutate: addService, isPending } = useAddService(bookingId)
 
   const selectedItem = catalog.find((item) => item.id === selectedId)
-  const catalogTotal = selectedItem ? selectedItem.price * catalogQty : null
+  const effectiveCatalogPrice = catalogPrice ?? selectedItem?.price ?? 0
+  const catalogTotal = selectedItem ? effectiveCatalogPrice * catalogQty : null
   const customTotal =
     customPrice !== null && customPrice > 0 && customQty > 0
       ? customPrice * customQty
@@ -63,6 +65,7 @@ export function AddServiceModal({ open, bookingId, onClose, onSuccess }: Props) 
     setMode('catalog')
     setSelectedId(undefined)
     setCatalogQty(1)
+    setCatalogPrice(null)
     setCustomName('')
     setCustomPrice(null)
     setCustomQty(1)
@@ -73,7 +76,12 @@ export function AddServiceModal({ open, bookingId, onClose, onSuccess }: Props) 
     if (mode === 'catalog') {
       if (!selectedId || catalogQty <= 0) return
       addService(
-        { serviceId: selectedId, qty: catalogQty },
+        {
+          serviceId: selectedId,
+          qty: catalogQty,
+          // Luôn gửi customPrice = giá hiện tại trên UI (có thể đã sửa khác catalog)
+          customPrice: effectiveCatalogPrice,
+        },
         { onSuccess: () => { onSuccess?.(); handleClose() } },
       )
       return
@@ -139,7 +147,11 @@ export function AddServiceModal({ open, bookingId, onClose, onSuccess }: Props) 
                 placeholder="Chọn dịch vụ..."
                 style={{ width: '100%' }}
                 value={selectedId}
-                onChange={(value) => setSelectedId(value)}
+                onChange={(value) => {
+                  setSelectedId(value)
+                  const found = catalog.find((item) => item.id === value)
+                  setCatalogPrice(found?.price ?? null)
+                }}
                 optionLabelProp="label"
                 options={catalog.map((item) => ({
                   value: item.id,
@@ -170,6 +182,23 @@ export function AddServiceModal({ open, bookingId, onClose, onSuccess }: Props) 
                 style={{ padding: '6px 12px' }}
               />
             )}
+
+            <div>
+              <Text type="secondary" style={{ display: 'block', marginBottom: 6 }}>
+                Đơn giá (có thể sửa)
+              </Text>
+              <InputNumber<number>
+                min={0}
+                step={5000}
+                value={effectiveCatalogPrice}
+                style={{ width: '100%' }}
+                formatter={(v) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                parser={(v) => Number(v?.replace(/,/g, '') ?? 0)}
+                addonAfter="₫"
+                disabled={!selectedId}
+                onChange={(value) => setCatalogPrice(value ?? 0)}
+              />
+            </div>
 
             <div>
               <Text type="secondary" style={{ display: 'block', marginBottom: 6 }}>
