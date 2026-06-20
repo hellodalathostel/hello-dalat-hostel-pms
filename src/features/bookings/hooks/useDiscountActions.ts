@@ -22,13 +22,17 @@ export function useDiscountActions(bookingId: string, groupId: string) {
 
   const addDiscount = useMutation({
     mutationFn: async (payload: AddDiscountPayload) => {
-      const { data, error } = await supabase.rpc('add_discount_txn', {
-        p_booking_id: payload.bookingId,
-        p_amount: payload.amount,
-        p_description: payload.description ?? null,
-      })
-      if (error) throw error
-      return data
+      try {
+        const { data, error } = await supabase.rpc('add_discount_txn', {
+          p_booking_id: payload.bookingId,
+          p_amount: payload.amount,
+          p_description: payload.description ?? null,
+        })
+        if (error) throw error
+        return data
+      } catch (err) {
+        throw err instanceof Error ? err : new Error('Lỗi không xác định khi thêm giảm giá')
+      }
     },
     onSuccess: () => { message.success('Đã thêm giảm giá'); invalidate() },
     onError: (err: Error) => { message.error(`Lỗi thêm giảm giá: ${err.message}`) },
@@ -36,10 +40,14 @@ export function useDiscountActions(bookingId: string, groupId: string) {
 
   const deleteDiscount = useMutation({
     mutationFn: async (discountId: string) => {
-      const { error } = await supabase.rpc('delete_booking_discount_txn', {
-        p_discount_row_id: discountId,
-      })
-      if (error) throw error
+      try {
+        const { error } = await supabase.rpc('delete_booking_discount_txn', {
+          p_discount_row_id: discountId,
+        })
+        if (error) throw error
+      } catch (err) {
+        throw err instanceof Error ? err : new Error('Lỗi không xác định khi xóa giảm giá')
+      }
     },
     onSuccess: () => { message.success('Đã xóa giảm giá'); invalidate() },
     onError: (err: Error) => { message.error(`Lỗi xóa giảm giá: ${err.message}`) },

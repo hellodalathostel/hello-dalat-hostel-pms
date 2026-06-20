@@ -76,13 +76,17 @@ export function useRejectRequest() {
 
   return useMutation({
     mutationFn: async ({ id, reason }: { id: string, reason?: string }) => {
-      const { error } = await supabase
-        .from('booking_requests')
-        .update({ status: 'rejected', rejected_reason: reason ?? null })
-        .eq('id', id)
+      try {
+        const { error } = await supabase
+          .from('booking_requests')
+          .update({ status: 'rejected', rejected_reason: reason ?? null })
+          .eq('id', id)
 
-      if (error) {
-        throw error
+        if (error) {
+          throw error
+        }
+      } catch (err) {
+        throw err instanceof Error ? err : new Error('Lỗi không xác định khi từ chối yêu cầu')
       }
     },
     onSuccess: () => {
@@ -90,8 +94,8 @@ export function useRejectRequest() {
       queryClient.invalidateQueries({ queryKey: bookingRequestKeys.pendingCount })
       message.success('Đã từ chối yêu cầu')
     },
-    onError: () => {
-      message.error('Không thể cập nhật, thử lại')
+    onError: (err: Error) => {
+      message.error(`Không thể cập nhật: ${err.message}`)
     },
   })
 }
@@ -108,21 +112,25 @@ export function useConvertRequest() {
       request: BookingRequest,
       pricePerNight: number,
     }) => {
-      const { data, error } = await supabase.rpc('confirm_booking_request_txn', {
-        p_request_id: request.id,
-        p_price_per_night: pricePerNight,
-      })
+      try {
+        const { data, error } = await supabase.rpc('confirm_booking_request_txn', {
+          p_request_id: request.id,
+          p_price_per_night: pricePerNight,
+        })
 
-      if (error) {
-        throw error
+        if (error) {
+          throw error
+        }
+
+        const result = data as ConfirmBookingRequestTxnResult | null
+        if (!result?.success) {
+          throw new Error(result?.error ?? 'confirm_booking_request_txn thất bại')
+        }
+
+        return result.group_id
+      } catch (err) {
+        throw err instanceof Error ? err : new Error('Lỗi không xác định khi tạo booking')
       }
-
-      const result = data as ConfirmBookingRequestTxnResult | null
-      if (!result?.success) {
-        throw new Error(result?.error ?? 'confirm_booking_request_txn thất bại')
-      }
-
-      return result.group_id
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: bookingRequestKeys.all })
