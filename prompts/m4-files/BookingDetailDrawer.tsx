@@ -1,0 +1,433 @@
+import { useState } from 'react'
+import dayjs from 'dayjs'
+import {
+  Alert,
+  Button,
+  Col,
+  Descriptions,
+  Drawer,
+  Flex,
+  Row,
+  Skeleton,
+  Space,
+  Statistic,
+  Table,
+  Tag,
+  Typography,
+} from 'antd'
+import {
+  CalendarOutlined,
+  CreditCardOutlined,
+  EditOutlined,
+  HistoryOutlined,
+  PhoneOutlined,
+  PlusOutlined,
+  UserOutlined,
+} from '@ant-design/icons'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { supabase } from '@/api/supabase'
+import { useBookingDetail } from '@/features/bookings/hooks/useBookingDetail'
+import type { BookingDetailItem } from '@/features/bookings/hooks/useBookingDetail'
+// BookingDetailItem được export từ useBookingDetail
+import { EditBookingModal } from '@/features/bookings/components/EditBookingModal'
+import BookingFolioEditModal from '@/features/bookings/components/BookingFolioEditModal'
+import { AddServiceModal } from '@/features/bookings/components/AddServiceModal'
+import { AddRoomModal } from '@/components/bookings/AddRoomModal'
+import { CheckinImportModal } from '@/features/checkin/components/CheckinImportModal'
+import { CheckoutModal } from '@/features/checkout/components/CheckoutModal'
+import { DocumentActionsMenu } from '@/features/documents/DocumentActionsMenu'
+import { DocumentHistoryDrawer } from '@/features/documents/DocumentHistoryDrawer'
+import { EarlyLateModal } from '@/features/bookings/components/EarlyLateModal'
+import { useCancelBooking } from '@/features/bookings/hooks/useUpdateBooking'
+import type { EarlyLateType } from '@/hooks/useAddEarlyLate'
+import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
+import { useBreakpoint } from '@/shared/hooks/useBreakpoint'
+import { formatVND } from './bookingDetailShared'
+import { BookingRoomCard } from './BookingRoomCard'
+
+interface Props {
+  groupId?: string | null
+  bookingId?: string | null
+  open: boolean
+  onClose: () => void
+  onEditBooking?: (booking: BookingDetailItem) => void
+}
+
+// Drawer chi tiết group booking: thông tin khách, danh sách phòng, thanh toán.
+export default function BookingDetailDrawer({ groupId = null, bookingId = null, open, onClose, onEditBooking }: Props) {
+  const queryClient = useQueryClient()
+  const { message } = useAppFeedback()
+  const { isMobile } = useBreakpoint()
+  const cancelBookingMutation = useCancelBooking()
+  const { data: resolvedGroupId, isLoading: isResolvingGroupId, isError: isResolvingError } = useQuery({
+    queryKey: ['booking-group-id', bookingId],
+    enabled: open && !groupId && Boolean(bookingId),
+    staleTime: 30 * 1000,
+    queryFn: async (): Promise<string | null> => {
+      if (!bookingId) {
+        return null
+      }
+
+      const { data: bookingRow, error } = await supabase
+        .from('bookings')
+        .select('group_id')
+        .eq('id', bookingId)
+        .single()
+
+      if (error) {
+        throw error
+      }
+
+      return bookingRow.group_id ?? null
+    },
+  })
+
+  const effectiveGroupId = groupId ?? resolvedGroupId ?? null
+  const { data, isLoading: isLoadingDetail, isError: isDetailError } = useBookingDetail(effectiveGroupId)
+  const isLoading = isResolvingGroupId || isLoadingDetail
+  const hasNoInput = !groupId && !bookingId
+  const shouldShowResolveError = open && !hasNoInput && !isLoading && (isResolvingError || isDetailError || !data)
+  const [editingBooking, setEditingBooking] = useState<BookingDetailItem | null>(null)
+  const [checkinImportOpen, setCheckinImportOpen] = useState(false)
+  const [checkoutBookingId, setCheckoutBookingId] = useState<string | null>(null)
+  const [historyOpen, setHistoryOpen] = useState(false)
+  // State for folio edit modal
+  const [folioEditOpen, setFolioEditOpen] = useState(false)
+  const [folioEditBookingId, setFolioEditBookingId] = useState<string | null>(null)
+  const [earlyLateOpen, setEarlyLateOpen] = useState(false)
+  const [earlyLateDefaultType, setEarlyLateDefaultType] = useState<EarlyLateType>('early')
+  const [earlyLateBooking, setEarlyLateBooking] = useState<BookingDetailItem | null>(null)
+  const [addServiceOpen, setAddServiceOpen] = useState(false)
+  const [addServiceBookingId, setAddServiceBookingId] = useState<string | null>(null)
+  const [addRoomOpen, setAddRoomOpen] = useState(false)
+
+  const handleCancelBooking = (bookingIdToCancel: string) => {
+    cancelBookingMutation.mutate(bookingIdToCancel, {
+      onSuccess: () => {
+        message.success('Đã huỷ booking')
+        if (effectiveGroupId) {
+          void queryClient.invalidateQueries({ queryKey: ['booking-detail', effectiveGroupId] })
+        }
+      },
+      onError: (error) => {
+        const errorMessage = error instanceof Error ? error.message : 'Không thể huỷ booking'
+        message.error(`Huỷ thất bại: ${errorMessage}`)
+      },
+    })
+  }
+
+  const totalGrandTotal = data?.grand_total ?? 0
+  const balanceDue = data?.balance_due ?? 0
+
+  const paymentColumns = [
+    {
+      title: 'Ngày',
+      dataIndex: 'date',
+      key: 'date',
+      render: (v: string) => dayjs(v).format('DD/MM/YYYY'),
+    },
+    {
+      title: 'Số tiền',
+      dataIndex: 'amount',
+      key: 'amount',
+      render: (v: number) => formatVND(v),
+    },
+    {
+      title: 'Phương thức',
+      dataIndex: 'method',
+      key: 'method',
+      render: (v: string | null) => v ?? '—',
+    },
+    {
+      title: 'Ghi chú',
+      dataIndex: 'note',
+      key: 'note',
+      render: (v: string | null) => v ?? '—',
+    },
+  ]
+
+  return (
+    <>
+      <Drawer
+        title="Chi tiết Booking"
+        placement="right"
+        width={isMobile ? '100%' : 680}
+        open={open}
+        onClose={onClose}
+        extra={
+          data && effectiveGroupId ? (
+            <Space size={8}>
+              <Button
+                icon={<HistoryOutlined />}
+                size="small"
+                onClick={() => setHistoryOpen(true)}
+              >
+                Lịch sử
+              </Button>
+              <DocumentActionsMenu groupId={effectiveGroupId} remaining={Math.max(0, balanceDue)} />
+            </Space>
+          ) : null
+        }
+        destroyOnClose
+      >
+        {isLoading && <Skeleton active paragraph={{ rows: 8 }} />}
+
+        {shouldShowResolveError && (
+          <Alert
+            type="error"
+            showIcon
+            message="Không tìm thấy thông tin booking"
+            description="Vui lòng tải lại trang hoặc kiểm tra lại booking đã chọn."
+            style={{ marginBottom: 16 }}
+          />
+        )}
+
+        {!isLoading && data && (
+          <Space direction="vertical" size={24} style={{ width: '100%' }}>
+            {/* Thông tin khách hàng */}
+            <Descriptions
+              title={
+                <Flex align="center" gap={8}>
+                  <UserOutlined />
+                  <span>{data.customer_name}</span>
+                  {data.ota_booking_number && (
+                    <Tag color="orange">#{data.ota_booking_number}</Tag>
+                  )}
+                </Flex>
+              }
+              bordered
+              size="small"
+              column={isMobile ? 1 : 2}
+            >
+              {data.customer_phone && (
+                <Descriptions.Item label={<><PhoneOutlined /> SĐT</>}>
+                  {data.customer_phone}
+                </Descriptions.Item>
+              )}
+              <Descriptions.Item label="Nguồn">
+                {data.source ?? '—'}
+              </Descriptions.Item>
+              {data.channel_fee_rate > 0 && (
+                <Descriptions.Item label="Phí kênh">
+                  {(data.channel_fee_rate * 100).toFixed(0)}%
+                </Descriptions.Item>
+              )}
+              {data.customer_note && (
+                <Descriptions.Item label="Ghi chú" span={2}>
+                  {data.customer_note}
+                </Descriptions.Item>
+              )}
+            </Descriptions>
+
+            {/* Tổng quan tài chính */}
+            <Row gutter={[16, 16]} align="middle">
+              <Col xs={24} md={8}>
+                <Statistic
+                  title="Tổng hoá đơn"
+                  value={totalGrandTotal}
+                  formatter={(v) => formatVND(v as number)}
+                />
+              </Col>
+              <Col xs={24} md={8}>
+                <Statistic
+                  title="Đã thanh toán"
+                  value={data.paid}
+                  valueStyle={{ color: '#52c41a' }}
+                  formatter={(v) => formatVND(v as number)}
+                />
+              </Col>
+              <Col
+                xs={24}
+                md={8}
+                style={{
+                  display: 'flex',
+                  alignItems: isMobile ? 'stretch' : 'center',
+                  gap: 8,
+                  flexDirection: isMobile ? 'column' : 'row',
+                }}
+              >
+                <Statistic
+                  title="Còn lại"
+                  value={balanceDue}
+                  valueStyle={{ color: balanceDue > 0 ? '#ff4d4f' : '#52c41a' }}
+                  formatter={(v) => formatVND(v as number)}
+                  style={{ flex: 1 }}
+                />
+                {/* Nút mở modal folio */}
+                {data.bookings.length > 0 && (
+                  <Button
+                    size="small"
+                    type="primary"
+                    icon={<EditOutlined />}
+                    block={isMobile}
+                    onClick={() => {
+                      setFolioEditBookingId(data.bookings[0].id)
+                      setFolioEditOpen(true)
+                    }}
+                  >
+                    Sổ folio
+                  </Button>
+                )}
+              </Col>
+            </Row>
+            {/* Danh sách phòng */}
+            <div>
+              <Flex align="center" justify="space-between" style={{ marginBottom: 12 }}>
+                <Typography.Title level={5} style={{ marginBottom: 0 }}>
+                  <CalendarOutlined style={{ marginRight: 8 }} />
+                  Danh sách phòng
+                </Typography.Title>
+                <Button
+                  icon={<PlusOutlined />}
+                  onClick={() => setAddRoomOpen(true)}
+                  size="small"
+                  disabled={!effectiveGroupId}
+                >
+                  Thêm phòng
+                </Button>
+              </Flex>
+              <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                {data.bookings.map((booking) => (
+                  <BookingRoomCard
+                    key={booking.id}
+                    booking={{ ...booking, services: [], discounts: [] }}
+                    groupId={effectiveGroupId ?? ''}
+                    isCancelling={cancelBookingMutation.isPending}
+                    onCheckin={() => setCheckinImportOpen(true)}
+                    onCheckout={(bookingIdToCheckout) => {
+                      setCheckoutBookingId(bookingIdToCheckout)
+                    }}
+                    onAddService={(bookingIdToEditFolio) => {
+                      setAddServiceBookingId(bookingIdToEditFolio)
+                      setAddServiceOpen(true)
+                    }}
+                    onEarlyLate={(bookingIdForEarlyLate) => {
+                      const matchedBooking = data.bookings.find((item) => item.id === bookingIdForEarlyLate) ?? booking
+                      setEarlyLateBooking({ ...matchedBooking, services: [], discounts: [] })
+                      setEarlyLateDefaultType('early')
+                      setEarlyLateOpen(true)
+                    }}
+                    onCancel={(bookingIdToCancel) => {
+                      handleCancelBooking(bookingIdToCancel)
+                    }}
+                    onEdit={() => {
+                      const bookingItem = { ...booking, services: [], discounts: [] }
+                      if (onEditBooking) {
+                        onEditBooking(bookingItem)
+                        return
+                      }
+
+                      setEditingBooking(bookingItem)
+                    }}
+                  />
+                ))}
+              </Space>
+            </div>
+
+            {/* Lịch sử thanh toán */}
+            <div>
+              <Typography.Title level={5} style={{ marginBottom: 12 }}>
+                <CreditCardOutlined style={{ marginRight: 8 }} />
+                Lịch sử thanh toán
+              </Typography.Title>
+              {data.payments.length === 0 ? (
+                <Typography.Text type="secondary">Chưa có thanh toán nào.</Typography.Text>
+              ) : (
+                <Table
+                  dataSource={data.payments}
+                  columns={paymentColumns}
+                  rowKey="id"
+                  size="small"
+                  pagination={false}
+                />
+              )}
+            </div>
+          </Space>
+        )}
+      </Drawer>
+
+      {/* Modal chỉnh sửa folio */}
+      <BookingFolioEditModal
+        open={folioEditOpen}
+        onClose={() => setFolioEditOpen(false)}
+        bookingId={folioEditBookingId || ''}
+        groupId={effectiveGroupId || ''}
+      />
+
+      {addServiceBookingId && (
+        <AddServiceModal
+          open={addServiceOpen}
+          bookingId={addServiceBookingId}
+          onClose={() => {
+            setAddServiceOpen(false)
+            setAddServiceBookingId(null)
+          }}
+          onSuccess={() => {
+            // folio query đã được invalidate trong useAddService
+            setAddServiceOpen(false)
+            setAddServiceBookingId(null)
+          }}
+        />
+      )}
+
+      {/* Modal sửa/huỷ booking */}
+      {editingBooking && effectiveGroupId && (
+        <EditBookingModal
+          booking={editingBooking}
+          onClose={() => setEditingBooking(null)}
+          onSuccess={() => setEditingBooking(null)}
+        />
+      )}
+
+      <CheckinImportModal
+        open={checkinImportOpen}
+        onClose={() => setCheckinImportOpen(false)}
+        onSuccess={() => {
+          setCheckinImportOpen(false)
+
+          if (effectiveGroupId) {
+            void queryClient.invalidateQueries({ queryKey: ['booking-detail', effectiveGroupId] })
+          }
+        }}
+      />
+
+      <CheckoutModal
+        bookingId={checkoutBookingId}
+        open={Boolean(checkoutBookingId)}
+        onClose={() => setCheckoutBookingId(null)}
+      />
+
+      <DocumentHistoryDrawer
+        groupId={effectiveGroupId}
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+      />
+
+      <EarlyLateModal
+        open={earlyLateOpen}
+        booking={earlyLateBooking}
+        defaultType={earlyLateDefaultType}
+        onClose={() => {
+          setEarlyLateOpen(false)
+          setEarlyLateBooking(null)
+        }}
+        onSuccess={() => {
+          if (effectiveGroupId) {
+            void queryClient.invalidateQueries({ queryKey: ['booking-detail', effectiveGroupId] })
+          }
+        }}
+      />
+
+      {effectiveGroupId && data && (
+        <AddRoomModal
+          open={addRoomOpen}
+          groupId={effectiveGroupId}
+          defaultCheckIn={data.bookings[0]?.check_in}
+          defaultCheckOut={data.bookings[0]?.check_out}
+          onClose={() => setAddRoomOpen(false)}
+        />
+      )}
+    </>
+  )
+}
+
