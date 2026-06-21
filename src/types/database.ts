@@ -51,7 +51,6 @@ export type BotLeadStatus = 'pending' | 'closed' | 'converted'
 
 export interface AppUser {
 	id: string
-	firebase_uid: string | null // legacy — pending drop
 	email: string
 	name: string | null
 	role: UserRole
