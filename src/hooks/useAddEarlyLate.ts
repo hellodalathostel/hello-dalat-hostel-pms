@@ -55,7 +55,7 @@ export function useAddEarlyLate() {
       queryClient.invalidateQueries({ queryKey: ['bookings'] })
       queryClient.invalidateQueries({ queryKey: ['booking', params.bookingId] })
       queryClient.invalidateQueries({ queryKey: ['booking-folio', params.bookingId] })
-      queryClient.invalidateQueries({ queryKey: ['dashboard-today'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard', 'today'] })
 
       const label = params.type === 'early' ? 'Early check-in' : 'Late check-out'
       notifySuccess(`${label} đã được áp dụng`)
