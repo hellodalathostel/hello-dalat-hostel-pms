@@ -735,7 +735,6 @@ async function handleDebt(chatId: string) {
     .from("groups")
     .select("id, net_revenue, paid, bookings(room_id, guest_name, status)")
     .eq("is_deleted", false)
-    .filter("paid", "lt", "net_revenue")
     .in("bookings.status", ["booked", "checked-in"]);
 
   if (error) return sendMessage(chatId, `❌ Lỗi: ${error.message}`);
