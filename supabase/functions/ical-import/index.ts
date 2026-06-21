@@ -115,11 +115,32 @@ serve(async (req) => {
     return new Response('Method not allowed', { status: 405, headers: CORS_HEADERS })
   }
 
-  // Chặn truy cập không có CRON_SECRET — function này chỉ được gọi từ pg_cron/UI nội bộ
+  // Chặn truy cập không có auth — function này chỉ được gọi từ pg_cron (CRON_SECRET)
+  // hoặc UI "Sync Now" của user đã đăng nhập (JWT)
   const CRON_SECRET = Deno.env.get('CRON_SECRET')
-  const authHeader = req.headers.get('Authorization')
-  const expectedAuth = `Bearer ${CRON_SECRET}`
-  if (!CRON_SECRET || authHeader !== expectedAuth) {
+  const authHeader = req.headers.get('Authorization') ?? ''
+  let authorized = false
+
+  // Case 1: Cron job gọi bằng secret
+  if (CRON_SECRET && authHeader === `Bearer ${CRON_SECRET}`) {
+    authorized = true
+  }
+
+  // Case 2: User đăng nhập gọi qua nút "Sync Now" — verify JWT bằng Supabase client
+  if (!authorized && authHeader.startsWith('Bearer ')) {
+    const userJwt = authHeader.replace('Bearer ', '')
+    const userClient = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_ANON_KEY')!,
+      { global: { headers: { Authorization: `Bearer ${userJwt}` } } }
+    )
+    const { data: userData, error: userError } = await userClient.auth.getUser()
+    if (!userError && userData?.user) {
+      authorized = true
+    }
+  }
+
+  if (!authorized) {
     return new Response(
       JSON.stringify({ error: 'Unauthorized' }),
       { status: 401, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
