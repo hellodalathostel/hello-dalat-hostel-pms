@@ -29,6 +29,7 @@ type BookFormValues = {
   room_id: string
   dates: [Dayjs, Dayjs]
   note?: string
+  website?: string
 }
 
 type VietQRInfo = {
@@ -99,6 +100,7 @@ export default function BookPage() {
           check_in: values.dates[0].format('YYYY-MM-DD'),
           check_out: values.dates[1].format('YYYY-MM-DD'),
           note: values.note?.trim() || undefined,
+          website: values.website || '',
         }),
       })
 
@@ -210,28 +212,41 @@ export default function BookPage() {
         )}
 
         <Form<BookFormValues> layout="vertical" onFinish={handleSubmit} requiredMark={false}>
+          <Form.Item name="website" style={{ display: 'none' }}>
+            <Input autoComplete="off" tabIndex={-1} aria-hidden="true" />
+          </Form.Item>
+
           <Form.Item
             label="Họ và tên"
             name="name"
-            rules={[{ required: true, message: 'Vui lòng nhập họ và tên' }]}
+            rules={[
+              { required: true, message: 'Vui lòng nhập họ và tên' },
+              { max: 120, message: 'Họ và tên tối đa 120 ký tự' },
+            ]}
           >
-            <Input size="large" placeholder="Nguyễn Văn A" />
+            <Input size="large" maxLength={120} placeholder="Nguyễn Văn A" />
           </Form.Item>
 
           <Form.Item
             label="Số điện thoại"
             name="phone"
-            rules={[{ required: true, message: 'Vui lòng nhập số điện thoại' }]}
+            rules={[
+              { required: true, message: 'Vui lòng nhập số điện thoại' },
+              { max: 30, message: 'Số điện thoại tối đa 30 ký tự' },
+            ]}
           >
-            <Input size="large" placeholder="0901234567" />
+            <Input size="large" maxLength={30} placeholder="0901234567" />
           </Form.Item>
 
           <Form.Item
             label="Email"
             name="email"
-            rules={[{ type: 'email', message: 'Email không hợp lệ' }]}
+            rules={[
+              { type: 'email', message: 'Email không hợp lệ' },
+              { max: 254, message: 'Email tối đa 254 ký tự' },
+            ]}
           >
-            <Input size="large" placeholder="ban@example.com" />
+            <Input size="large" maxLength={254} placeholder="ban@example.com" />
           </Form.Item>
 
           <Form.Item
@@ -245,7 +260,17 @@ export default function BookPage() {
           <Form.Item
             label="Ngày lưu trú"
             name="dates"
-            rules={[{ required: true, message: 'Vui lòng chọn ngày nhận và trả phòng' }]}
+            rules={[
+              { required: true, message: 'Vui lòng chọn ngày nhận và trả phòng' },
+              {
+                validator: (_, value) => {
+                  if (value && value[0] && value[1] && !value[1].isAfter(value[0], 'day')) {
+                    return Promise.reject('Ngày trả phòng phải sau ngày nhận phòng')
+                  }
+                  return Promise.resolve()
+                },
+              },
+            ]}
           >
             <RangePicker
               size="large"
@@ -256,9 +281,14 @@ export default function BookPage() {
             />
           </Form.Item>
 
-          <Form.Item label="Ghi chú" name="note">
+          <Form.Item
+            label="Ghi chú"
+            name="note"
+            rules={[{ max: 1000, message: 'Ghi chú tối đa 1000 ký tự' }]}
+          >
             <Input.TextArea
               rows={4}
+              maxLength={1000}
               placeholder="Ví dụ: đến muộn sau 22h, cần giường tầng thấp..."
             />
           </Form.Item>
