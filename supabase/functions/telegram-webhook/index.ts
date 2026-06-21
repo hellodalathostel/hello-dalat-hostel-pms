@@ -733,9 +733,9 @@ async function handleRevenue(chatId: string) {
 async function handleDebt(chatId: string) {
   const { data, error } = await supabase
     .from("groups")
-    .select("id, grand_total, paid, bookings(room_id, guest_name, status)")
+    .select("id, net_revenue, paid, bookings(room_id, guest_name, status)")
     .eq("is_deleted", false)
-    .filter("paid", "lt", "grand_total")
+    .filter("paid", "lt", "net_revenue")
     .in("bookings.status", ["booked", "checked-in"]);
 
   if (error) return sendMessage(chatId, `❌ Lỗi: ${error.message}`);
@@ -743,13 +743,13 @@ async function handleDebt(chatId: string) {
     const hasActive = (g.bookings as any[]).some((b) =>
       ["booked", "checked-in"].includes(b.status)
     );
-    return hasActive && (g.grand_total ?? 0) > (g.paid ?? 0);
+    return hasActive && (g.net_revenue ?? 0) > (g.paid ?? 0);
   });
 
   if (!groups.length) return sendMessage(chatId, "✅ Không có nhóm nào còn nợ.");
   let msg = `⚠️ <b>Nhóm còn nợ (${groups.length})</b>\n\n`;
   for (const g of groups) {
-    const debt  = (g.grand_total ?? 0) - (g.paid ?? 0);
+    const debt  = (g.net_revenue ?? 0) - (g.paid ?? 0);
     const names = (g.bookings as any[]).map((b) => `P${b.room_id} ${b.guest_name}`).join(", ");
     msg += `${names} — Còn: ${formatVND(debt)}\n`;
   }
