@@ -23,7 +23,6 @@ export interface DashboardRoom {
   source: string | null
   paid: number | null
   net_revenue: number | null
-  price: number | null            // legacy field — KHÔNG khớp tên cột thật (price_per_night), giữ nguyên không sửa, ngoài scope việc này
   price_per_night: number | null  // đúng tên cột thật trong view, Room Board dùng field này
   grand_total: number | null
   balance_due: number | null
