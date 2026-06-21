@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { todayVN, isValidDateOnly, nightsBetween } from "../_shared/date-utils.ts";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -30,7 +31,7 @@ serve(async (req) => {
     return json({ error: "Invalid JSON" }, 400);
   }
 
-  const { name, phone, email, room_id, check_in, check_out, note } = body as {
+  const { name, phone, email, room_id, check_in, check_out, note, website } = body as {
     name?: string;
     phone?: string;
     email?: string;
@@ -38,7 +39,23 @@ serve(async (req) => {
     check_in?: string;
     check_out?: string;
     note?: string;
+    website?: string;
   };
+
+  // Honeypot — bot tu dien field an, nguoi dung thuc khong thay
+  if (website && website.trim() !== "") {
+    return json({ success: true }, 200);
+  }
+
+  // Length validation
+  if (
+    (name && name.length > 120) ||
+    (phone && phone.length > 30) ||
+    (email && email.length > 254) ||
+    (note && note.length > 1000)
+  ) {
+    return json({ error: "Invalid input length" }, 400);
+  }
 
   // Validate bat buoc
   const errors: string[] = [];
@@ -50,22 +67,19 @@ serve(async (req) => {
 
   if (errors.length) return json({ error: errors.join(", ") }, 400);
 
-  // Validate dates
-  const d_in = new Date(check_in!);
-  const d_out = new Date(check_out!);
-  if (Number.isNaN(d_in.getTime()) || Number.isNaN(d_out.getTime())) {
-    return json({ error: "Ngay khong hop le" }, 400);
+  // Validate dates (Asia/Ho_Chi_Minh)
+  if (!isValidDateOnly(check_in!) || !isValidDateOnly(check_out!)) {
+    return json({ error: "Invalid date format" }, 400);
   }
 
-  if (d_out <= d_in) {
-    return json({ error: "check_out phai sau check_in" }, 400);
+  const today = todayVN();
+  if (check_in! < today) {
+    return json({ error: "Check-in date is in the past" }, 400);
   }
 
-  // Khong nhan ngay qua khu
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  if (d_in < today) {
-    return json({ error: "check_in khong the la ngay trong qua khu" }, 400);
+  const nights = nightsBetween(check_in!, check_out!);
+  if (nights <= 0) {
+    return json({ error: "Check-out must be after check-in" }, 400);
   }
 
   // Supabase client (service_role de bypass RLS khi INSERT)
@@ -119,9 +133,6 @@ serve(async (req) => {
     console.error("Insert error:", insertErr);
     return json({ error: "Khong the tao yeu cau dat phong" }, 500);
   }
-
-  // Tinh so dem
-  const nights = Math.round((d_out.getTime() - d_in.getTime()) / (1000 * 60 * 60 * 24));
 
   // Query gia phong theo check_in (get_suggested_price tra INTEGER)
   const { data: suggestedPrice, error: priceErr } = await supabase
