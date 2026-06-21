@@ -573,7 +573,7 @@ async function loadSession(_chatId: string): Promise<{ idx: number; pageId: stri
 async function handleTaskList(chatId: string) {
   const tasks = await getNotionTasks(chatId);
   if (!tasks.length) {
-    await supabase.from("telegram_task_sessions").delete().eq("chat_id", chatId);
+    await supabase.from("telegram_task_sessions").delete().eq("session_date", todayVN());
     return sendMessage(chatId, "✅ Không còn task nào hôm nay!");
   }
   await saveSession(chatId, tasks);
