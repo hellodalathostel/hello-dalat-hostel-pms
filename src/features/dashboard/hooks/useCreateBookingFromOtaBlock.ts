@@ -100,6 +100,8 @@ export function useCreateBookingFromOtaBlock() {
       void queryClient.invalidateQueries({ queryKey: ['ota-blocks', variables.room_id] })
       void queryClient.invalidateQueries({ queryKey: ['room-calendar'] })
       void queryClient.invalidateQueries({ queryKey: ['bookings'] })
+      void queryClient.invalidateQueries({ queryKey: ['dashboard', 'today'] })
+      void queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] })
     },
     onError: (error) => {
       const normalizedError = normalizeError(error)
