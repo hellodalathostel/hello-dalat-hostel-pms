@@ -99,9 +99,9 @@ async function sha256(text: string): Promise<string> {
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Origin': 'https://pms.hellodalathostel.com',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
 serve(async (req) => {
@@ -110,9 +110,20 @@ serve(async (req) => {
     return new Response(null, { status: 204, headers: CORS_HEADERS })
   }
 
-  // Chỉ chấp nhận POST/GET (từ pg_net cron hoặc UI)
-  if (req.method !== 'POST' && req.method !== 'GET') {
+  // Chỉ chấp nhận POST (từ pg_net cron hoặc UI "Sync Now")
+  if (req.method !== 'POST') {
     return new Response('Method not allowed', { status: 405, headers: CORS_HEADERS })
+  }
+
+  // Chặn truy cập không có CRON_SECRET — function này chỉ được gọi từ pg_cron/UI nội bộ
+  const CRON_SECRET = Deno.env.get('CRON_SECRET')
+  const authHeader = req.headers.get('Authorization')
+  const expectedAuth = `Bearer ${CRON_SECRET}`
+  if (!CRON_SECRET || authHeader !== expectedAuth) {
+    return new Response(
+      JSON.stringify({ error: 'Unauthorized' }),
+      { status: 401, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+    )
   }
 
   // Dùng service_role để bypass RLS — function này chỉ chạy server-side
