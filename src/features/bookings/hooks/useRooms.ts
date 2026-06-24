@@ -11,6 +11,7 @@ export type RoomsQueryItem = Pick<
   | 'type'
   | 'floor'
   | 'capacity'
+  | 'base_price'
   | 'is_active'
   | 'housekeeping_status'
   | 'housekeeping_note'
@@ -25,7 +26,7 @@ export function useRooms(onlyActive = true) {
       let query = supabase
         .from('rooms')
         .select(
-          'id, name, type, floor, capacity, is_active, housekeeping_status, housekeeping_note, ota_feed_url, ota_last_synced_at',
+          'id, name, type, floor, capacity, base_price, is_active, housekeeping_status, housekeeping_note, ota_feed_url, ota_last_synced_at',
         )
         .order('floor', { ascending: true })
         .order('id', { ascending: true })

@@ -47,6 +47,7 @@ function createMenuItems(pendingCount: number): ItemType[] {
     { key: '/dk14-report', icon: <FileExcelOutlined />, label: 'Báo cáo ĐK14' },
     { key: '/s1a', icon: <AuditOutlined />, label: 'Sổ S1a — Doanh thu HKD' },
     { key: '/checkin-import', icon: <UserAddOutlined />, label: 'Import Check-in (Excel)' },
+    { key: '/settings/rooms', icon: <HomeOutlined />, label: 'Quản lý phòng' },
     { key: '/settings/ical', icon: <LinkOutlined />, label: 'iCal Feed' },
   ]
 }
@@ -65,6 +66,7 @@ function resolveSelectedKeys(pathname: string): string[] {
     ['/dk14-report', '/dk14-report'],
     ['/s1a', '/s1a'],
     ['/checkin-import', '/checkin-import'],
+    ['/settings/rooms', '/settings/rooms'],
     ['/settings', '/settings/ical'],
     ['/dashboard', '/'],
   ]
