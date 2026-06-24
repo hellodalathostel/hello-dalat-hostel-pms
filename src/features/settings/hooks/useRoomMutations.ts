@@ -51,6 +51,7 @@ export function useCreateRoom() {
       message.success('Đã thêm phòng mới')
     },
     onError: (error) => {
+      console.error(error)
       message.error(normalizeError(error).message)
     },
   })
@@ -70,6 +71,7 @@ export function useUpdateRoom() {
       message.success('Đã lưu thay đổi')
     },
     onError: (error) => {
+      console.error(error)
       message.error(normalizeError(error).message)
     },
   })
@@ -89,6 +91,7 @@ export function useToggleRoomActive() {
       message.success(variables.is_active ? 'Đã kích hoạt lại phòng' : 'Đã ẩn phòng')
     },
     onError: (error) => {
+      console.error(error)
       message.error(normalizeError(error).message)
     },
   })
