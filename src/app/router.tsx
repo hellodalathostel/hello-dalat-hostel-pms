@@ -5,6 +5,7 @@ import AuthGuard from '@/shared/components/AuthGuard'
 import LoginPage from '@/pages/LoginPage'
 import BookPage from '@/pages/BookPage'
 import { ICalFeedPanel } from '@/features/settings/components/ICalFeedPanel'
+import { RoomManagementPanel } from '@/features/settings/components/RoomManagementPanel'
 import {
   DashboardPage,
   NewBookingPage,
@@ -48,6 +49,7 @@ export const appRouter = createBrowserRouter([
         children: [
           { index: true, element: <Navigate to="ical" replace /> },
           { path: 'ical', element: <ICalFeedPanel /> },
+          { path: 'rooms', element: <RoomManagementPanel /> },
         ],
       },
     ],
