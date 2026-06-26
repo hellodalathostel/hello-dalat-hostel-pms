@@ -9,12 +9,8 @@ import {
   useToggleRoomActive,
   type CreateRoomInput,
 } from '@/features/settings/hooks/useRoomMutations'
-import { useCurrentUserRole } from '@/features/auth/hooks/useCurrentUserRole'
 
 export function RoomManagementPanel() {
-  const { data: role } = useCurrentUserRole()
-  const isOwner = role === 'owner'
-
   const { data: rooms, isLoading } = useRooms(false)
   const createRoom = useCreateRoom()
   const updateRoom = useUpdateRoom()
@@ -76,43 +72,31 @@ export function RoomManagementPanel() {
       render: (active: boolean) =>
         active ? <Tag color="green">Đang dùng</Tag> : <Tag color="red">Đã ẩn</Tag>,
     },
-    ...(isOwner
-      ? [
-          {
-            title: 'Hành động',
-            key: 'action',
-            width: 140,
-            render: (_: unknown, record: RoomsQueryItem) => (
-              <Space>
-                <Button
-                  size="small"
-                  icon={<EditOutlined />}
-                  onClick={() => openEditModal(record)}
-                />
-                <Button
-                  size="small"
-                  danger={record.is_active}
-                  icon={record.is_active ? <EyeInvisibleOutlined /> : <EyeOutlined />}
-                  onClick={() =>
-                    toggleActive.mutate({ id: record.id, is_active: !record.is_active })
-                  }
-                />
-              </Space>
-            ),
-          },
-        ]
-      : []),
+    {
+      title: 'Hành động',
+      key: 'action',
+      width: 140,
+      render: (_: unknown, record: RoomsQueryItem) => (
+        <Space>
+          <Button size="small" icon={<EditOutlined />} onClick={() => openEditModal(record)} />
+          <Button
+            size="small"
+            danger={record.is_active}
+            icon={record.is_active ? <EyeInvisibleOutlined /> : <EyeOutlined />}
+            onClick={() => toggleActive.mutate({ id: record.id, is_active: !record.is_active })}
+          />
+        </Space>
+      ),
+    },
   ]
 
   return (
     <Card
       title="Quản lý phòng"
       extra={
-        isOwner && (
-          <Button type="primary" icon={<PlusOutlined />} onClick={openCreateModal}>
-            Thêm phòng
-          </Button>
-        )
+        <Button type="primary" icon={<PlusOutlined />} onClick={openCreateModal}>
+          Thêm phòng
+        </Button>
       }
     >
       <Table<RoomsQueryItem>
