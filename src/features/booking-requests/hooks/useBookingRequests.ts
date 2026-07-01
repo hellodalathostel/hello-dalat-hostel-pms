@@ -78,10 +78,10 @@ export function useRejectRequest() {
   return useMutation({
     mutationFn: async ({ id, reason }: { id: string, reason?: string }) => {
       try {
-        const { error } = await supabase
-          .from('booking_requests')
-          .update({ status: 'rejected', rejected_reason: reason ?? null })
-          .eq('id', id)
+        const { error } = await supabase.rpc('reject_booking_request_txn', {
+          p_request_id: id,
+          p_reason: reason ?? null,
+        })
 
         if (error) {
           throw error
