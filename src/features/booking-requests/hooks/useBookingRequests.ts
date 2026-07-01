@@ -96,6 +96,10 @@ export function useRejectRequest() {
       message.success('Đã từ chối yêu cầu')
     },
     onError: (err: Error) => {
+      if (err.message.includes('REQUEST_ALREADY_PROCESSED')) {
+        message.error('Yêu cầu này đã được xử lý, vui lòng tải lại danh sách')
+        return
+      }
       message.error(`Không thể cập nhật: ${err.message}`)
     },
   })

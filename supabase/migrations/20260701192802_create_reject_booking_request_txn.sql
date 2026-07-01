@@ -49,3 +49,8 @@ $function$;
 
 -- Grant thực thi cho cả 2 role (đúng data access model: Owner + Staff full CRUD)
 GRANT EXECUTE ON FUNCTION public.reject_booking_request_txn(UUID, TEXT) TO authenticated;
+
+-- Chặn PUBLIC/anon gọi trực tiếp RPC này khi chưa đăng nhập (Postgres grant EXECUTE cho
+-- PUBLIC theo default khi tạo function, anon kế thừa qua đó nếu không revoke rõ ràng)
+REVOKE EXECUTE ON FUNCTION public.reject_booking_request_txn(UUID, TEXT) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.reject_booking_request_txn(UUID, TEXT) FROM anon;
