@@ -25,6 +25,8 @@
   --signal-stop-bg: #F5DEDE;
   --signal-occupied: #4A4A52; /* xám than — đang ở */
   --signal-occupied-bg: #E7E7E5;
+  --signal-checkout: #A6741C;    /* vàng đồng — trả phòng hôm nay, cần dọn sau khi khách đi */
+  --signal-checkout-bg: #F2E8CF;
 
   /* ---- Brand accent — đã tách khỏi --signal-hold (brain.decisions, 2026-06-17) ---- */
   --accent: #14141A;          /* = --ink */
@@ -81,6 +83,8 @@
   --signal-stop-bg: #2E1A1A;
   --signal-occupied: #ACACB4;
   --signal-occupied-bg: #232325;
+  --signal-checkout: #D9B563;
+  --signal-checkout-bg: #332C18;
 
   --accent: #F0F0EC;          /* = --ink dark mode — đã tách khỏi --signal-hold */
   --accent-ink: #14141A;

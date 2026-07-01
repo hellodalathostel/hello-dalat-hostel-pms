@@ -1,7 +1,7 @@
 /* FILE: src/features/dashboard/components/RoomBoard.module.css */
 .summary {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 1px;
   background: var(--rule);
   margin-bottom: var(--space-4);
@@ -93,6 +93,16 @@
 .dotHold { color: var(--signal-hold); }
 .dotOcc { color: var(--signal-occupied); }
 .dotStop { color: var(--signal-stop); }
+.dotCheckout { color: var(--signal-checkout); }
+
+/* Tô màu cả dòng theo trạng thái — "trống" giữ nguyên nền mặc định (yêu cầu 2026-07-01) */
+.rowOccupied {
+  background: var(--signal-occupied-bg);
+}
+
+.rowCheckoutToday {
+  background: var(--signal-checkout-bg);
+}
 
 /* ĐÃ SỬA: debtBadge giờ là <button> thật (bấm mở PaymentModal), không còn là <span> tĩnh. */
 .debtBadge {

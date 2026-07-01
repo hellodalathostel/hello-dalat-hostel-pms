@@ -2,7 +2,7 @@
 import { Button, Tooltip } from 'antd'
 import { MoreOutlined } from '@ant-design/icons'
 import type { DashboardRoom } from '@/types/dashboard'
-import { getRoomBoardState, type RoomBoardState } from '@/features/dashboard/utils/roomBoardState'
+import { getRoomBoardState, isOccupiedLikeState, type RoomBoardState } from '@/features/dashboard/utils/roomBoardState'
 import { useMarkRoomClean } from '@/features/housekeeping/hooks/useMarkRoomClean'
 import styles from './RoomBoard.module.css'
 
@@ -41,7 +41,7 @@ function dedupeRooms(rooms: DashboardRoom[]): DashboardRoom[] {
 
 // Cột "Khách" — tuỳ trạng thái mà hiện tên khách, gợi ý sắp đến, hay lý do trống/dọn.
 function renderGuestCell(room: DashboardRoom, state: RoomBoardState): React.ReactNode {
-  if (state === 'occupied') {
+  if (isOccupiedLikeState(state)) {
     return room.guest_name ?? '—'
   }
 
@@ -84,7 +84,7 @@ export function RoomBoard({
       acc[getRoomBoardState(room)] += 1
       return acc
     },
-    { blocked: 0, occupied: 0, cleaning: 0, out_of_order: 0, vacant: 0 } as Record<RoomBoardState, number>,
+    { blocked: 0, occupied: 0, checkout_today: 0, cleaning: 0, out_of_order: 0, vacant: 0 } as Record<RoomBoardState, number>,
   )
 
   return (
@@ -101,6 +101,12 @@ export function RoomBoard({
             {counts.occupied}
           </span>
           <span className={styles.summaryLabel}>Đang ở</span>
+        </div>
+        <div className={styles.summaryCell}>
+          <span className={styles.summaryNum} style={{ color: 'var(--signal-checkout)' }}>
+            {counts.checkout_today}
+          </span>
+          <span className={styles.summaryLabel}>Trả hôm nay</span>
         </div>
         <div className={styles.summaryCell}>
           <span className={styles.summaryNum} style={{ color: 'var(--signal-hold)' }}>
@@ -124,17 +130,28 @@ export function RoomBoard({
           const state = getRoomBoardState(room)
           const isMarkingThisRoom = markClean.isPending && markClean.variables?.roomId === room.room_id
 
+          // Tô màu cả dòng theo trạng thái — "trống" giữ nguyên, không thêm class
+          const rowStateClass =
+            state === 'occupied'
+              ? styles.rowOccupied
+              : state === 'checkout_today'
+                ? styles.rowCheckoutToday
+                : ''
+
           return (
-            <div key={room.room_id} className={styles.row}>
+            <div key={room.room_id} className={`${styles.row} ${rowStateClass}`}>
               <span className={styles.id}>{room.room_id}</span>
               <span className={styles.guest}>{renderGuestCell(room, state)}</span>
               <span className={styles.price}>{formatCurrency(room.price_per_night)}</span>
 
               <span className={styles.status}>
                 {state === 'vacant' && <span className={styles.dotGo}>○ TRỐNG</span>}
-                {state === 'occupied' && (
+                {isOccupiedLikeState(state) && (
                   <>
-                    <span className={styles.dotOcc}>● ĐANG Ở</span>
+                    {state === 'occupied' && <span className={styles.dotOcc}>● ĐANG Ở</span>}
+                    {state === 'checkout_today' && (
+                      <span className={styles.dotCheckout}>● TRẢ HÔM NAY</span>
+                    )}
                     {/* ĐÃ SỬA: debt badge giờ là <button> bấm được, mở PaymentModal đúng phòng. */}
                     {(room.balance_due ?? 0) > 0 && (
                       <Tooltip title={`Còn nợ ${formatCurrency(room.balance_due)}đ — bấm để thanh toán`}>
@@ -160,7 +177,7 @@ export function RoomBoard({
                     {room.booking_id ? 'Nhận phòng' : 'Đặt phòng'}
                   </Button>
                 )}
-                {state === 'occupied' && (
+                {isOccupiedLikeState(state) && (
                   <Button size="small" onClick={() => onCheckoutClick(room)}>
                     Trả phòng
                   </Button>
@@ -186,7 +203,7 @@ export function RoomBoard({
                     Chi tiết
                   </Button>
                 )}
-                {(state === 'vacant' || state === 'occupied' || state === 'cleaning') && room.booking_id && (
+                {(state === 'vacant' || isOccupiedLikeState(state) || state === 'cleaning') && room.booking_id && (
                   <Button
                     size="small"
                     icon={<MoreOutlined />}
