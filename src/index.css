@@ -299,6 +299,11 @@ body {
   font-size: var(--text-xs);
   opacity: 0.85;
   color: inherit !important;
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ---- Signal màu theo variant (đã chốt với Hiếu 2026-06-18) ---- */

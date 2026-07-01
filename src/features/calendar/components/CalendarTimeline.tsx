@@ -276,7 +276,7 @@ export function CalendarTimeline({ dates, rooms, onBookingClick }: CalendarTimel
                           <div>
                             <div>{event.guest_name ?? 'Khách chưa xác định'}</div>
                             <div>Mã: {event.code ?? '—'}</div>
-                            <div>Ghi chú: {event.booking_note || 'Không có'}</div>
+                            {event.booking_note && <div>Ghi chú: {event.booking_note}</div>}
                             <div>Check-in: {formatEventTime(event.checkin_at)}</div>
                             <div>Check-out: {formatEventTime(event.checkout_at)}</div>
                           </div>
@@ -284,9 +284,11 @@ export function CalendarTimeline({ dates, rooms, onBookingClick }: CalendarTimel
                       >
                         <div className="cal-block__content">
                           <span className="cal-block__title">{shortLabel}</span>
-                          <Typography.Text className="cal-block__meta">
-                            {event.booking_note || 'Không có ghi chú'}
-                          </Typography.Text>
+                          {event.booking_note && (
+                            <Typography.Text className="cal-block__meta" title={event.booking_note}>
+                              {event.booking_note}
+                            </Typography.Text>
+                          )}
                         </div>
                       </Tooltip>
                     </div>
