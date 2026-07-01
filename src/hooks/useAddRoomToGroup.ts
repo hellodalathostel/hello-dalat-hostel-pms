@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { message } from 'antd'
 import { supabase } from '@/api/supabase'
+import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
 
 export interface AddRoomPayload {
   group_id: string
@@ -14,6 +14,7 @@ export interface AddRoomPayload {
 
 export function useAddRoomToGroup() {
   const queryClient = useQueryClient()
+  const { message } = useAppFeedback()
 
   return useMutation({
     mutationFn: async (payload: AddRoomPayload) => {

@@ -10,7 +10,11 @@
       "Bash(git rm *)",
       "Bash(supabase --version)",
       "Bash(supabase projects *)",
-      "mcp__claude_ai_Supabase__get_logs"
+      "mcp__claude_ai_Supabase__get_logs",
+      "mcp__claude_ai_Supabase__apply_migration",
+      "Bash(deno check *)",
+      "mcp__claude_ai_Supabase__get_edge_function",
+      "mcp__claude_ai_Supabase__deploy_edge_function"
     ],
     "additionalDirectories": [
       "/tmp"

@@ -11,9 +11,9 @@
 // documentGeneratorTypes.ts. File này chỉ còn 3 hook chính.
 
 import { useState } from 'react';
-import { message } from 'antd';
 import dayjs from 'dayjs';
 import { supabase } from '@/api/supabase';
+import { useAppFeedback } from '@/shared/hooks/useAppFeedback';
 import {
   renderBookingConfirmation,
   renderDepositRequest,
@@ -41,6 +41,7 @@ export interface UseDocumentGeneratorReturn {
 
 export function useDocumentGenerator(): UseDocumentGeneratorReturn {
   const [generating, setGenerating] = useState(false);
+  const { message } = useAppFeedback();
 
   const generate = async (opts: GenerateOptions): Promise<void> => {
     setGenerating(true);
@@ -128,6 +129,7 @@ export function useDocumentGeneratorByGroup(
 ): UseDocumentGeneratorByGroupReturn {
   const [isGenerating, setIsGenerating] = useState(false);
   const [zaloText, setZaloText] = useState<string | null>(null);
+  const { message } = useAppFeedback();
 
   /** Resolve bookingId: dùng param nếu có, không thì query booking đầu tiên của group */
   async function resolveBookingId(paramBookingId?: string): Promise<string> {

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { message } from 'antd'
 import { supabase } from '@/api/supabase'
+import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
 
 export type BookingRequestStatus = 'pending' | 'confirmed' | 'rejected'
 
@@ -73,6 +73,7 @@ export function usePendingRequestCount() {
 
 export function useRejectRequest() {
   const queryClient = useQueryClient()
+  const { message } = useAppFeedback()
 
   return useMutation({
     mutationFn: async ({ id, reason }: { id: string, reason?: string }) => {
@@ -103,6 +104,7 @@ export function useRejectRequest() {
 
 export function useConvertRequest() {
   const queryClient = useQueryClient()
+  const { message } = useAppFeedback()
 
   return useMutation({
     mutationFn: async ({
