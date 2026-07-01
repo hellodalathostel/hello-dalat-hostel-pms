@@ -43,6 +43,7 @@ interface RoomCalendarRawRecord {
   is_blocked?: boolean | null
   guest_name?: string | null
   customer_phone?: string | null
+  booking_note?: string | null
   checkin_at?: string | null
   checkout_at?: string | null
   grand_total?: number | null
@@ -253,6 +254,7 @@ function expandRangeRecordToDailyEvents(
       is_blocked: record.is_blocked ?? false,
       guest_name: record.guest_name ?? null,
       guest_phone: record.customer_phone ?? null,
+      booking_note: record.booking_note ?? null,
       check_in: record.check_in ?? record.start_date ?? null,
       check_out: record.check_out ?? record.end_date ?? null,
       checkin_at: record.checkin_at ?? record.check_in ?? record.start_date ?? null,
@@ -285,6 +287,7 @@ function normalizeCalendarRecords(
         is_blocked: record.is_blocked ?? false,
         guest_name: record.guest_name ?? null,
         guest_phone: record.customer_phone ?? null,
+        booking_note: record.booking_note ?? null,
         check_in: record.check_in ?? record.start_date ?? null,
         check_out: record.check_out ?? record.end_date ?? null,
         checkin_at: record.checkin_at ?? record.check_in ?? null,

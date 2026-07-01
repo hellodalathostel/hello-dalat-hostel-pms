@@ -130,6 +130,7 @@ export function CalendarTimeline({ dates, rooms, onBookingClick }: CalendarTimel
     is_blocked: false,
     guest_name: null,
     guest_phone: null,
+    booking_note: null,
     check_in: date,
     check_out: date,
     checkin_at: null,
@@ -275,7 +276,7 @@ export function CalendarTimeline({ dates, rooms, onBookingClick }: CalendarTimel
                           <div>
                             <div>{event.guest_name ?? 'Khách chưa xác định'}</div>
                             <div>Mã: {event.code ?? '—'}</div>
-                            <div>SĐT: {event.guest_phone ?? 'Chưa có'}</div>
+                            <div>Ghi chú: {event.booking_note || 'Không có'}</div>
                             <div>Check-in: {formatEventTime(event.checkin_at)}</div>
                             <div>Check-out: {formatEventTime(event.checkout_at)}</div>
                           </div>
@@ -284,7 +285,7 @@ export function CalendarTimeline({ dates, rooms, onBookingClick }: CalendarTimel
                         <div className="cal-block__content">
                           <span className="cal-block__title">{shortLabel}</span>
                           <Typography.Text className="cal-block__meta">
-                            {event.guest_phone ?? 'Chưa có số điện thoại'}
+                            {event.booking_note || 'Không có ghi chú'}
                           </Typography.Text>
                         </div>
                       </Tooltip>

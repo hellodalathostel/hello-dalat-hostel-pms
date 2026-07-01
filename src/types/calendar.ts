@@ -14,6 +14,7 @@ export interface CalendarEvent {
   is_blocked: boolean
   guest_name: string | null
   guest_phone: string | null
+  booking_note: string | null
   check_in: string | null
   check_out: string | null
   checkin_at: string | null
