@@ -199,15 +199,21 @@ export const BASE_STYLE = `
   table.line-table tr:last-child td { border-bottom:none; }
   table.line-table .total-row td { background:#d0e8da; font-weight:700; color:#0a3d1a; font-size:13.5px; border-top:1px solid #a8d5b5; }
   table.line-table .paid-row td { background:#dce8fa; color:#0c2a5e; font-weight:600; }
-  table.line-table .due-row td { background:#fde8c8; color:#6d2800; font-weight:700; font-size:13.5px; border-top:1px solid #f5c87a; }
+  table.line-table .due-row td { background:#fde8c8; color:#6d2800; font-weight:800; font-size:26px; padding:18px 12px; border-top:2px solid #f5c87a; }
   table.line-table .surcharge-row td { background:#fdf6ee; color:#7a4500; }
   .tr { text-align:right; }
   .tc { text-align:center; }
-  .qr-block { display:flex; gap:18px; padding:16px; background:#f7f4ef; border:0.5px solid #e0d8c8; border-radius:6px; align-items:flex-start; }
-  .qr-img { width:220px; height:220px; background:#fff; border:0.5px solid #d0c8b8; border-radius:4px; display:flex; align-items:center; justify-content:center; flex-shrink:0; overflow:hidden; }
-  .qr-img img { width:220px; height:220px; object-fit:contain; }
+  .qr-block { display:flex; flex-wrap:wrap; gap:18px; padding:16px; background:#f7f4ef; border:0.5px solid #e0d8c8; border-radius:6px; align-items:flex-start; }
+  @media (max-width:480px) {
+    .qr-block { justify-content:center; }
+    .qr-img { width:280px; height:280px; }
+    .qr-img img { width:280px; height:280px; }
+    .qr-info { width:100%; }
+  }
+  .qr-img { width:360px; height:360px; background:#fff; border:0.5px solid #d0c8b8; border-radius:6px; display:flex; align-items:center; justify-content:center; flex-shrink:0; overflow:hidden; }
+  .qr-img img { width:360px; height:360px; object-fit:contain; }
   .qr-info { flex:1; }
-  .qr-amount { font-family:'Playfair Display',serif; font-size:22px; font-weight:600; color:#0a3d1a; line-height:1; margin-bottom:10px; }
+  .qr-amount { font-family:'Playfair Display',serif; font-size:32px; font-weight:700; color:#0a3d1a; line-height:1; margin-bottom:14px; }
   .qr-row { display:flex; gap:8px; margin-bottom:4px; }
   .qr-key { font-size:10px; color:#6a5a40; width:100px; flex-shrink:0; }
   .qr-val { font-size:12px; color:#1a1a1a; font-weight:500; }
