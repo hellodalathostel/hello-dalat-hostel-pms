@@ -577,10 +577,11 @@ export function renderInvoice(d: DocumentData): { html: string; zaloText: string
         <thead><tr>
           <th>${isEN ? 'Description' : 'Mô tả'}</th>
           <th class="tr">${isEN ? 'Unit price' : 'Đơn giá'}</th>
-          <th class="tc">${isEN ? 'Qty' : 'SL'}</th>
+          <th class="tc">${isEN ? 'Quantity' : 'Số lượng'}</th>
           <th class="tr">${isEN ? 'Amount' : 'Thành tiền'}</th>
         </tr></thead>
         <tbody>
+          <tr class="group-label-row"><td colspan="4">${isEN ? 'Room' : 'Phòng'}</td></tr>
           <tr>
             <td>${d.roomName} <span style="color:#6a5a40">(${d.roomType})</span>
               <br><small style="color:#8a7a60">${nightsLabel}</small>
@@ -589,6 +590,7 @@ export function renderInvoice(d: DocumentData): { html: string; zaloText: string
             <td class="tc">${d.nights}</td>
             <td class="tr">${fmt(d.roomSubtotal)}</td>
           </tr>
+          ${d.services.length > 0 ? `<tr class="group-label-row"><td colspan="4">${isEN ? 'Additional Services' : 'Dịch vụ phát sinh'}</td></tr>` : ''}
           ${d.services.map(s => `
           <tr>
             <td>${s.name}</td>

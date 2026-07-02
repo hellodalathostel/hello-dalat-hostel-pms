@@ -5,7 +5,6 @@
 
 import dayjs from 'dayjs';
 
-
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface BookingServiceItem {
@@ -151,8 +150,6 @@ export const vietQrUrl = (amount: number, addInfo: string) => {
   return `https://img.vietqr.io/image/${VQR_BANK}-${VQR_ACCOUNT}-print.png?amount=${amount}&addInfo=${safeInfo}&accountName=${safeName}`;
 };
 
-
-
 // ─── CSS Base ─────────────────────────────────────────────────────────────────
 // Tất cả màu text trong callout/table dùng hardcode hex để đảm bảo đọc được
 // trên cả light mode và dark mode trong popup window.
@@ -190,10 +187,12 @@ export const BASE_STYLE = `
   .badge { display:inline-block; padding:1px 8px; border-radius:20px; font-size:10px; font-weight:700; }
   .badge-green { background:#c8e6c9; color:#1b5e20; }
   .badge-amber { background:#ffe0b2; color:#6d3200; }
-  .inv-tag { display:inline-block; padding:1px 8px; border-radius:20px; font-size:10px; font-weight:700; }
+  .inv-tag { display:inline-flex; align-items:center; gap:5px; padding:4px 12px; border-radius:20px; font-size:12px; font-weight:700; letter-spacing:0.3px; }
   .tag-paid { background:#c8e6c9; color:#1b5e20; }
-  .tag-pending { background:#ffe0b2; color:#6d3200; }
+  .tag-pending { background:#ffdca8; color:#7a3900; border:1px solid #f0b050; }
+  .tag-pending::before { content:'⚠'; font-size:11px; }
   table.line-table { width:100%; border-collapse:collapse; border:0.5px solid #e4ddd0; }
+  table.line-table .group-label-row td { background:#f7f4ef; color:#8a7a60; font-size:9.5px; font-weight:700; text-transform:uppercase; letter-spacing:1.2px; padding:6px 12px; border-bottom:0.5px solid #e4ddd0; }
   table.line-table thead tr { background:#f2ede4; }
   table.line-table th { padding:8px 12px; font-size:9.5px; font-weight:700; text-transform:uppercase; letter-spacing:1.2px; color:#5a4a30; border-bottom:0.5px solid #e4ddd0; text-align:left; }
   table.line-table td { padding:9px 12px; font-size:12.5px; border-bottom:0.5px solid #f0ebe0; color:#1a1a1a; vertical-align:middle; background:#fff; }
@@ -212,7 +211,8 @@ export const BASE_STYLE = `
   .qr-row { display:flex; gap:8px; margin-bottom:4px; }
   .qr-key { font-size:10px; color:#6a5a40; width:100px; flex-shrink:0; }
   .qr-val { font-size:12px; color:#1a1a1a; font-weight:500; }
-  .qr-note { font-size:10.5px; color:#5a4a30; margin-top:8px; line-height:1.5; border-top:0.5px solid #e0d8c8; padding-top:7px; }
+  .qr-divider { border:none; border-top:0.5px dashed #d4c8b0; margin:10px 0 8px; }
+  .qr-note { font-size:10.5px; color:#5a4a30; line-height:1.5; }
   .callout { display:flex; gap:12px; padding:12px 16px; margin:14px 0; align-items:flex-start; font-size:12.5px; line-height:1.6; border-radius:0 4px 4px 0; }
   .callout-text { color:#1a1a1a; }
   .callout-icon { width:20px; height:20px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:11px; flex-shrink:0; margin-top:1px; font-weight:700; }
@@ -393,6 +393,7 @@ export const qrBlockHtml = (
       <span class="qr-key">${lang === 'en' ? 'Deadline' : 'Hạn cọc'}</span>
       <span class="qr-val" style="color:#8b0000;font-weight:700">${fmtDate(deadline)}</span>
     </div>` : ''}
+    <hr class="qr-divider">
     <p class="qr-note">${lang === 'en'
       ? `Scan QR with any Vietnamese banking app. Once transferred, please send a screenshot to WhatsApp/Zalo ${HOSTEL_PHONE_INTL} to confirm your booking.`
       : `Scan QR bằng app ngân hàng để chuyển khoản nhanh. Sau khi chuyển, gửi ảnh xác nhận qua Zalo ${HOSTEL_PHONE}.`

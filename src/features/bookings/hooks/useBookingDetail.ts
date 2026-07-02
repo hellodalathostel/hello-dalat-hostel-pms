@@ -140,7 +140,7 @@ export async function fetchGroupDetail(groupId: string): Promise<GroupDetail> {
     }) as BookingRow[]
     const paymentRows = (payments ?? []) as PaymentRow[]
 
-    const grandTotal = bookingRows.reduce((sum, booking) => sum + (booking.grand_total ?? 0), 0)
+    const grandTotal = group.grand_total ?? 0
     const paid = group.paid ?? 0
     const balanceDue = grandTotal - paid
 

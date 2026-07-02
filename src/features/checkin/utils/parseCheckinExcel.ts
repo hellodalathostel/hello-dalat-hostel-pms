@@ -258,10 +258,14 @@ export function parseCheckinExcel(file: File): Promise<GuestImportRow[]> {
         }
 
         const headers = (rows[headerRowIndex] as unknown[]).map((header) => String(header ?? ''))
-  console.log('[parseCheckin] headerRowIndex:', headerRowIndex)
-  console.log('[parseCheckin] headers:', headers)
+        if (import.meta.env.DEV) {
+          console.log('[parseCheckin] headerRowIndex:', headerRowIndex)
+          console.log('[parseCheckin] headers:', headers)
+        }
         const format = detectFormat(headers)
-  console.log('[parseCheckin] format:', format)
+        if (import.meta.env.DEV) {
+          console.log('[parseCheckin] format:', format)
+        }
         const fileType = toFileType(format)
 
         if (fileType === 'UNKNOWN') {
@@ -273,7 +277,9 @@ export function parseCheckinExcel(file: File): Promise<GuestImportRow[]> {
 
         const result: GuestImportRow[] = []
         const dataRows = rows.slice(headerRowIndex + 1)
-  console.log('[parseCheckin] dataRows count:', dataRows.length)
+        if (import.meta.env.DEV) {
+          console.log('[parseCheckin] dataRows count:', dataRows.length)
+        }
 
         dataRows.forEach((row, index) => {
           if (!Array.isArray(row)) {
@@ -340,7 +346,9 @@ export function parseCheckinExcel(file: File): Promise<GuestImportRow[]> {
           })
         })
 
-        console.log('[parseCheckin] result count:', result.length)
+        if (import.meta.env.DEV) {
+          console.log('[parseCheckin] result count:', result.length)
+        }
 
         if (result.length === 0) {
           resolve([])

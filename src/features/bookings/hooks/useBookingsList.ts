@@ -24,6 +24,7 @@ type GroupBookingRow = {
   customer_phone: string | null
   source: string | null
   paid: number | null
+  grand_total: number | null
   created_at: string
   bookings: {
     id: string
@@ -47,6 +48,7 @@ async function fetchBookingsList(): Promise<BookingsListItem[]> {
         customer_phone,
         source,
         paid,
+        grand_total,
         created_at,
         bookings (
           id,
@@ -69,7 +71,7 @@ async function fetchBookingsList(): Promise<BookingsListItem[]> {
       const nonDeletedBookings = (group.bookings ?? []).filter((booking) => !booking.is_deleted)
       const activeBookings = nonDeletedBookings.filter((booking) => booking.status !== 'cancelled')
       const firstBookingCode = activeBookings[0]?.code ?? nonDeletedBookings[0]?.code ?? null
-      const grandTotal = activeBookings.reduce((sum, booking) => sum + (booking.grand_total ?? 0), 0)
+      const grandTotal = group.grand_total ?? 0
       const checkIns = activeBookings.map((booking) => booking.check_in).filter(Boolean)
       const checkOuts = activeBookings.map((booking) => booking.check_out).filter(Boolean)
 
