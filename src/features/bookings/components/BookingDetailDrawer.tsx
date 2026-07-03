@@ -7,7 +7,9 @@ import {
   Descriptions,
   Drawer,
   Flex,
+  Modal,
   Row,
+  Select,
   Skeleton,
   Space,
   Statistic,
@@ -94,6 +96,8 @@ export default function BookingDetailDrawer({ groupId = null, bookingId = null, 
   // State for folio edit modal
   const [folioEditOpen, setFolioEditOpen] = useState(false)
   const [folioEditBookingId, setFolioEditBookingId] = useState<string | null>(null)
+  const [roomPickerOpen, setRoomPickerOpen] = useState(false)
+  const [selectedFolioRoomId, setSelectedFolioRoomId] = useState<string | null>(null)
   const [earlyLateOpen, setEarlyLateOpen] = useState(false)
   const [earlyLateDefaultType, setEarlyLateDefaultType] = useState<EarlyLateType>('early')
   const [earlyLateBooking, setEarlyLateBooking] = useState<BookingDetailItem | null>(null)
@@ -261,8 +265,15 @@ export default function BookingDetailDrawer({ groupId = null, bookingId = null, 
                     icon={<EditOutlined />}
                     block={isMobile}
                     onClick={() => {
-                      setFolioEditBookingId(data.bookings[0].id)
-                      setFolioEditOpen(true)
+                      if (data.bookings.length === 1) {
+                        // Chỉ 1 phòng → mở thẳng, không cần hỏi
+                        setFolioEditBookingId(data.bookings[0].id)
+                        setFolioEditOpen(true)
+                      } else {
+                        // Nhiều phòng → bắt buộc chọn phòng trước khi mở folio
+                        setSelectedFolioRoomId(null)
+                        setRoomPickerOpen(true)
+                      }
                     }}
                   >
                     Sổ folio
@@ -345,6 +356,40 @@ export default function BookingDetailDrawer({ groupId = null, bookingId = null, 
           </Space>
         )}
       </Drawer>
+
+      {/* Modal chọn phòng trước khi mở Sổ folio — chỉ hiện khi group >1 phòng */}
+      <Modal
+        title="Chọn phòng để mở Sổ folio"
+        open={roomPickerOpen}
+        onOk={() => {
+          if (selectedFolioRoomId) {
+            setFolioEditBookingId(selectedFolioRoomId)
+            setRoomPickerOpen(false)
+            setFolioEditOpen(true)
+          }
+        }}
+        onCancel={() => {
+          setRoomPickerOpen(false)
+          setSelectedFolioRoomId(null)
+        }}
+        okButtonProps={{ disabled: !selectedFolioRoomId }}
+        okText="Mở folio"
+        cancelText="Huỷ"
+      >
+        <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
+          Đoàn này có {data?.bookings.length ?? 0} phòng. Dịch vụ/giảm giá/cọc sẽ được ghi vào phòng bạn chọn.
+        </Typography.Paragraph>
+        <Select
+          style={{ width: '100%' }}
+          placeholder="Chọn phòng..."
+          value={selectedFolioRoomId}
+          onChange={(value) => setSelectedFolioRoomId(value)}
+          options={data?.bookings.map((booking) => ({
+            value: booking.id,
+            label: `${booking.room_name ?? booking.room_id} — ${dayjs(booking.check_in).format('DD/MM')} → ${dayjs(booking.check_out).format('DD/MM')}${booking.guest_name ? ` — ${booking.guest_name}` : ''}`,
+          }))}
+        />
+      </Modal>
 
       {/* Modal chỉnh sửa folio */}
       <BookingFolioEditModal
