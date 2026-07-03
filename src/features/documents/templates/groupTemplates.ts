@@ -26,6 +26,7 @@ import {
   htmlHeader,
   htmlFooter,
   houseRulesHtml,
+  cancelPolicyHtml,
   qrBlockHtml,
   surchargeRow4Col,
 } from './shared';
@@ -209,9 +210,6 @@ export function renderGroupConfirmation(data: GroupDocumentData, lang: 'vi' | 'e
     svcTotal:     isEn ? 'Total'                   : 'Thành tiền',
     discTitle:    isEn ? 'Discounts'               : 'Giảm giá',
     totalLabel:   isEn ? 'Total Amount'            : 'Tổng cộng',
-    cancelTitle:  isEn ? 'Cancellation Policy'     : 'Chính sách huỷ phòng',
-    cancelPeriod: isEn ? 'Notice period'           : 'Thời gian báo huỷ',
-    cancelRefund: isEn ? 'Refund'                  : 'Hoàn tiền',
     calloutMsg:   isEn
       ? 'Please reply to confirm your booking. This confirmation is valid for 24 hours.'
       : 'Vui lòng xác nhận lại để giữ phòng. Thông tin đặt phòng có hiệu lực trong 24 giờ.',
@@ -317,46 +315,26 @@ export function renderGroupConfirmation(data: GroupDocumentData, lang: 'vi' | 'e
       </tbody>
     </table>`;
 
-  const cancelSection = `
-    <div class="section">
-      <div class="section-label">${t.cancelTitle}</div>
-      <table class="cancel-table">
-        <thead>
-          <tr>
-            <th>${t.cancelPeriod}</th>
-            <th>${t.cancelRefund}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>${isEn ? 'More than 7 days before check-in' : 'Trước check-in > 7 ngày'}</td>
-            <td class="refund-ok">${isEn ? '100% refund' : 'Hoàn 100%'}</td>
-          </tr>
-          <tr>
-            <td>${isEn ? '3 – 7 days before check-in' : 'Trước check-in 3 – 7 ngày'}</td>
-            <td style="color:#c07800;font-weight:700;">${isEn ? '50% refund' : 'Hoàn 50%'}</td>
-          </tr>
-          <tr>
-            <td>${isEn ? 'Less than 3 days before check-in' : 'Trước check-in < 3 ngày'}</td>
-            <td class="refund-none">${isEn ? 'Non-refundable' : 'Không hoàn tiền'}</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>`;
+  // Chính sách huỷ — dùng chung shared.ts, khớp quyết định Brain 2026-06-14 (2-tier, không dùng 3-tier cũ)
+  const cancelSection = cancelPolicyHtml(hasDepositGroup, lang);
+
+  // addInfo ngắn gọn — đồng bộ pattern renderDepositRequest, tránh app ngân hàng cắt nội dung
+  const lastNameGroup = removeDiacritics(data.guestName).trim().split(/\s+/).pop() ?? '';
+  const addInfoGroup = `HD DOAN ${dayjs(data.checkIn).format('DDMM')} ${lastNameGroup}`;
 
   const qrSection = balGroup > 0 ? `
     <div class="section">
       <div class="section-label">${t.bankTitle}</div>
       <div class="qr-block">
         <div class="qr-img">
-          <img src="${vietQrUrl(balGroup, `HD ${removeDiacritics(data.guestName)}`)}" alt="VietQR" />
+          <img src="${vietQrUrl(balGroup, addInfoGroup)}" alt="VietQR" />
         </div>
         <div class="qr-info">
           <div class="qr-row"><span class="qr-key">${isEn ? 'Amount' : 'Số tiền'}</span><span class="qr-val" style="font-weight:700">${fmtMoney(balGroup)}</span></div>
           <div class="qr-row"><span class="qr-key">${isEn ? 'Bank' : 'Ngân hàng'}</span><span class="qr-val">Vietcombank (VCB)</span></div>
           <div class="qr-row"><span class="qr-key">${isEn ? 'Account' : 'Số tài khoản'}</span><span class="qr-val">${VQR_ACCOUNT_DISPLAY}</span></div>
           <div class="qr-row"><span class="qr-key">${isEn ? 'Account Name' : 'Chủ TK'}</span><span class="qr-val">${VQR_OWNER}</span></div>
-          <div class="qr-row"><span class="qr-key">${isEn ? 'Reference' : 'Nội dung CK'}</span><span class="qr-val" style="color:#0a3d1a;font-weight:600">HD ${removeDiacritics(data.guestName)}</span></div>
+          <div class="qr-row"><span class="qr-key">${isEn ? 'Reference' : 'Nội dung CK'}</span><span class="qr-val" style="color:#0a3d1a;font-weight:600">${addInfoGroup}</span></div>
           <div class="qr-note">${t.bankNote}</div>
         </div>
       </div>
