@@ -1,7 +1,7 @@
 // Edge Function: telegram-finance-bot
 // Nhận tin nhắn Telegram (text hoặc ảnh chuyển khoản), parse chi tiêu,
 // insert vào brain.personal_finances (qua RPC) hoặc public.expenses.
-// Text: $0, keyword mapping. Ảnh: Claude Haiku vision (co phi nho, dang test 1 thang).
+// Text: $0, keyword mapping. Anh: Claude Haiku vision (co phi nho, dang test 1 thang).
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -14,7 +14,7 @@ const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY')!;
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-// escapeHtml bắt buộc cho mọi text động chèn vào Telegram message (parse_mode="HTML")
+// escapeHtml bat buoc cho moi text dong chen vao Telegram message (parse_mode="HTML")
 function escapeHtml(text: string): string {
   return text
     .replace(/&/g, '&amp;')
@@ -35,7 +35,7 @@ async function sendTelegramMessage(chatId: string, text: string) {
   return res;
 }
 
-// Parse số tiền dạng "25k", "1.2tr", "500000" từ text
+// Parse so tien dang "25k", "1.2tr", "500000" tu text
 function parseAmount(text: string): { amount: number; rest: string } | null {
   const trMatch = text.match(/(\d+(?:[.,]\d+)?)\s*tr\b/i);
   if (trMatch) {
@@ -58,7 +58,7 @@ function parseAmount(text: string): { amount: number; rest: string } | null {
   return null;
 }
 
-// $0 — keyword mapping cho category hostel. Không khớp -> 'Khác', sửa tay sau.
+// $0 - keyword mapping cho category hostel. Khong khop -> 'Khac', sua tay sau.
 function classifyCategory(description: string): string {
   const desc = description.toLowerCase();
 
@@ -78,7 +78,7 @@ function classifyCategory(description: string): string {
   return 'Khác';
 }
 
-// Tải ảnh từ Telegram bằng file_id, trả về base64
+// Tai anh tu Telegram bang file_id, tra ve base64
 async function getTelegramFileBase64(fileId: string): Promise<string> {
   const fileInfoRes = await fetch(
     `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getFile?file_id=${fileId}`
@@ -92,7 +92,7 @@ async function getTelegramFileBase64(fileId: string): Promise<string> {
   const arrayBuffer = await fileRes.arrayBuffer();
   const bytes = new Uint8Array(arrayBuffer);
 
-  // Encode base64 theo chunk, tránh stack overflow với String.fromCharCode(...bytes) trên ảnh lớn
+  // Encode base64 theo chunk, tranh stack overflow voi String.fromCharCode(...bytes) tren anh lon
   let binary = '';
   const chunkSize = 8192;
   for (let i = 0; i < bytes.length; i += chunkSize) {
@@ -101,8 +101,8 @@ async function getTelegramFileBase64(fileId: string): Promise<string> {
   return btoa(binary);
 }
 
-// Gọi Claude Haiku vision để trích số tiền + nội dung từ ảnh chuyển khoản
-// (ZaloPay/MoMo/ShopeePay không gửi email nên không dùng được pipeline email hiện có)
+// Goi Claude Haiku vision de trich so tien + noi dung tu anh chuyen khoan
+// (ZaloPay/MoMo/ShopeePay khong gui email nen khong dung duoc pipeline email hien co)
 async function extractFromScreenshot(
   base64Image: string
 ): Promise<{ amount: number; description: string } | null> {
@@ -116,7 +116,7 @@ async function extractFromScreenshot(
       },
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 200,
+        max_tokens: 300,
         messages: [
           {
             role: 'user',
@@ -127,12 +127,21 @@ async function extractFromScreenshot(
               },
               {
                 type: 'text',
-                text: `Đây là ảnh chụp màn hình xác nhận chuyển khoản (ZaloPay/MoMo/ShopeePay).
-Trích ra CHÍNH XÁC số tiền giao dịch (VNĐ, chỉ số nguyên, không dấu chấm/phẩy)
-và nội dung/mục đích chuyển khoản (ngắn gọn, dưới 10 từ, tiếng Việt).
-Trả lời DUY NHẤT dạng JSON, không thêm gì khác:
-{"amount": <số>, "description": "<mô tả ngắn>"}
-Nếu không đọc được số tiền rõ ràng, trả về {"amount": 0, "description": ""}`,
+                text: `Đây là ảnh chi tiết giao dịch từ ví điện tử (ZaloPay/MoMo/ShopeePay).
+
+Ảnh có thể chứa NHIỀU số tiền khác nhau (số tiền ban đầu, số tiền giảm giá,
+phí dịch vụ, số dư ví...). Chỉ lấy ĐÚNG 1 số: SỐ TIỀN GIAO DỊCH THỰC TẾ —
+thường là số lớn nhất, đậm nhất, nằm ngay dưới tiêu đề "Thanh toán đơn hàng"
+hoặc "Chuyển tiền", thường có dấu trừ (-) phía trước, đơn vị đ hoặc VNĐ.
+BỎ QUA các dòng "Số tiền ban đầu", "Số tiền giảm", "Số dư ví sau giao dịch",
+"Phí dịch vụ" — đó KHÔNG phải số tiền giao dịch chính.
+
+Nội dung/mục đích: lấy từ dòng mô tả giao dịch, viết ngắn gọn dưới 10 từ tiếng Việt.
+
+Trả lời DUY NHẤT dạng JSON thuần, KHÔNG kèm chữ giải thích, KHÔNG markdown fence:
+{"amount": <số nguyên VNĐ>, "description": "<mô tả ngắn>"}
+
+Nếu không đọc rõ số tiền: {"amount": 0, "description": ""}`,
               },
             ],
           },
@@ -141,11 +150,28 @@ Nếu không đọc được số tiền rõ ràng, trả về {"amount": 0, "de
     });
 
     const data = await response.json();
+
+    // Log toan bo response de chan doan - quan trong khi request that bai
+    // (401/400/500), vi luc do data.content khong ton tai
+    console.log('extractFromScreenshot HTTP status:', response.status);
+    console.log('extractFromScreenshot full response:', JSON.stringify(data));
+
+    if (!response.ok) {
+      console.error('Anthropic API error:', data.error?.message || 'Unknown error');
+      return null;
+    }
+
     const raw = data.content?.[0]?.text?.trim();
-    if (!raw) return null;
+    if (!raw) {
+      console.error('No text in response content:', JSON.stringify(data.content));
+      return null;
+    }
 
     const clean = raw.replace(/```json|```/g, '').trim();
-    const parsed = JSON.parse(clean);
+    const jsonMatch = clean.match(/\{[\s\S]*\}/);
+    const jsonStr = jsonMatch ? jsonMatch[0] : clean;
+
+    const parsed = JSON.parse(jsonStr);
 
     if (typeof parsed.amount === 'number' && parsed.amount > 0) {
       return { amount: parsed.amount, description: parsed.description || 'chuyen khoan' };
@@ -159,7 +185,7 @@ Nếu không đọc được số tiền rõ ràng, trả về {"amount": 0, "de
 
 Deno.serve(async (req) => {
   try {
-    // Verify webhook secret — bắt buộc, endpoint này public
+    // Verify webhook secret - bat buoc, endpoint nay public
     const secretHeader = req.headers.get('X-Telegram-Bot-Api-Secret-Token');
     if (secretHeader !== TELEGRAM_WEBHOOK_SECRET) {
       return new Response('Unauthorized', { status: 401 });
@@ -174,7 +200,7 @@ Deno.serve(async (req) => {
 
     const chatId = String(message.chat.id);
 
-    // Chỉ chấp nhận chat_id đã whitelist — không reply để tránh lộ thông tin cho chat lạ
+    // Chi chap nhan chat_id da whitelist - khong reply de tranh lo thong tin cho chat la
     if (chatId !== ALLOWED_CHAT_ID) {
       console.warn('Rejected message from unauthorized chat_id:', chatId);
       return new Response('OK', { status: 200 });
@@ -186,7 +212,7 @@ Deno.serve(async (req) => {
     let source = 'telegram_bot';
 
     if (message.photo && message.photo.length > 0) {
-      // Xử lý ảnh chuyển khoản: lấy bản lớn nhất (phần tử cuối trong mảng photo)
+      // Xu ly anh chuyen khoan: lay ban lon nhat (phan tu cuoi trong mang photo)
       const largestPhoto = message.photo[message.photo.length - 1];
       const caption: string = message.caption || '';
       isHostel = /#hostel\b/i.test(caption);
@@ -223,14 +249,14 @@ Deno.serve(async (req) => {
       amount = parsed.amount;
       description = parsed.rest;
     } else {
-      // Bỏ qua update không phải text/photo (sticker, voice, v.v.)
+      // Bo qua update khong phai text/photo (sticker, voice, v.v.)
       return new Response('OK', { status: 200 });
     }
 
     const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
 
     if (isHostel) {
-      // Ghi vào public.expenses (hostel) — bảng expose trực tiếp qua PostgREST
+      // Ghi vao public.expenses (hostel) - bang expose truc tiep qua PostgREST
       const category = classifyCategory(description || 'Khác');
 
       const { error } = await supabase.from('expenses').insert({
@@ -251,7 +277,7 @@ Deno.serve(async (req) => {
         `✅ Đã ghi [Hostel]: ${escapeHtml(description || '(không mô tả)')} - ${amount.toLocaleString('vi-VN')}đ\nCategory: ${escapeHtml(category)}`
       );
     } else {
-      // Ghi vào brain.personal_finances qua RPC — brain schema không expose qua PostgREST
+      // Ghi vao brain.personal_finances qua RPC - brain schema khong expose qua PostgREST
       const { error } = await supabase.rpc('insert_personal_finance_txn', {
         p_date: today,
         p_category: 'Chi tiêu hàng ngày',
@@ -275,6 +301,6 @@ Deno.serve(async (req) => {
     return new Response('OK', { status: 200 });
   } catch (err) {
     console.error('telegram-finance-bot error:', err);
-    return new Response('OK', { status: 200 }); // Luôn trả 200 để Telegram không retry liên tục
+    return new Response('OK', { status: 200 }); // Luon tra 200 de Telegram khong retry lien tuc
   }
 });
