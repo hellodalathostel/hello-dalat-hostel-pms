@@ -1,7 +1,8 @@
 // Edge Function: telegram-finance-bot
-// Nhận tin nhắn Telegram (text hoặc ảnh chuyển khoản), parse chi tiêu,
-// insert vào brain.personal_finances (qua RPC) hoặc public.expenses.
-// Text: $0, keyword mapping. Anh: Claude Haiku vision (co phi nho, dang test 1 thang).
+// Nhan tin nhan Telegram (text hoac anh chuyen khoan), parse chi tieu,
+// insert vao brain.personal_finances (qua RPC), public.expenses, hoac
+// public.pass_through_transactions (thanh toan ho doi tac).
+// Text: $0, keyword mapping. Anh: Claude Haiku vision (co phi nho, dang test).
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -102,7 +103,7 @@ async function getTelegramFileBase64(fileId: string): Promise<string> {
 }
 
 // Goi Claude Haiku vision de trich so tien + noi dung tu anh chuyen khoan
-// (ZaloPay/MoMo/ShopeePay khong gui email nen khong dung duoc pipeline email hien co)
+// (ZaloPay/MoMo/ShopeePay khong gui email nen khong dung duoc pipeline email co san)
 async function extractFromScreenshot(
   base64Image: string
 ): Promise<{ amount: number; description: string } | null> {
@@ -151,8 +152,6 @@ Nếu không đọc rõ số tiền: {"amount": 0, "description": ""}`,
 
     const data = await response.json();
 
-    // Log toan bo response de chan doan - quan trong khi request that bai
-    // (401/400/500), vi luc do data.content khong ton tai
     console.log('extractFromScreenshot HTTP status:', response.status);
     console.log('extractFromScreenshot full response:', JSON.stringify(data));
 
@@ -183,6 +182,33 @@ Nếu không đọc rõ số tiền: {"amount": 0, "description": ""}`,
   }
 }
 
+// Xac dinh nhanh dich (ca nhan / hostel / partner) tu 1 doan text (text hoac caption anh)
+// Tra ve: nhanh + partner_name (neu co) + text da lam sach (bo prefix)
+function detectTarget(rawText: string): {
+  target: 'personal' | 'hostel' | 'partner';
+  partnerName: string;
+  cleanText: string;
+} {
+  const partnerMatch = rawText.match(/#partner\s+(\S+)/i);
+  if (partnerMatch) {
+    return {
+      target: 'partner',
+      partnerName: partnerMatch[1],
+      cleanText: rawText.replace(/#partner\s+\S+/i, '').trim(),
+    };
+  }
+
+  if (/#hostel\b/i.test(rawText)) {
+    return {
+      target: 'hostel',
+      partnerName: '',
+      cleanText: rawText.replace(/#hostel\b/i, '').trim(),
+    };
+  }
+
+  return { target: 'personal', partnerName: '', cleanText: rawText.trim() };
+}
+
 Deno.serve(async (req) => {
   try {
     // Verify webhook secret - bat buoc, endpoint nay public
@@ -208,14 +234,17 @@ Deno.serve(async (req) => {
 
     let amount: number;
     let description: string;
-    let isHostel = false;
+    let target: 'personal' | 'hostel' | 'partner';
+    let partnerName = '';
     let source = 'telegram_bot';
 
     if (message.photo && message.photo.length > 0) {
       // Xu ly anh chuyen khoan: lay ban lon nhat (phan tu cuoi trong mang photo)
       const largestPhoto = message.photo[message.photo.length - 1];
       const caption: string = message.caption || '';
-      isHostel = /#hostel\b/i.test(caption);
+      const detected = detectTarget(caption);
+      target = detected.target;
+      partnerName = detected.partnerName;
       source = 'telegram_bot_ocr';
 
       await sendTelegramMessage(chatId, '🔍 Đang đọc ảnh...');
@@ -232,17 +261,19 @@ Deno.serve(async (req) => {
       }
 
       amount = extracted.amount;
-      description = extracted.description;
+      // Uu tien mo ta nguoi dung go trong caption (sau khi bo prefix), fallback ve mo ta OCR
+      description = detected.cleanText || extracted.description;
     } else if (message.text) {
       const text: string = message.text.trim();
-      isHostel = /#hostel\b/i.test(text);
-      const cleanText = text.replace(/#hostel\b/i, '').trim();
+      const detected = detectTarget(text);
+      target = detected.target;
+      partnerName = detected.partnerName;
 
-      const parsed = parseAmount(cleanText);
+      const parsed = parseAmount(detected.cleanText);
       if (!parsed) {
         await sendTelegramMessage(
           chatId,
-          '⚠️ Không nhận diện được số tiền. Ví dụ hợp lệ: "cafe 25k" hoặc "#hostel bong den 45k"'
+          '⚠️ Không nhận diện được số tiền. Ví dụ: "cafe 25k", "#hostel bong den 45k", hoặc "#partner Tuan tien phong 500k"'
         );
         return new Response('OK', { status: 200 });
       }
@@ -255,7 +286,28 @@ Deno.serve(async (req) => {
 
     const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
 
-    if (isHostel) {
+    if (target === 'partner') {
+      // Ghi vao public.pass_through_transactions - khoan thanh toan ho doi tac,
+      // KHONG phai chi phi that (Hieu se thu lai tu doi tac sau)
+      const { error } = await supabase.from('pass_through_transactions').insert({
+        direction: 'paid_out',
+        partner_name: partnerName,
+        amount,
+        transaction_date: today,
+        note: description || null,
+      });
+
+      if (error) {
+        console.error('Insert pass_through_transactions error:', error);
+        await sendTelegramMessage(chatId, '❌ Lỗi khi ghi khoản thanh toán hộ. Kiểm tra logs.');
+        return new Response('OK', { status: 200 });
+      }
+
+      await sendTelegramMessage(
+        chatId,
+        `✅ Đã ghi [Thanh toán hộ]: ${escapeHtml(partnerName)} - ${escapeHtml(description || '(không mô tả)')} - ${amount.toLocaleString('vi-VN')}đ\n💡 Nhớ theo dõi thu lại từ ${escapeHtml(partnerName)}`
+      );
+    } else if (target === 'hostel') {
       // Ghi vao public.expenses (hostel) - bang expose truc tiep qua PostgREST
       const category = classifyCategory(description || 'Khác');
 
