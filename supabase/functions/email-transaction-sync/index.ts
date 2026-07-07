@@ -19,6 +19,7 @@ const BANK_SENDERS = [
   "mbcard@mbbank.com.vn",
   "no-reply@mpos.vn",
   "info@card.vib.com.vn",
+  "tpbank@tpb.com.vn",
 ];
 
 // Map domain -> ten bank + payment_method
@@ -27,6 +28,7 @@ function detectBank(from: string): { bank: string; payment_method: string } | nu
   if (f.includes("vietcombank.com.vn")) return { bank: "VCB", payment_method: "transfer" };
   if (f.includes("mbbank.com.vn")) return { bank: "MB", payment_method: "card" };
   if (f.includes("mpos.vn")) return { bank: "mPOS", payment_method: "card" };
+  if (f.includes("tpb.com.vn")) return { bank: "TPBank", payment_method: "card" };
   if (f.includes("vib.com.vn")) return { bank: "VIB", payment_method: "card" };
   return null;
 }
@@ -162,22 +164,39 @@ function parseTxn(bank: string, text: string): {
     }
   }
 
+  // Pattern TPBank: "Gia tri giao dich: 196,500VND" (dinh lien, khong khoang trang truoc VND)
+  // Phai kiem tra TRUOC pattern VIB vi "Gia tri giao dich" chua substring "Gia tri"
+  if (amount === null) {
+    const mTPB = text.match(/Giá trị giao dịch\s*:?\s*([\d.,]+)\s*VND/i);
+    if (mTPB) amount = parseAmountStr(mTPB[1]);
+  }
+
+  // Pattern VIB: "Gia tri: 205,556 VND" (co khoang trang truoc VND)
+  if (amount === null) {
+    const mVIB = text.match(/Giá trị\s*:?\s*([\d.,]+)\s*VND/i);
+    if (mVIB) amount = parseAmountStr(mVIB[1]);
+  }
+
   // Pattern 3 (fallback tieng Anh / mPOS): "Amount: 500,000 VND"
   if (amount === null) {
     const m3 = text.match(/Amount\s*:?\s*([\d.,]+)\s*(VND|USD)?/i);
     if (m3) amount = parseAmountStr(m3[1]);
   }
 
-  // So the cuoi: "**** 1234" / "xxxx1234" / "*1234"
-  const mCard = text.match(/(?:\*{1,4}|x{2,4})\s*(\d{4})\b/i);
+  // So the cuoi: "**** 1234" / "498796******8050" / "5128***4868" / "xxxx1234"
+  const mCard = text.match(/(?:\*+|x{2,4})\s*(\d{4})\b/i);
   const card_last4 = mCard ? mCard[1] : null;
 
   // Merchant: "tại XYZ" = "tại XYZ" (giao dich the) hoac "Mô tả:" = "Mô tả:" (VCB)
   let merchant_raw: string | null = null;
-  const mAt = text.match(/tại\s+([A-Z0-9][^.,;]{2,60})/);
+  const mAt = text.match(/[Tt]ại\s+([A-Z0-9](?:(?!Để biết)[^.,;]){1,59})/);
   const mDesc = text.match(/Mô tả\s*:?\s*([^.;]{3,120})/);
   if (mAt) merchant_raw = mAt[1].trim();
   else if (mDesc) merchant_raw = mDesc[1].trim();
+
+  // TPBank: "Nội dung giao dịch: COINMASTER +13024396943" — dung lai truoc "Han muc"/"Neu can"
+  const mNoiDung = text.match(/Nội dung giao dịch\s*:?\s*([^.\n]{3,120}?)(?=\s*Hạn mức|\s*Nếu cần|$)/i);
+  if (!merchant_raw && mNoiDung) merchant_raw = mNoiDung[1].trim();
 
   // VCB tai khoan: neu khong co dau hieu direction ro rang thi giu 'out';
   // cac bank the (MB/VIB/mPOS) mac dinh 'out' (chi tieu).
