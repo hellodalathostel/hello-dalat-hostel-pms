@@ -26,3 +26,6 @@ Desktop.ini
 *.njsproj
 *.sln
 *.sw?
+
+# Supabase CLI local/machine-specific state (may transiently contain access tokens)
+supabase/.temp/
