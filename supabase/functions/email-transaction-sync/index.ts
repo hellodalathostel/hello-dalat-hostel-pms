@@ -137,13 +137,20 @@ function parseAmountStr(s: string): number {
   return Number(s.replace(/[.,\s]/g, ""));
 }
 
+function parseAmountStrUSD(s: string): number {
+  // "5.56" -> 5.56 (giu nguyen dau cham thap phan, khac VND dung dau cham/phay la phan cach nghin)
+  return Number(s);
+}
+
 function parseTxn(bank: string, text: string): {
   amount: number | null;
+  currency: string;
   direction: "in" | "out";
   card_last4: string | null;
   merchant_raw: string | null;
 } {
   let amount: number | null = null;
+  let currency = "VND";
   let direction: "in" | "out" = "out";
 
   // Pattern 1 (VCB bien dong so du): "vua tang/giam 500,000 VND"
@@ -164,11 +171,15 @@ function parseTxn(bank: string, text: string): {
     }
   }
 
-  // Pattern TPBank: "Gia tri giao dich: 196,500VND" (dinh lien, khong khoang trang truoc VND)
+  // Pattern TPBank: "Gia tri giao dich: 196,500VND" hoac "5.56USD" (dinh lien, khong khoang trang truoc don vi)
   // Phai kiem tra TRUOC pattern VIB vi "Gia tri giao dich" chua substring "Gia tri"
   if (amount === null) {
-    const mTPB = text.match(/Giá trị giao dịch\s*:?\s*([\d.,]+)\s*VND/i);
-    if (mTPB) amount = parseAmountStr(mTPB[1]);
+    const mTPB = text.match(/Giá trị giao dịch\s*:?\s*([\d.,]+)\s*(VND|USD)/i);
+    if (mTPB) {
+      const curr = mTPB[2].toUpperCase();
+      amount = curr === "USD" ? parseAmountStrUSD(mTPB[1]) : parseAmountStr(mTPB[1]);
+      currency = curr;
+    }
   }
 
   // Pattern VIB: "Gia tri: 205,556 VND" (co khoang trang truoc VND)
@@ -202,7 +213,7 @@ function parseTxn(bank: string, text: string): {
   // cac bank the (MB/VIB/mPOS) mac dinh 'out' (chi tieu).
   void bank;
 
-  return { amount, direction, card_last4, merchant_raw };
+  return { amount, currency, direction, card_last4, merchant_raw };
 }
 
 // ─── Main ────────────────────────────────────────────────────────────────────
@@ -240,8 +251,12 @@ Deno.serve(async (req) => {
       const bankInfo = detectBank(from);
       if (!bankInfo) continue; // khong phai email bank (phong tru)
 
+      // Bo qua email sao ke thang VIB - khong phai giao dich don le, khong co field so tien
+      const isVIBStatement = bankInfo.bank === "VIB" && /SAO\s*KE|BẢNG\s*SAO\s*KÊ/i.test(subject);
+      if (isVIBStatement) continue; // khong dua vao parsed, cung khong dua vao parseFailed
+
       const text = extractBodyText(msg.payload);
-      const { amount, direction, card_last4, merchant_raw } = parseTxn(bankInfo.bank, text);
+      const { amount, currency, direction, card_last4, merchant_raw } = parseTxn(bankInfo.bank, text);
 
       if (amount === null || !Number.isFinite(amount) || amount <= 0) {
         parseFailed.push({ id, subject, reason: "khong parse duoc amount" });
@@ -253,7 +268,7 @@ Deno.serve(async (req) => {
         card_last4,
         txn_datetime: new Date(Number(msg.internalDate)).toISOString(),
         amount,
-        currency: "VND",
+        currency,
         direction,
         merchant_raw,
         payment_method: bankInfo.payment_method,
