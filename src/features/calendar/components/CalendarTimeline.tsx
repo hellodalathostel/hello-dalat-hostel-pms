@@ -1,4 +1,4 @@
-import { LockOutlined, PlusOutlined } from '@ant-design/icons'
+import { ClockCircleOutlined, LockOutlined, PlusOutlined } from '@ant-design/icons'
 import { Button, Card, Tooltip, Typography } from 'antd'
 import dayjs from 'dayjs'
 import type { JSX, PointerEvent as ReactPointerEvent } from 'react'
@@ -137,6 +137,8 @@ export function CalendarTimeline({ dates, rooms, onBookingClick }: CalendarTimel
     checkout_at: null,
     grand_total: null,
     block_reason: null,
+    has_early_check_in: false,
+    has_late_check_out: false,
   })
 
   const handleCellClick = (roomId: string, date: string) => {
@@ -291,6 +293,27 @@ export function CalendarTimeline({ dates, rooms, onBookingClick }: CalendarTimel
                           )}
                         </div>
                       </Tooltip>
+                      {(event.has_early_check_in || event.has_late_check_out) && (
+                        <Tooltip
+                          title={
+                            event.has_early_check_in && event.has_late_check_out
+                              ? 'Early check-in & Late check-out'
+                              : event.has_early_check_in
+                                ? 'Early check-in'
+                                : 'Late check-out'
+                          }
+                        >
+                          <ClockCircleOutlined
+                            style={{
+                              position: 'absolute',
+                              top: 2,
+                              right: 4,
+                              fontSize: 11,
+                              opacity: 0.9,
+                            }}
+                          />
+                        </Tooltip>
+                      )}
                     </div>
                   )
                 })}

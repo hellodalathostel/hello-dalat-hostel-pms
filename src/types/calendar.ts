@@ -21,6 +21,8 @@ export interface CalendarEvent {
   checkout_at: string | null
   grand_total: number | null
   block_reason: string | null
+  has_early_check_in: boolean
+  has_late_check_out: boolean
 }
 
 // Một khối liên tục (booking/block) đã gộp nhiều ngày liên tiếp, dùng để render

@@ -48,6 +48,8 @@ interface RoomCalendarRawRecord {
   checkout_at?: string | null
   grand_total?: number | null
   block_reason?: string | null
+  has_early_check_in?: boolean | null
+  has_late_check_out?: boolean | null
 }
 
 function buildDateRange(startDate: string, endDate: string): string[] {
@@ -261,6 +263,8 @@ function expandRangeRecordToDailyEvents(
       checkout_at: record.checkout_at ?? record.check_out ?? record.end_date ?? null,
       grand_total: record.grand_total ?? null,
       block_reason: record.block_reason ?? null,
+      has_early_check_in: record.has_early_check_in ?? false,
+      has_late_check_out: record.has_late_check_out ?? false,
     }
   })
 }
@@ -294,6 +298,8 @@ function normalizeCalendarRecords(
         checkout_at: record.checkout_at ?? record.check_out ?? null,
         grand_total: record.grand_total ?? null,
         block_reason: record.block_reason ?? null,
+        has_early_check_in: record.has_early_check_in ?? false,
+        has_late_check_out: record.has_late_check_out ?? false,
       })
       continue
     }
