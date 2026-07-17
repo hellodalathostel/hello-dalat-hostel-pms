@@ -99,13 +99,15 @@ export default function Dashboard(): React.JSX.Element {
       setCheckoutTarget({
         bookingId: room.booking_id,
         groupId: room.group_id,
-        bookingIds: [room.booking_id],
         roomNumber: room.room_name || room.room_id,
         guestName: room.guest_name || 'Khach',
         checkIn: room.check_in || dayjs().format('YYYY-MM-DD'),
         checkOut: room.check_out || dayjs().format('YYYY-MM-DD'),
-        grandTotal: room.grand_total ?? 0,
+        // #2/#7: dùng group_grand_total (cả đoàn, = groups.grand_total source of truth) thay vì
+        // grand_total per-booking (cho ra remaining sai khi group nhiều phòng).
+        groupGrandTotal: room.group_grand_total ?? 0,
         paid: room.paid ?? 0,
+        isLastActiveBooking: room.is_last_active_booking,
       })
       return
     }

@@ -1,3 +1,13 @@
+// src/features/bookings/hooks/useBookingFolio.ts
+// v2 — SỬA BUG ROOT CAUSE: remaining trước đây tính
+//   grandTotal (của RIÊNG booking này) - paid (của CẢ group)
+// → sai khi group có nhiều phòng, vì trộn booking-level với group-level.
+//
+// Sửa thành: remaining = group.grand_total - group.paid (đúng nguyên tắc
+// đã ghi trong Project Instructions: "Balance = groups.grand_total - groups.paid").
+//
+// Thêm field mới: isLastActiveBooking — để CheckoutModal biết gọi
+// checkout_single_booking_txn hay checkout_last_booking_and_settle_txn.
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/api/supabase'
 import { normalizeError } from '@/shared/utils/normalizeError'
@@ -21,6 +31,7 @@ type BookingRow = {
 type GroupRow = {
   id: string
   paid: number | null
+  grand_total: number | null
   net_revenue: number | null
   channel_fee_rate: number | null
   customer_name: string | null
@@ -48,6 +59,12 @@ type PaymentRow = {
   is_void: boolean
   voided_payment_id: string | null
   updated_at: string
+}
+
+// Đếm booking active khác trong group — dùng để xác định isLastActiveBooking.
+type ActiveSiblingRow = {
+  id: string
+  status: BookingStatus
 }
 
 export interface BookingFolio {
@@ -90,10 +107,14 @@ export interface BookingFolio {
   group: {
     id: string
     paid: number
+    grandTotal: number
     netRevenue: number
     channelFeeRate: number
   }
+  /** SỬA: giờ tính ở group-level (group.grandTotal - group.paid), không còn trộn booking-level */
   remaining: number
+  /** Booking này có phải booking active (booked/checked-in) cuối cùng trong group không */
+  isLastActiveBooking: boolean
 }
 
 export function useBookingFolio(bookingId: string | null) {
@@ -117,10 +138,10 @@ export function useBookingFolio(bookingId: string | null) {
           throw bookingError ?? new Error('Không tìm thấy booking')
         }
 
-        const [groupResult, servicesResult, discountsResult, paymentsResult] = await Promise.all([
+        const [groupResult, servicesResult, discountsResult, paymentsResult, siblingsResult] = await Promise.all([
           supabase
             .from('groups')
-            .select('id, paid, net_revenue, channel_fee_rate, customer_name')
+            .select('id, paid, grand_total, net_revenue, channel_fee_rate, customer_name')
             .eq('id', booking.group_id)
             .single<GroupRow>(),
           supabase
@@ -136,6 +157,14 @@ export function useBookingFolio(bookingId: string | null) {
             .select('id, amount, method, date, note, is_void, voided_payment_id, updated_at')
             .eq('group_id', booking.group_id)
             .order('date', { ascending: false }),
+          // Lấy trạng thái các booking khác trong group để tính isLastActiveBooking.
+          // Không dùng count() vì cần loại trừ is_deleted và chính booking này.
+          supabase
+            .from('bookings')
+            .select('id, status')
+            .eq('group_id', booking.group_id)
+            .eq('is_deleted', false)
+            .in('status', ['booked', 'checked-in']),
         ])
 
         if (groupResult.error || !groupResult.data) {
@@ -154,14 +183,24 @@ export function useBookingFolio(bookingId: string | null) {
           throw paymentsResult.error
         }
 
+        if (siblingsResult.error) {
+          throw siblingsResult.error
+        }
+
         const group = groupResult.data
         const services = (servicesResult.data ?? []) as ServiceRow[]
         const discounts = (discountsResult.data ?? []) as DiscountRow[]
         const payments = (paymentsResult.data ?? []) as PaymentRow[]
+        const activeSiblings = (siblingsResult.data ?? []) as ActiveSiblingRow[]
 
         const grandTotal = booking.grand_total ?? 0
         const roomSubtotal = booking.room_subtotal ?? 0
         const paid = group.paid ?? 0
+        const groupGrandTotal = group.grand_total ?? 0
+
+        // Booking này active + không còn booking active nào khác (loại trừ chính nó) → là booking cuối.
+        const otherActiveCount = activeSiblings.filter((row) => row.id !== bookingId).length
+        const isLastActiveBooking = booking.status === 'checked-in' && otherActiveCount === 0
 
         return {
           booking: {
@@ -206,10 +245,13 @@ export function useBookingFolio(bookingId: string | null) {
           group: {
             id: group.id,
             paid,
+            grandTotal: groupGrandTotal,
             netRevenue: group.net_revenue ?? 0,
             channelFeeRate: Number(group.channel_fee_rate ?? 0),
           },
-          remaining: grandTotal - paid,
+          // SỬA: group-level, không còn booking.grand_total - group.paid
+          remaining: groupGrandTotal - paid,
+          isLastActiveBooking,
         }
       } catch (error) {
         throw normalizeError(error)
