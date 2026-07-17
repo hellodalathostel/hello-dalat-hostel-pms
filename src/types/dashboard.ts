@@ -25,9 +25,18 @@ export interface DashboardRoom {
   net_revenue: number | null
   price_per_night: number | null  // đúng tên cột thật trong view, Room Board dùng field này
   grand_total: number | null
+  /** LEGACY field — trộn booking-level (grand_total) với group-level (paid): balance_due =
+   *  booking.grand_total - group.paid. KHÔNG dùng cho tính toán checkout/payment vì sai khi
+   *  group có nhiều phòng. Dùng group_balance_due thay thế. Giữ lại chỉ để tương thích ngược. */
   balance_due: number | null
   // Group field
   group_id: string | null
+  // Group-level fields — mới thêm Migration 04b, dùng cho checkout đa phòng
+  group_grand_total: number | null
+  /** Balance cấp group = group_grand_total - paid. DÙNG FIELD NÀY cho checkout/payment. */
+  group_balance_due: number | null
+  group_active_booking_count: number | null
+  is_last_active_booking: boolean
   // Block fields
   is_blocked: boolean
   block_reason: string | null

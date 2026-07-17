@@ -1,12 +1,18 @@
+// src/features/checkout/components/CheckoutModal.tsx
+// v2 — Thay đổi so với v1:
+//   1. Dùng useCheckoutBooking({ bookingId, isLastActiveBooking, paymentMethod, note })
+//      thay vì gọi useRecordPayment() + useCheckoutBooking() rời nhau.
+//   2. Khi KHÔNG phải booking cuối (isLastActiveBooking=false): ẩn hẳn form thu tiền,
+//      hiển thị rõ "phòng này không thu tiền, sẽ thu khi checkout phòng cuối cùng của đoàn".
+//   3. Khi thanh toán thẻ: hiển thị rõ 3 dòng — Số dư gốc / Phụ phí thẻ 4% / Tổng thực thu.
+//   4. remaining giờ lấy từ folio.remaining (đã sửa group-level ở useBookingFolio v2).
 import { useEffect, useMemo, useState } from 'react'
 import {
   Alert,
   Button,
   Descriptions,
   Divider,
-  Form,
   Input,
-  InputNumber,
   Modal,
   Select,
   Space,
@@ -17,7 +23,7 @@ import {
 import { CheckCircleOutlined, CreditCardOutlined, DollarOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { useBookingFolio } from '@/features/bookings/hooks/useBookingFolio'
-import { useCheckoutBooking, useRecordPayment } from '@/features/checkout/hooks/useCheckoutBooking'
+import { useCheckoutBooking } from '@/features/checkout/hooks/useCheckoutBooking'
 import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
 import type { PaymentMethod } from '@/types/database'
 
@@ -35,34 +41,27 @@ interface Props {
 
 type Step = 'folio' | 'payment' | 'done'
 
-type PaymentFormValues = {
-  amount: number
-  method: PaymentMethod
-  note?: string
-}
+const CARD_SURCHARGE_RATE = 0.04
 
 export function CheckoutModal({ bookingId, open, onClose }: Props) {
   const { message } = useAppFeedback()
   const [step, setStep] = useState<Step>('folio')
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash')
-  const [form] = Form.useForm<PaymentFormValues>()
+  const [note, setNote] = useState('')
 
   const { data: folio, isLoading, error } = useBookingFolio(open ? bookingId : null)
-  const recordPayment = useRecordPayment()
   const checkoutBooking = useCheckoutBooking()
 
-  // Reset state khi modal đóng — derived state reset hợp lệ, không phải side effect
   useEffect(() => {
     if (!open) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setStep('folio')
       setPaymentMethod('cash')
-      form.resetFields()
+      setNote('')
     }
-  }, [form, open])
+  }, [open])
 
   const stepIndex = step === 'folio' ? 0 : step === 'payment' ? 1 : 2
-  const minPaymentAmount: number = 0
 
   const serviceColumns = useMemo(() => [
     { title: 'Dịch vụ', dataIndex: 'name', key: 'name' },
@@ -84,47 +83,71 @@ export function CheckoutModal({ bookingId, open, onClose }: Props) {
   const handleClose = () => {
     setStep('folio')
     setPaymentMethod('cash')
-    form.resetFields()
+    setNote('')
     onClose()
   }
 
-  const handleCheckoutOnly = async () => {
-    if (!bookingId) {
-      return
-    }
+  // Booking KHÔNG phải cuối cùng → checkout luôn, không thu tiền, không hỏi payment method.
+  const handleCheckoutNonFinal = async () => {
+    if (!bookingId) return
 
     try {
-      await checkoutBooking.mutateAsync({ bookingId })
+      await checkoutBooking.mutateAsync({
+        bookingId,
+        isLastActiveBooking: false,
+      })
       setStep('done')
       message.success('Checkout thành công')
     } catch {
-      // Lỗi đã được hiển thị ở hook.
+      // Lỗi đã hiển thị ở hook.
     }
   }
 
-  const handleSubmitPayment = async () => {
-    if (!folio || !bookingId) {
-      return
-    }
-
-    const values = await form.validateFields()
+  // Booking đã hết nợ (remaining <= 0) — checkout cuối cùng, không cần chọn payment method.
+  const handleCheckoutFinalNoDebt = async () => {
+    if (!bookingId || !folio) return
 
     try {
-      await recordPayment.mutateAsync({
-        groupId: folio.group.id,
-        amount: values.amount,
-        method: values.method,
-        note: values.note,
-        firstBookingId: values.method === 'card' ? bookingId : undefined,
+      await checkoutBooking.mutateAsync({
+        bookingId,
+        isLastActiveBooking: true,
+        // #4 Kể cả khi UI nghĩ là hết nợ, vẫn gửi expected để RPC chặn nếu group vừa phát sinh nợ mới.
+        // Guard `!folio` ở trên đảm bảo 2 field này luôn là number (không undefined) — khớp
+        // discriminated union CheckoutParamsLast.
+        expectedGroupGrandTotal: folio.group.grandTotal,
+        expectedGroupPaid: folio.group.paid,
       })
+      setStep('done')
+      message.success('Checkout thành công')
+    } catch {
+      // Lỗi đã hiển thị ở hook.
+    }
+  }
 
-      await checkoutBooking.mutateAsync({ bookingId })
+  // Booking cuối cùng còn nợ — thu tiền + checkout trong 1 lệnh atomic.
+  const handleSettleAndCheckout = async () => {
+    if (!bookingId || !folio) return
+
+    try {
+      await checkoutBooking.mutateAsync({
+        bookingId,
+        isLastActiveBooking: true,
+        paymentMethod,
+        note: note.trim() || undefined,
+        // #4 Gửi số staff đang nhìn thấy để RPC chặn nếu group đã bị thay đổi bởi phiên khác.
+        expectedGroupGrandTotal: folio.group.grandTotal,
+        expectedGroupPaid: folio.group.paid,
+      })
       setStep('done')
       message.success('Checkout và ghi payment thành công')
     } catch {
-      // Lỗi đã được hiển thị ở hook.
+      // Lỗi đã hiển thị ở hook.
     }
   }
+
+  const remaining = folio?.remaining ?? 0
+  const surchargeAmount = paymentMethod === 'card' ? Math.round(remaining * CARD_SURCHARGE_RATE) : 0
+  const totalToCollect = remaining + surchargeAmount
 
   return (
     <Modal
@@ -172,6 +195,16 @@ export function CheckoutModal({ bookingId, open, onClose }: Props) {
             style={{ marginBottom: 12 }}
           />
 
+          {!folio.isLastActiveBooking && (
+            <Alert
+              type="info"
+              showIcon
+              message="Phòng này không phải phòng cuối cùng của đoàn"
+              description="Sẽ không thu tiền ở bước checkout phòng này. Số dư của cả đoàn sẽ được tính và thu khi checkout phòng cuối cùng."
+              style={{ marginBottom: 16 }}
+            />
+          )}
+
           <div
             style={{
               background: '#fafafa',
@@ -183,27 +216,27 @@ export function CheckoutModal({ bookingId, open, onClose }: Props) {
           >
             <Space direction="vertical" style={{ width: '100%' }} size={4}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <Text type="secondary">Tiền phòng</Text>
+                <Text type="secondary">Tiền phòng (booking này)</Text>
                 <Text>{formatVND(folio.booking.roomSubtotal)}</Text>
               </div>
 
               {folio.booking.surcharge > 0 && (
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <Text type="secondary">Phụ thu thẻ</Text>
+                  <Text type="secondary">Phụ thu thẻ (booking này)</Text>
                   <Text>{formatVND(folio.booking.surcharge)}</Text>
                 </div>
               )}
 
               {folio.services.length > 0 && (
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <Text type="secondary">Dịch vụ</Text>
+                  <Text type="secondary">Dịch vụ (booking này)</Text>
                   <Text>{formatVND(folio.services.reduce((sum, item) => sum + item.subtotal, 0))}</Text>
                 </div>
               )}
 
               {folio.discounts.length > 0 && (
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <Text type="secondary">Giảm giá</Text>
+                  <Text type="secondary">Giảm giá (booking này)</Text>
                   <Text type="danger">
                     -{formatVND(folio.discounts.reduce((sum, item) => sum + item.amount, 0))}
                   </Text>
@@ -213,27 +246,27 @@ export function CheckoutModal({ bookingId, open, onClose }: Props) {
               <Divider style={{ margin: '6px 0' }} />
 
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <Text strong>Grand Total</Text>
-                <Text strong style={{ fontSize: 16 }}>{formatVND(folio.booking.grandTotal)}</Text>
+                <Text strong>Grand Total cả đoàn</Text>
+                <Text strong style={{ fontSize: 16 }}>{formatVND(folio.group.grandTotal)}</Text>
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <Text type="secondary">Đã trả</Text>
+                <Text type="secondary">Đã trả (cả đoàn)</Text>
                 <Text type="success">-{formatVND(folio.group.paid)}</Text>
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <Text strong>
-                  {folio.remaining > 0 ? 'Còn lại' : folio.remaining < 0 ? 'Trả dư' : 'Đã thanh toán đủ'}
+                  {remaining > 0 ? 'Còn lại (cả đoàn)' : remaining < 0 ? 'Trả dư' : 'Đã thanh toán đủ'}
                 </Text>
                 <Text
                   strong
                   style={{
                     fontSize: 18,
-                    color: folio.remaining > 0 ? '#f5222d' : folio.remaining < 0 ? '#fa8c16' : '#52c41a',
+                    color: remaining > 0 ? '#f5222d' : remaining < 0 ? '#fa8c16' : '#52c41a',
                   }}
                 >
-                  {folio.remaining < 0 ? '+' : ''}{formatVND(Math.abs(folio.remaining))}
+                  {remaining < 0 ? '+' : ''}{formatVND(Math.abs(remaining))}
                 </Text>
               </div>
             </Space>
@@ -241,16 +274,27 @@ export function CheckoutModal({ bookingId, open, onClose }: Props) {
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
             <Button onClick={handleClose}>Huỷ</Button>
-            {folio.remaining <= 0 ? (
+            {!folio.isLastActiveBooking && (
               <Button
                 type="primary"
                 icon={<CheckCircleOutlined />}
                 loading={checkoutBooking.isPending}
-                onClick={handleCheckoutOnly}
+                onClick={handleCheckoutNonFinal}
+              >
+                Checkout ngay (không thu tiền)
+              </Button>
+            )}
+            {folio.isLastActiveBooking && remaining <= 0 && (
+              <Button
+                type="primary"
+                icon={<CheckCircleOutlined />}
+                loading={checkoutBooking.isPending}
+                onClick={handleCheckoutFinalNoDebt}
               >
                 Checkout ngay
               </Button>
-            ) : (
+            )}
+            {folio.isLastActiveBooking && remaining > 0 && (
               <Button
                 type="primary"
                 icon={<DollarOutlined />}
@@ -268,43 +312,17 @@ export function CheckoutModal({ bookingId, open, onClose }: Props) {
           <Alert
             type="info"
             showIcon
-            message={`Còn lại: ${formatVND(folio.remaining)}`}
+            message={`Còn lại (cả đoàn): ${formatVND(remaining)}`}
             style={{ marginBottom: 16 }}
           />
 
-          <Form
-            form={form}
-            layout="vertical"
-            initialValues={{
-              amount: folio.remaining > 0 ? folio.remaining : 0,
-              method: 'cash',
-            }}
-          >
-            <Form.Item
-              label="Số tiền thu"
-              name="amount"
-              rules={[
-                { required: true, message: 'Nhập số tiền' },
-                { type: 'number', min: 1, message: 'Phải lớn hơn 0' },
-              ]}
-            >
-              <InputNumber
-                style={{ width: '100%' }}
-                min={minPaymentAmount}
-                step={10000}
-                formatter={(value) => (value ? `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : '')}
-                parser={(value) => Number((value ?? '').toString().replace(/,/g, ''))}
-                addonAfter="VND"
-              />
-            </Form.Item>
-
-            <Form.Item
-              label="Phương thức"
-              name="method"
-              rules={[{ required: true, message: 'Chọn phương thức thanh toán' }]}
-            >
+          <Space direction="vertical" style={{ width: '100%' }} size={12}>
+            <div>
+              <Text strong style={{ display: 'block', marginBottom: 4 }}>Phương thức</Text>
               <Select
+                value={paymentMethod}
                 onChange={(value: PaymentMethod) => setPaymentMethod(value)}
+                style={{ width: '100%' }}
                 options={[
                   { value: 'cash', label: 'Tiền mặt' },
                   { value: 'transfer', label: 'Chuyển khoản' },
@@ -314,32 +332,64 @@ export function CheckoutModal({ bookingId, open, onClose }: Props) {
                   { value: 'other', label: 'Khác' },
                 ]}
               />
-            </Form.Item>
+            </div>
 
             {paymentMethod === 'card' && (
-              <Alert
-                type="warning"
-                showIcon
-                icon={<CreditCardOutlined />}
-                message="Thanh toán thẻ sẽ cộng surcharge 4% vào booking đầu tiên."
-                style={{ marginBottom: 12 }}
-              />
+              <div
+                style={{
+                  background: '#fffbe6',
+                  border: '1px solid #ffe58f',
+                  borderRadius: 8,
+                  padding: '12px 16px',
+                }}
+              >
+                <Space direction="vertical" style={{ width: '100%' }} size={4}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Text type="secondary">Số dư gốc</Text>
+                    <Text>{formatVND(remaining)}</Text>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Text type="secondary">
+                      <CreditCardOutlined /> Phụ phí thẻ (4%)
+                    </Text>
+                    <Text type="warning">+{formatVND(surchargeAmount)}</Text>
+                  </div>
+                  <Divider style={{ margin: '4px 0' }} />
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Text strong>Tổng thực thu</Text>
+                    <Text strong style={{ fontSize: 16 }}>{formatVND(totalToCollect)}</Text>
+                  </div>
+                </Space>
+              </div>
             )}
 
-            <Form.Item label="Ghi chú" name="note">
-              <Input.TextArea rows={2} placeholder="Tuỳ chọn" />
-            </Form.Item>
-          </Form>
+            {paymentMethod !== 'card' && (
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <Text strong>Tổng thực thu</Text>
+                <Text strong style={{ fontSize: 16 }}>{formatVND(totalToCollect)}</Text>
+              </div>
+            )}
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <div>
+              <Text style={{ display: 'block', marginBottom: 4 }}>Ghi chú</Text>
+              <Input.TextArea
+                rows={2}
+                value={note}
+                onChange={(event) => setNote(event.target.value)}
+                placeholder="Tuỳ chọn"
+              />
+            </div>
+          </Space>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
             <Button onClick={() => setStep('folio')}>Quay lại</Button>
             <Button
               type="primary"
               icon={<CheckCircleOutlined />}
-              loading={recordPayment.isPending || checkoutBooking.isPending}
-              onClick={handleSubmitPayment}
+              loading={checkoutBooking.isPending}
+              onClick={handleSettleAndCheckout}
             >
-              Xác nhận và Checkout
+              Xác nhận thu {formatVND(totalToCollect)} và Checkout
             </Button>
           </div>
         </>

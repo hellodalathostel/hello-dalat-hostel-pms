@@ -153,8 +153,10 @@ export function RoomBoard({
                       <span className={styles.dotCheckout}>● TRẢ HÔM NAY</span>
                     )}
                     {/* ĐÃ SỬA: debt badge giờ là <button> bấm được, mở PaymentModal đúng phòng. */}
-                    {(room.balance_due ?? 0) > 0 && (
-                      <Tooltip title={`Còn nợ ${formatCurrency(room.balance_due)}đ — bấm để thanh toán`}>
+                    {/* #2 SỬA: dùng group_balance_due (group-level, đúng khi đoàn nhiều phòng)
+                        thay vì balance_due (legacy, trộn booking-level với group-level). */}
+                    {(room.group_balance_due ?? 0) > 0 && (
+                      <Tooltip title={`Công nợ đoàn ${formatCurrency(room.group_balance_due)}đ — bấm để thanh toán`}>
                         <button
                           type="button"
                           className={styles.debtBadge}

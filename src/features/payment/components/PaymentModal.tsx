@@ -23,7 +23,9 @@ const paymentMethodOptions: Array<{ label: string; value: PaymentFormValues['met
 
 function getDefaultValues(room: DashboardRoom): PaymentFormValues {
   return {
-    amount: Math.max(room.balance_due ?? 0, 0),
+    // #2 SỬA: dùng group_balance_due (group_grand_total - paid) thay vì balance_due
+    // (balance_due là field legacy, trộn booking-level với group-level — sai khi group nhiều phòng).
+    amount: Math.max(room.group_balance_due ?? 0, 0),
     method: 'transfer',
     note: '',
   }
