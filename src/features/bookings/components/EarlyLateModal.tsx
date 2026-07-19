@@ -1,7 +1,8 @@
 import { useEffect } from 'react'
-import { Alert, Descriptions, Form, InputNumber, Modal, Radio, Typography } from 'antd'
+import { Alert, Button, Descriptions, Form, InputNumber, Modal, Popconfirm, Radio, Typography } from 'antd'
 import dayjs from 'dayjs'
 import { type EarlyLateType, useAddEarlyLate } from '@/hooks/useAddEarlyLate'
+import { useUndoEarlyLate } from '@/hooks/useUndoEarlyLate'
 
 const { Text } = Typography
 
@@ -38,6 +39,7 @@ export function EarlyLateModal({
 }: EarlyLateModalProps) {
   const [form] = Form.useForm<FormValues>()
   const { mutate, isPending } = useAddEarlyLate()
+  const { mutate: undoMutate, isPending: isUndoPending } = useUndoEarlyLate()
 
   const watchedType = Form.useWatch('type', form)
   const currentType: EarlyLateType = watchedType ?? defaultType
@@ -61,6 +63,13 @@ export function EarlyLateModal({
   }, [open, booking, defaultType, suggestedFee, form])
 
   if (!booking) return null
+
+  const handleUndo = (type: EarlyLateType) => {
+    undoMutate(
+      { bookingId: booking.id, type },
+      { onSuccess: () => onSuccess?.() },
+    )
+  }
 
   const newCheckIn = dayjs(booking.check_in).subtract(1, 'day')
   const newCheckOut = dayjs(booking.check_out).add(1, 'day')
@@ -134,11 +143,41 @@ export function EarlyLateModal({
           <Radio.Group>
             <Radio value="early" disabled={earlyDisabled}>
               Early Check-in
-              {booking.has_early_check_in && <Text type="secondary"> (đã áp dụng)</Text>}
+              {booking.has_early_check_in && (
+                <>
+                  <Text type="secondary"> (đã áp dụng) </Text>
+                  <Popconfirm
+                    title="Hủy Early Check-in?"
+                    description="Sẽ xóa phí đã ghi và bỏ block phòng đêm liền kề (nếu có)."
+                    okText="Hủy áp dụng"
+                    cancelText="Đóng"
+                    onConfirm={() => handleUndo('early')}
+                  >
+                    <Button size="small" danger type="link" loading={isUndoPending}>
+                      Hủy
+                    </Button>
+                  </Popconfirm>
+                </>
+              )}
             </Radio>
             <Radio value="late" disabled={lateDisabled}>
               Late Check-out
-              {booking.has_late_check_out && <Text type="secondary"> (đã áp dụng)</Text>}
+              {booking.has_late_check_out && (
+                <>
+                  <Text type="secondary"> (đã áp dụng) </Text>
+                  <Popconfirm
+                    title="Hủy Late Check-out?"
+                    description="Sẽ xóa phí đã ghi và bỏ block phòng đêm liền kề (nếu có)."
+                    okText="Hủy áp dụng"
+                    cancelText="Đóng"
+                    onConfirm={() => handleUndo('late')}
+                  >
+                    <Button size="small" danger type="link" loading={isUndoPending}>
+                      Hủy
+                    </Button>
+                  </Popconfirm>
+                </>
+              )}
             </Radio>
           </Radio.Group>
         </Form.Item>
