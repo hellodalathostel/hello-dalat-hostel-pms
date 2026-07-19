@@ -14,8 +14,9 @@ export interface AddEarlyLateParams {
 export interface AddEarlyLateResult {
   success: boolean
   type: EarlyLateType
-  new_check_in: string
-  new_check_out: string
+  block_id: string
+  block_from: string
+  block_to: string
   fee: number
 }
 
