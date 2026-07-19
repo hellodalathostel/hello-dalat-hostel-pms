@@ -220,6 +220,11 @@ function expandRangeRecordToDailyEvents(
   }
 
   // Booking hach toan theo dem: ngay check_out la exclusive, khong to mau tren lich.
+  // TODO(fragile): block cũng dùng end_date exclusive giống booking (xem
+  // migration add_early_late_txn_no_date_shift), nhưng nhánh này chỉ trừ
+  // 1 ngày cho entry_type === 'booking'. Hiện vô hại vì record sau trong
+  // mảng ghi đè đúng, nhưng phụ thuộc ngầm vào thứ tự ORDER BY từ view
+  // room_calendar. Cân nhắc sửa thống nhất khi có thời gian.
   const effectiveBaseEnd =
     record.entry_type === 'booking' || Boolean(record.booking_id)
       ? baseEnd.startOf('day').subtract(1, 'day')
