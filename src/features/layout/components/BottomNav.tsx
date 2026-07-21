@@ -4,6 +4,7 @@ import {
   HomeOutlined,
   UnorderedListOutlined,
   UserOutlined,
+  WalletOutlined,
 } from '@ant-design/icons'
 import type { JSX } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -43,6 +44,13 @@ const NAV_ITEMS: NavItem[] = [
     path: '/guests',
     icon: <UserOutlined />,
     label: 'Khách',
+  },
+  {
+    key: 'so-quy',
+    path: '/so-quy',
+    icon: <WalletOutlined />,
+    label: 'Sổ quỹ',
+    // KHONG co ownerOnly — Loi la nguoi dung chinh cua so quy
   },
   {
     key: 'finance',

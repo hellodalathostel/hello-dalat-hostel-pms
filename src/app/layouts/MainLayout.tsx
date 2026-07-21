@@ -12,6 +12,7 @@ import {
   TeamOutlined,
   UnorderedListOutlined,
   UserAddOutlined,
+  WalletOutlined,
 } from '@ant-design/icons'
 import { Badge, Layout, Menu, Space, Typography } from 'antd'
 import { useMemo } from 'react'
@@ -42,6 +43,7 @@ function createMenuItems(pendingCount: number): ItemType[] {
     },
     { key: '/guests', icon: <TeamOutlined />, label: 'Khách' },
     { key: '/housekeeping', icon: <CheckSquareOutlined />, label: 'Housekeeping' },
+    { key: '/so-quy', icon: <WalletOutlined />, label: 'Sổ quỹ' },
     { key: '/finance', icon: <DollarOutlined />, label: 'Tài chính' },
     { key: '/revenue', icon: <RiseOutlined />, label: 'Doanh thu' },
     { key: '/dk14-report', icon: <FileExcelOutlined />, label: 'Báo cáo ĐK14' },

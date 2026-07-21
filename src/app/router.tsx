@@ -20,6 +20,7 @@ import {
   HousekeepingPage,
   BookingRequestsPage,
   S1aPage,
+  CashBookPage,
 } from '@/app/routes'
 
 export const appRouter = createBrowserRouter([
@@ -43,6 +44,7 @@ export const appRouter = createBrowserRouter([
       { path: 'bookings', element: <Suspense fallback={null}><BookingsPage /></Suspense> },
       { path: 'booking-requests', element: <Suspense fallback={null}><BookingRequestsPage /></Suspense> },
       { path: 'guests', element: <Suspense fallback={null}><GuestsPage /></Suspense> },
+      { path: 'so-quy', element: <Suspense fallback={null}><CashBookPage /></Suspense> },
       {
         path: 'settings',
         element: <Suspense fallback={null}><SettingsPage /></Suspense>,
