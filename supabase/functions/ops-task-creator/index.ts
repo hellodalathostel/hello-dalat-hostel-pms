@@ -16,13 +16,17 @@ function fmt(dateStr: string): string {
 
 Deno.serve(async (req: Request) => {
   try {
-    // Xac thuc webhook secret neu co set (giu nguyen tu function cu)
+    // Xac thuc webhook secret - FAIL-CLOSED (item 07 remediation).
+    // Khong set WEBHOOK_SECRET HOAC header khong khop -> tu choi.
     const webhookSecret = Deno.env.get('WEBHOOK_SECRET');
-    if (webhookSecret) {
-      const incoming = req.headers.get('x-webhook-secret');
-      if (incoming !== webhookSecret) {
-        return new Response('Unauthorized', { status: 401 });
-      }
+    if (!webhookSecret) {
+      console.error('[ops-task-creator] WEBHOOK_SECRET chua set - tu choi (fail-closed)');
+      return new Response('Server misconfigured', { status: 500 });
+    }
+    const incoming = req.headers.get('x-webhook-secret');
+    if (incoming !== webhookSecret) {
+      console.warn('[ops-task-creator] Header x-webhook-secret khong khop - tu choi');
+      return new Response('Unauthorized', { status: 401 });
     }
 
     const payload = await req.json();

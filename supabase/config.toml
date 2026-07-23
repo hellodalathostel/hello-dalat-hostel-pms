@@ -65,3 +65,6 @@ entrypoint = "./functions/daily-room-report/index.ts"
 
 [functions.submit-booking-request]
 verify_jwt = false
+
+[functions.ops-task-creator]
+verify_jwt = false
