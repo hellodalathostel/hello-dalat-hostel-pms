@@ -13,6 +13,7 @@ const TELEGRAM_TOKEN   = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
 const ALLOWED_CHAT_ID  = Deno.env.get("ALLOWED_CHAT_ID")!;
 const SUPABASE_URL     = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const WEBHOOK_SECRET   = Deno.env.get("TELEGRAM_WEBHOOK_SECRET")!;
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE);
 
@@ -798,6 +799,14 @@ async function handleHelp(chatId: string) {
 
 serve(async (req) => {
   try {
+    // Xac thuc secret_token tu Telegram (item 06) — FAIL-CLOSED.
+    // Telegram gui header nay khi setWebhook co param secret_token.
+    // Chan request gia mao (chat_id khong phai bi mat).
+    const secretHeader = req.headers.get("X-Telegram-Bot-Api-Secret-Token");
+    if (secretHeader !== WEBHOOK_SECRET) {
+      console.warn("Rejected: sai hoac thieu secret_token header");
+      return new Response("ok");
+    }
     const body = await req.json();
     const message = body?.message;
     if (!message) return new Response("ok");
