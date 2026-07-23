@@ -68,3 +68,6 @@ verify_jwt = false
 
 [functions.ops-task-creator]
 verify_jwt = false
+
+[functions.telegram-webhook]
+verify_jwt = false
