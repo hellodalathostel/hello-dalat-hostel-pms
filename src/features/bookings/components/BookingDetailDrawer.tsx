@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import dayjs from 'dayjs'
 import {
   Alert,
@@ -7,6 +7,7 @@ import {
   Descriptions,
   Drawer,
   Flex,
+  InputNumber,
   Modal,
   Row,
   Select,
@@ -24,11 +25,13 @@ import {
   HistoryOutlined,
   PhoneOutlined,
   PlusOutlined,
+  SendOutlined,
   UserOutlined,
 } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/api/supabase'
 import { useBookingDetail } from '@/features/bookings/hooks/useBookingDetail'
+import { useSendDeposit } from '@/features/bookings/hooks/useSendDeposit'
 import type { BookingDetailItem } from '@/features/bookings/hooks/useBookingDetail'
 // BookingDetailItem được export từ useBookingDetail
 import { EditBookingModal } from '@/features/bookings/components/EditBookingModal'
@@ -104,6 +107,29 @@ export default function BookingDetailDrawer({ groupId = null, bookingId = null, 
   const [addServiceOpen, setAddServiceOpen] = useState(false)
   const [addServiceBookingId, setAddServiceBookingId] = useState<string | null>(null)
   const [addRoomOpen, setAddRoomOpen] = useState(false)
+  // Giá trị gợi ý: autofill = tổng price_per_night các booking active (KHÔNG hard-code 30%)
+  const [depositAmount, setDepositAmount] = useState<number | null>(null)
+  const sendDeposit = useSendDeposit()
+  const autoFilledGroupIdRef = useRef<string | null>(null)
+  const depositEditedRef = useRef(false)
+
+  const suggestedDeposit = useMemo(() => {
+    if (!data?.bookings) return 0
+    return data.bookings
+      .filter((booking) => booking.status !== 'cancelled')
+      .reduce((sum, booking) => sum + (booking.price_per_night ?? 0), 0)
+  }, [data?.bookings])
+
+  useEffect(() => {
+    if (!effectiveGroupId || !data) return
+    // Chỉ autofill 1 lần cho mỗi group được mở — không ghi đè khi data refetch
+    if (autoFilledGroupIdRef.current === effectiveGroupId) return
+    autoFilledGroupIdRef.current = effectiveGroupId
+    depositEditedRef.current = false
+    if (suggestedDeposit > 0) {
+      setDepositAmount(suggestedDeposit)
+    }
+  }, [effectiveGroupId, data, suggestedDeposit])
 
   const handleCancelBooking = (bookingIdToCancel: string) => {
     cancelBookingMutation.mutate(bookingIdToCancel, {
@@ -337,10 +363,47 @@ export default function BookingDetailDrawer({ groupId = null, bookingId = null, 
 
             {/* Lịch sử thanh toán */}
             <div>
-              <Typography.Title level={5} style={{ marginBottom: 12 }}>
-                <CreditCardOutlined style={{ marginRight: 8 }} />
-                Lịch sử thanh toán
-              </Typography.Title>
+              <Flex
+                align={isMobile ? 'stretch' : 'center'}
+                justify="space-between"
+                gap={8}
+                wrap="wrap"
+                style={{ marginBottom: 12 }}
+              >
+                <Typography.Title level={5} style={{ marginBottom: 0 }}>
+                  <CreditCardOutlined style={{ marginRight: 8 }} />
+                  Lịch sử thanh toán
+                </Typography.Title>
+                {effectiveGroupId && (
+                  <Space.Compact>
+                    <InputNumber
+                      value={depositAmount}
+                      onChange={(v) => {
+                        depositEditedRef.current = true
+                        setDepositAmount(v)
+                      }}
+                      min={0}
+                      step={50000}
+                      placeholder="Số tiền cọc"
+                      formatter={(v) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}
+                      parser={(v) => Number(v?.replace(/\./g, '') ?? 0)}
+                      addonAfter="đ"
+                      style={{ width: 160 }}
+                    />
+                    <Button
+                      type="primary"
+                      icon={<SendOutlined />}
+                      loading={sendDeposit.isPending}
+                      disabled={!depositAmount || depositAmount <= 0}
+                      onClick={() =>
+                        sendDeposit.mutate({ groupId: effectiveGroupId, depositAmount: depositAmount! })
+                      }
+                    >
+                      Gửi lại cọc
+                    </Button>
+                  </Space.Compact>
+                )}
+              </Flex>
               {data.payments.length === 0 ? (
                 <Typography.Text type="secondary">Chưa có thanh toán nào.</Typography.Text>
               ) : (

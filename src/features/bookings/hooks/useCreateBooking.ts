@@ -4,6 +4,7 @@ import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
 import { normalizeError } from '@/shared/utils/normalizeError'
 import type { NewBookingFormValues } from '@/lib/schemas'
 import type { DepositInput, DiscountLineItem, ServiceLineItem } from '@/features/bookings/types/booking'
+import { useSendDeposit } from '@/features/bookings/hooks/useSendDeposit'
 
 interface CreateBookingRpcPayload {
   p_group: {
@@ -163,17 +164,23 @@ async function createBookingMutationFn(input: CreateBookingMutationInput): Promi
 export function useCreateBooking() {
   const { notification } = useAppFeedback()
   const queryClient = useQueryClient()
+  const sendDeposit = useSendDeposit()
 
   return useMutation({
     mutationKey: ['create-group-booking-rpc'],
     mutationFn: createBookingMutationFn,
-    onSuccess: async () => {
+    onSuccess: async (result, variables) => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['room-calendar'] }),
         queryClient.invalidateQueries({ queryKey: ['bookings'] }),
         queryClient.invalidateQueries({ queryKey: ['groups'] }),
         queryClient.invalidateQueries({ queryKey: ['dashboard', 'today'] }),
       ])
+
+      // Auto gửi cọc — chỉ khi form KHÔNG ghi cọc sẵn. Backend vẫn skip nếu paid>0.
+      if (result.group_id && !(variables.deposit && variables.deposit.amount > 0)) {
+        sendDeposit.mutate({ groupId: result.group_id, auto: true })
+      }
     },
     onError: (error) => {
       const normalizedError = normalizeError(error)

@@ -71,3 +71,8 @@ verify_jwt = false
 
 [functions.telegram-webhook]
 verify_jwt = false
+
+[functions.deposit-sender]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/deposit-sender/index.ts"
