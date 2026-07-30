@@ -139,12 +139,41 @@ const TYPE_ICON: Record<string, string> = {
   "Khác": "📌",
 };
 
+/**
+ * Ghi heartbeat vào automation.automation_runs qua wrapper public.report_automation_run.
+ * KHÔNG bao giờ ném lỗi ra ngoài — giám sát hỏng không được phép làm chết nghiệp vụ chính.
+ */
+async function reportHeartbeat(
+  startedAt: number,
+  detail: Record<string, unknown> = {},
+): Promise<void> {
+  try {
+    const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2");
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    );
+    const { error } = await supabase.rpc("report_automation_run", {
+      p_job_name: "task-reminder",
+      p_status: "ok",
+      p_duration_ms: Date.now() - startedAt,
+      p_detail: detail,
+      p_error_message: null,
+    });
+    if (error) console.error("[heartbeat] loi ghi:", error.message);
+  } catch (e) {
+    console.error("[heartbeat] exception:", e);
+  }
+}
+
 Deno.serve(async (_req) => {
+  const startedAt = Date.now();
   try {
     const tasks = await queryTodayTasks();
 
     if (tasks.length === 0) {
       await sendTelegram("✅ <b>Hôm nay không có task nào.</b> Nghỉ ngơi đi nào! 😄");
+      await reportHeartbeat(startedAt, { tasks_sent: 0 });
       return new Response("OK");
     }
 
@@ -179,6 +208,7 @@ Deno.serve(async (_req) => {
     lines.push(`• <code>/tasks</code> — xem lại danh sách`);
 
     await sendTelegram(lines.join("\n"));
+    await reportHeartbeat(startedAt, { tasks_sent: tasks.length });
     return new Response("OK");
   } catch (e) {
     console.error("task-reminder error:", e);
