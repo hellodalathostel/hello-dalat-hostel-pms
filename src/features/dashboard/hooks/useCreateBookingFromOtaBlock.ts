@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/api/supabase'
 import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
 import { normalizeError } from '@/shared/utils/normalizeError'
+import { CHANNEL_FEE_RATE } from '@/constants/booking'
 
 export interface OtaBlockBookingPayload {
   ical_uid: string
@@ -52,7 +53,7 @@ async function createBookingFromOtaBlockMutationFn(
         customer_name: payload.customer_name,
         customer_phone: payload.customer_phone?.trim() ? payload.customer_phone.trim() : null,
         source: 'Booking.com',
-        channel_fee_rate: 0.17,
+        channel_fee_rate: CHANNEL_FEE_RATE['Booking.com'],
       },
       p_bookings: [
         {

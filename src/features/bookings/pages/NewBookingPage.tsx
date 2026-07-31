@@ -30,6 +30,7 @@ import { ServiceSection } from '@/features/bookings/components/ServiceSection'
 import { DiscountSection } from '@/features/bookings/components/DiscountSection'
 import { DepositSection } from '@/features/bookings/components/DepositSection'
 import type { DepositInput, DiscountLineItem, ServiceLineItem } from '@/features/bookings/types/booking'
+import { CHANNEL_FEE_RATE } from '@/constants/booking'
 
 const sourceOptions: Array<{ label: NewBookingFormValues['source']; value: NewBookingFormValues['source'] }> = [
   { label: 'Booking.com', value: 'Booking.com' },
@@ -39,15 +40,6 @@ const sourceOptions: Array<{ label: NewBookingFormValues['source']; value: NewBo
   { label: 'Walk-in', value: 'Walk-in' },
   { label: 'Other', value: 'Other' },
 ]
-
-const DEFAULT_FEE_RATES: Record<NewBookingFormValues['source'], number> = {
-  'Booking.com': 0.17,
-  Facebook: 0,
-  'Gọi điện/Zalo': 0,
-  'Khách quen': 0,
-  'Walk-in': 0,
-  Other: 0,
-}
 
 function getDefaultValues(prefillRoomId?: string, prefillCheckIn?: string): NewBookingFormValues {
   const parsedCheckIn = prefillCheckIn ? dayjs(prefillCheckIn).startOf('day') : dayjs().startOf('day')
@@ -59,7 +51,7 @@ function getDefaultValues(prefillRoomId?: string, prefillCheckIn?: string): NewB
     customer_note: '',
     customer_cccd: '',
     source: 'Walk-in',
-    channel_fee_rate: DEFAULT_FEE_RATES['Walk-in'],
+    channel_fee_rate: CHANNEL_FEE_RATE['Walk-in'],
     bookings: [
       {
         room_id: prefillRoomId ?? '',
@@ -116,7 +108,7 @@ export default function NewBooking(): JSX.Element {
   const bookingValues = watch('bookings')
 
   useEffect(() => {
-    setValue('channel_fee_rate', DEFAULT_FEE_RATES[selectedSource] ?? 0, {
+    setValue('channel_fee_rate', CHANNEL_FEE_RATE[selectedSource] ?? 0, {
       shouldDirty: true,
       shouldValidate: true,
     })
@@ -183,7 +175,7 @@ export default function NewBooking(): JSX.Element {
   }
 
   const onSubmit = async (values: NewBookingFormValues) => {
-    const feeRate = values.channel_fee_rate ?? DEFAULT_FEE_RATES[values.source] ?? 0
+    const feeRate = values.channel_fee_rate ?? CHANNEL_FEE_RATE[values.source] ?? 0
 
     try {
       await createBookingMutation.mutateAsync({
