@@ -32,11 +32,51 @@ interface Issue {
   last_error: string | null;
 }
 
+interface SemanticResult {
+  job_name: string;
+  verdict: "pass" | "fail" | "unknown" | "skipped";
+  run_id?: string;
+  run_at?: string;
+  alert_created?: boolean;
+  semantic_enabled?: boolean;
+  reason?: string;
+  result?: {
+    validator?: string;
+    verdict?: string;
+    task_date?: string;
+    expected_min?: number;
+    actual?: number;
+    reason?: string;
+    message?: string;
+  };
+}
+
+interface SemanticScan {
+  checked: number;
+  failed: number;
+  unknown: number;
+  results: SemanticResult[];
+}
+
+interface ResolvedAlert {
+  job_name: string;
+  alert_type: string;
+  alerted_at: string;
+  open_for: string;
+}
+
+interface ResolvedBlock {
+  resolved_count: number;
+  resolved: ResolvedAlert[];
+}
+
 interface ScanResult {
   new_alerts: Issue[];
   all_issues: Issue[];
   ok_count: number;
   scanned_at: string;
+  semantic?: SemanticScan;
+  resolved?: ResolvedBlock;
 }
 
 /** Escape mọi text động trước khi chèn vào message HTML (bài học telegram-webhook v49). */
@@ -101,6 +141,49 @@ function formatIssue(i: Issue): string {
   return line;
 }
 
+/**
+ * Render phần semantic check + auto-resolve cho báo cáo sáng.
+ * Trả về "" nếu không có gì đáng báo — để không làm báo cáo dài vô ích.
+ */
+function renderSemanticBlock(scan: ScanResult): string {
+  const lines: string[] = [];
+  const results: SemanticResult[] = scan.semantic?.results ?? [];
+
+  const failed = results.filter((r) => r.verdict === "fail");
+  const unknown = results.filter((r) => r.verdict === "unknown");
+
+  // Job chạy nhưng làm sai — nghiêm trọng nhất, đặt lên đầu
+  if (failed.length > 0) {
+    lines.push("\n🔴 <b>Job chạy nhưng làm sai</b>");
+    for (const f of failed) {
+      const msg = f.result?.message ?? f.result?.reason ?? "không rõ";
+      lines.push(`• <b>${escapeHtml(f.job_name)}</b>: ${escapeHtml(msg)}`);
+    }
+  }
+
+  // Không đủ dữ liệu để kết luận — không tạo alert, chỉ báo để biết
+  if (unknown.length > 0) {
+    lines.push("\n⚪ <b>Chưa đủ dữ liệu để kết luận</b>");
+    for (const u of unknown) {
+      const reason = u.result?.reason ?? u.reason ?? "unknown";
+      lines.push(`• ${escapeHtml(u.job_name)}: ${escapeHtml(reason)}`);
+    }
+  }
+
+  // Alert đã tự động đóng — open_for chính là MTTR
+  const resolved: ResolvedAlert[] = scan.resolved?.resolved ?? [];
+  if (resolved.length > 0) {
+    lines.push("\n✅ <b>Đã tự động đóng cảnh báo</b>");
+    for (const r of resolved) {
+      lines.push(
+        `• ${escapeHtml(r.job_name)} (${escapeHtml(r.alert_type)}) — mở ${escapeHtml(r.open_for)}`,
+      );
+    }
+  }
+
+  return lines.join("\n");
+}
+
 async function reportHeartbeat(
   supabase: SupabaseClient,
   startedAt: number,
@@ -146,19 +229,18 @@ Deno.serve(async (_req: Request) => {
       sent = true;
     } else if (isMorningReport) {
       // Báo cáo sáng — luôn gửi, kể cả khi OK (dead-man's switch)
+      let message: string;
       if (allIssues.length === 0) {
-        await sendTelegram(
-          `✅ <b>Ops Guardian — báo cáo sáng</b>\n\n` +
-            `Tất cả ${scan.ok_count} job đang chạy bình thường.`,
-        );
+        message = `✅ <b>Ops Guardian — báo cáo sáng</b>\n\n` +
+          `Tất cả ${scan.ok_count} job đang chạy bình thường.`;
       } else {
         const lines = allIssues.map(formatIssue).join("\n\n");
-        await sendTelegram(
-          `📋 <b>Ops Guardian — báo cáo sáng</b>\n\n` +
-            `Còn tồn ${allIssues.length} sự cố chưa xử lý:\n\n${lines}\n\n` +
-            `Đang khoẻ: ${scan.ok_count} job`,
-        );
+        message = `📋 <b>Ops Guardian — báo cáo sáng</b>\n\n` +
+          `Còn tồn ${allIssues.length} sự cố chưa xử lý:\n\n${lines}\n\n` +
+          `Đang khoẻ: ${scan.ok_count} job`;
       }
+      message += renderSemanticBlock(scan);
+      await sendTelegram(message);
       sent = true;
     }
 
@@ -169,6 +251,8 @@ Deno.serve(async (_req: Request) => {
       ok_count: scan.ok_count,
       telegram_sent: sent,
       morning_report: isMorningReport,
+      semantic_failed: scan.semantic?.failed ?? 0,
+      alerts_resolved: scan.resolved?.resolved_count ?? 0,
     });
 
     return new Response(
