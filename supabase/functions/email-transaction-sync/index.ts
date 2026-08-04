@@ -5,6 +5,10 @@
 // ?days=N     -> doi cua so quet Gmail (mac dinh 3 ngay)
 // Luu y: moi chuoi tieng Viet trong regex dung \uXXXX escape de an toan khi deploy qua MCP.
 
+import { reportRun } from "../_shared/heartbeat.ts";
+
+const JOB = "email-transaction-sync";
+
 const GMAIL_CLIENT_ID = Deno.env.get("GMAIL_CLIENT_ID")!;
 const GMAIL_CLIENT_SECRET = Deno.env.get("GMAIL_CLIENT_SECRET")!;
 const GMAIL_REFRESH_TOKEN = Deno.env.get("GMAIL_REFRESH_TOKEN")!;
@@ -219,6 +223,8 @@ function parseTxn(bank: string, text: string): {
 // ─── Main ────────────────────────────────────────────────────────────────────
 
 Deno.serve(async (req) => {
+  const t0 = performance.now();
+
   // Bao ve: cron/manual phai gui dung x-cron-key
   if (CRON_SECRET && req.headers.get("x-cron-key") !== CRON_SECRET) {
     return json({ error: "unauthorized" }, 401);
@@ -233,6 +239,7 @@ Deno.serve(async (req) => {
     const ids = await listMessageIds(token, days);
 
     if (ids.length === 0) {
+      await reportRun(JOB, "skipped", t0, { scanned: 0, reason: "khong co email ngan hang moi" });
       return json({ ok: true, scanned: 0, inserted: 0, skipped_existing: 0, parse_failed: [] });
     }
 
@@ -291,6 +298,14 @@ Deno.serve(async (req) => {
       inserted = data as number;
     }
 
+    await reportRun(JOB, "ok", t0, {
+      scanned: ids.length,
+      parsed: parsed.length,
+      inserted,
+      skipped_existing: parsed.length - inserted,
+      parse_failed: parseFailed.length,
+    });
+
     return json({
       ok: true,
       scanned: ids.length,
@@ -301,6 +316,7 @@ Deno.serve(async (req) => {
     });
   } catch (err) {
     console.error("email-transaction-sync error:", err);
+    await reportRun(JOB, "error", t0, null, String(err));
     return json({ ok: false, error: String(err) }, 500);
   }
 });
