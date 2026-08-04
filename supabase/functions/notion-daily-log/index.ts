@@ -1,5 +1,8 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { reportRun } from "../_shared/heartbeat.ts";
+
+const JOB = "notion-daily-log";
 
 // notion-daily-log
 // v7 (30/07/2026): nhan phong = rooms.id (SO phong) thay vi rooms.name (LOAI phong,
@@ -121,18 +124,14 @@ function bullet(text: string): any {
 }
 
 Deno.serve(async () => {
+  const t0 = performance.now();
+
   try {
     if (!NOTION_TOKEN) {
-      return new Response(
-        JSON.stringify({ error: "NOTION_TOKEN chua set trong Edge Function secrets" }),
-        { status: 500 },
-      );
+      throw new Error("NOTION_TOKEN chua set trong Edge Function secrets");
     }
     if (!NOTION_DAILY_OPS_DB_ID) {
-      return new Response(
-        JSON.stringify({ error: "NOTION_DAILY_OPS_DB_ID chua set trong Edge Function secrets" }),
-        { status: 500 },
-      );
+      throw new Error("NOTION_DAILY_OPS_DB_ID chua set trong Edge Function secrets");
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -163,10 +162,7 @@ Deno.serve(async () => {
     for (const [name, res] of checks) {
       if (res.error) {
         console.error(`Query ${name} failed:`, JSON.stringify(res.error));
-        return new Response(
-          JSON.stringify({ error: `Query ${name} failed: ${(res.error as Error).message}` }),
-          { status: 500 },
-        );
+        throw new Error(`Query ${name} failed: ${(res.error as Error).message}`);
       }
     }
 
@@ -362,7 +358,7 @@ Deno.serve(async () => {
     if (!pageRes.ok) {
       const errText = await pageRes.text();
       console.error("Notion API error:", errText);
-      return new Response(JSON.stringify({ error: `Notion API error: ${errText}` }), { status: 500 });
+      throw new Error(`Notion API error: ${errText}`);
     }
 
     const page = await pageRes.json();
@@ -376,6 +372,13 @@ Deno.serve(async () => {
     if (logError) {
       console.error("log_automation_run failed:", JSON.stringify(logError));
     }
+
+    await reportRun(JOB, "ok", t0, {
+      occupancy_pct: pct,
+      check_ins: ci.length,
+      check_outs: co.length,
+      has_incident: hasIncident,
+    });
 
     return new Response(
       JSON.stringify({
@@ -396,6 +399,7 @@ Deno.serve(async () => {
   } catch (err) {
     console.error("notion-daily-log error:", err instanceof Error ? err.stack : String(err));
     const message = err instanceof Error ? err.message : String(err);
+    await reportRun(JOB, "error", t0, null, message);
     return new Response(JSON.stringify({ error: message }), { status: 500 });
   }
 });
