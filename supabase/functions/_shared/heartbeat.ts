@@ -9,7 +9,7 @@
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
-export type RunStatus = "ok" | "error" | "skipped";
+export type RunStatus = "ok" | "error";   // bo "skipped" - DB chi nhan 2 gia tri
 
 /**
  * Ghi nhan mot lan chay vao automation.automation_runs.

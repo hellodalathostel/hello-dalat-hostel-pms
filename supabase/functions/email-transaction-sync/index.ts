@@ -239,7 +239,9 @@ Deno.serve(async (req) => {
     const ids = await listMessageIds(token, days);
 
     if (ids.length === 0) {
-      await reportRun(JOB, "skipped", t0, { scanned: 0, reason: "khong co email ngan hang moi" });
+      // DB chi cho phep status 'ok' | 'error'. Chay khong co gi de lam VAN LA chay
+      // thanh cong, nen ghi 'ok' va danh dau bang detail de phan biet ve sau.
+      await reportRun(JOB, "ok", t0, { scanned: 0, skipped_reason: "no_new_emails" });
       return json({ ok: true, scanned: 0, inserted: 0, skipped_existing: 0, parse_failed: [] });
     }
 
