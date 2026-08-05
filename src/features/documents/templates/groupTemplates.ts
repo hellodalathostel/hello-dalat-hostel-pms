@@ -210,9 +210,6 @@ export function renderGroupConfirmation(data: GroupDocumentData, lang: 'vi' | 'e
     svcTotal:     isEn ? 'Total'                   : 'Thành tiền',
     discTitle:    isEn ? 'Discounts'               : 'Giảm giá',
     totalLabel:   isEn ? 'Total Amount'            : 'Tổng cộng',
-    calloutMsg:   isEn
-      ? 'Please reply to confirm your booking. This confirmation is valid for 24 hours.'
-      : 'Vui lòng xác nhận lại để giữ phòng. Thông tin đặt phòng có hiệu lực trong 24 giờ.',
     bankTitle:    isEn ? 'Deposit Payment'         : 'Thanh toán cọc',
     bankNote:     isEn
       ? `Transfer reference: Your name or phone number`
@@ -340,12 +337,6 @@ export function renderGroupConfirmation(data: GroupDocumentData, lang: 'vi' | 'e
       </div>
     </div>` : '';
 
-  const calloutSection = `
-    <div class="callout callout-amber">
-      <div class="callout-icon">!</div>
-      <div class="callout-text">${t.calloutMsg}</div>
-    </div>`;
-
   const html = `<!DOCTYPE html>
 <html lang="${lang}">
 <head>
@@ -364,8 +355,6 @@ export function renderGroupConfirmation(data: GroupDocumentData, lang: 'vi' | 'e
     </div>
   </div>
   <div class="inv-body">
-
-    ${calloutSection}
 
     <div class="section" style="margin-top:16px;">
       <div class="info-grid">

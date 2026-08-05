@@ -1,0 +1,214 @@
+﻿[
+  {
+    "file": "src/components/bookings/AddRoomModal.tsx",
+    "rpcs": [
+      "get_suggested_price"
+    ]
+  },
+  {
+    "file": "src/components/checkin/KBTTImportModal.tsx",
+    "rpcs": [
+      "checkin_booking_txn"
+    ]
+  },
+  {
+    "file": "src/features/auth/hooks/useCurrentUserRole.ts",
+    "rpcs": [
+      "current_user_role"
+    ]
+  },
+  {
+    "file": "src/features/booking-requests/hooks/useBookingRequests.ts",
+    "rpcs": [
+      "confirm_booking_request_txn",
+      "reject_booking_request_txn"
+    ]
+  },
+  {
+    "file": "src/features/bookings/api/bookings.ts",
+    "rpcs": [
+      "create_group_booking_txn"
+    ]
+  },
+  {
+    "file": "src/features/bookings/hooks/useAddService.ts",
+    "rpcs": [
+      "add_booking_service_txn"
+    ]
+  },
+  {
+    "file": "src/features/bookings/hooks/useCreateBooking.ts",
+    "rpcs": [
+      "create_group_booking_txn",
+      "record_payment_txn"
+    ]
+  },
+  {
+    "file": "src/features/bookings/hooks/useDepositActions.ts",
+    "rpcs": [
+      "record_payment_txn"
+    ]
+  },
+  {
+    "file": "src/features/bookings/hooks/useDiscountActions.ts",
+    "rpcs": [
+      "add_discount_txn",
+      "delete_booking_discount_txn"
+    ]
+  },
+  {
+    "file": "src/features/bookings/hooks/useServiceActions.ts",
+    "rpcs": [
+      "add_booking_service_txn",
+      "delete_booking_service_txn"
+    ]
+  },
+  {
+    "file": "src/features/bookings/hooks/useUpdateBooking.ts",
+    "rpcs": [
+      "update_booking_txn"
+    ]
+  },
+  {
+    "file": "src/features/bookings/hooks/useVoidBooking.ts",
+    "rpcs": [
+      "void_checkedout_booking_txn"
+    ]
+  },
+  {
+    "file": "src/features/bookings/hooks/useVoidPayment.ts",
+    "rpcs": [
+      "void_payment_txn"
+    ]
+  },
+  {
+    "file": "src/features/calendar/hooks/useHousekeeping.ts",
+    "rpcs": [
+      "update_housekeeping_status"
+    ]
+  },
+  {
+    "file": "src/features/cashbook/hooks/useCashBook.ts",
+    "rpcs": [
+      "add_cash_book_entry_txn",
+      "close_cash_shift_txn",
+      "reopen_cash_shift_txn",
+      "update_cash_book_entry_txn",
+      "void_cash_book_entry_txn"
+    ]
+  },
+  {
+    "file": "src/features/checkin/hooks/useCheckIn.ts",
+    "rpcs": [
+      "checkin_booking_txn"
+    ]
+  },
+  {
+    "file": "src/features/checkin/hooks/useCheckinImport.ts",
+    "rpcs": [
+      "checkin_booking_txn"
+    ]
+  },
+  {
+    "file": "src/features/checkout/hooks/useCheckOut.ts",
+    "rpcs": [
+      "checkout_last_booking_and_settle_txn",
+      "checkout_single_booking_txn"
+    ]
+  },
+  {
+    "file": "src/features/checkout/hooks/useCheckoutBooking.ts",
+    "rpcs": [
+      "checkout_last_booking_and_settle_txn",
+      "checkout_single_booking_txn",
+      "record_payment_txn"
+    ]
+  },
+  {
+    "file": "src/features/compliance/hooks/useTaxThresholdSummary.ts",
+    "rpcs": [
+      "get_tax_threshold_summary"
+    ]
+  },
+  {
+    "file": "src/features/dashboard/hooks/useCancelOtaBlock.ts",
+    "rpcs": [
+      "cancel_ota_block"
+    ]
+  },
+  {
+    "file": "src/features/dashboard/hooks/useCreateBookingFromOtaBlock.ts",
+    "rpcs": [
+      "create_group_booking_txn"
+    ]
+  },
+  {
+    "file": "src/features/documents/documentLogging.ts",
+    "rpcs": [
+      "create_document_log"
+    ]
+  },
+  {
+    "file": "src/features/documents/hooks/useDocumentLog.ts",
+    "rpcs": [
+      "create_document_log"
+    ]
+  },
+  {
+    "file": "src/features/documents/useDocumentGenerator.ts",
+    "rpcs": [
+      "create_document_log"
+    ]
+  },
+  {
+    "file": "src/features/finance/hooks/useManualRevenue.ts",
+    "rpcs": [
+      "create_manual_revenue_txn"
+    ]
+  },
+  {
+    "file": "src/features/housekeeping/hooks/useMarkRoomClean.ts",
+    "rpcs": [
+      "mark_room_clean_txn"
+    ]
+  },
+  {
+    "file": "src/features/payment/hooks/usePayment.ts",
+    "rpcs": [
+      "record_payment_txn"
+    ]
+  },
+  {
+    "file": "src/features/settings/hooks/useRoomMutations.ts",
+    "rpcs": [
+      "create_room_txn",
+      "toggle_room_active_txn",
+      "update_room_txn"
+    ]
+  },
+  {
+    "file": "src/hooks/useAddEarlyLate.ts",
+    "rpcs": [
+      "add_early_late_txn"
+    ]
+  },
+  {
+    "file": "src/hooks/useAddRoomToGroup.ts",
+    "rpcs": [
+      "add_booking_to_group_txn"
+    ]
+  },
+  {
+    "file": "src/hooks/useRoomBlocks.ts",
+    "rpcs": [
+      "create_room_block_txn",
+      "delete_room_block_txn"
+    ]
+  },
+  {
+    "file": "src/hooks/useUndoEarlyLate.ts",
+    "rpcs": [
+      "undo_early_late_txn"
+    ]
+  }
+]
