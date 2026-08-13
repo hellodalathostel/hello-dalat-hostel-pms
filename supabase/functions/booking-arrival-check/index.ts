@@ -1,11 +1,14 @@
 // supabase/functions/booking-arrival-check/index.ts
-// Doc email "Reservations with today's or tomorrow's arrival date for Hello
-// Dalat Hostel" tu noreply-email@booking.com, doi chieu voi bookings trong PMS.
-// Cron goi 1 lan/ngay luc 07:30 ICT. Dedupe theo email_message_id.
-// ?dry_run=1 -> parse + tra JSON, KHONG ghi DB, KHONG gui Telegram (dung de tune parser).
+// 1) Doc email "Reservations with today's or tomorrow's arrival date for Hello
+//    Dalat Hostel" tu noreply-email@booking.com, doi chieu voi bookings trong PMS.
+// 2) Doc email "Booking.com - Đặt phòng đã hủy!" tu noreply@booking.com, tu dong
+//    huy booking trong PMS khi khop ota_booking_number (khong can duyet tay).
+// Cron goi 1 lan/ngay luc 07:30 ICT. Dedupe rieng cho tung loai email.
+// ?dry_run=1 -> parse + tra JSON, KHONG ghi DB, KHONG gui Telegram, KHONG huy that
+// (dung de tune parser / kiem tra truoc khi bat cron thuc te).
 //
-// [PHONG DOAN] Parser dua tren 1 email mau (11/08/2026) — BAT BUOC chay
-// dry_run doi chieu vai email lien tiep truoc khi bat cron thuc te.
+// [PHONG DOAN] Parser dua tren 1 email mau moi loai — BAT BUOC chay dry_run
+// doi chieu vai email that truoc khi tin tuong hoan toan.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -19,6 +22,11 @@ const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
 const TELEGRAM_CHAT_ID = Deno.env.get("TELEGRAM_CHAT_ID")!;
 
 const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+// LUU Y QUAN TRONG: schema brain KHONG duoc PostgREST expose (xac nhan qua
+// pgrst.db_schemas setting). Moi lan .from() truc tiep tren schema brain qua
+// REST client se THAT BAI AM THAM (khong throw, tra ve rong) -- day la bug
+// da xay ra thuc te (dedupe khong hoat dong, insert log khong ghi duoc).
+// BAT BUOC dung RPC (SECURITY DEFINER, schema public) cho MOI thao tac brain.
 
 interface ArrivalRow {
   ota_booking_number: string;
@@ -220,19 +228,32 @@ async function checkAgainstPMS(rows: ArrivalRow[]): Promise<Issue[]> {
 
   const checkIns = [...new Set(rows.map((r) => r.check_in))];
 
-  // Lay het booking active co check_in trong cac ngay lien quan, kem ota_booking_number + guest_name
+  // ota_booking_number nam o bang groups (1 group = 1 booking OTA, co the
+  // nhieu phong/bookings con trong cung group). Join qua groups de lay dung field.
   const { data: candidateBookings, error } = await supabase
     .from("bookings")
-    .select("id, ota_booking_number, guest_name, check_in, check_out")
+    .select("id, guest_name, check_in, check_out, group_id, groups!inner(id, ota_booking_number)")
     .in("check_in", checkIns)
     .eq("is_deleted", false)
     .neq("status", "cancelled");
 
   if (error) throw new Error(`Query bookings failed: ${error.message}`);
 
-  const byOtaNumber = new Map<string, typeof candidateBookings[number]>();
-  for (const b of candidateBookings ?? []) {
-    if (b.ota_booking_number) byOtaNumber.set(b.ota_booking_number, b);
+  type CandidateRow = {
+    id: string;
+    guest_name: string | null;
+    check_in: string;
+    check_out: string;
+    group_id: string;
+    // deno-lint-ignore no-explicit-any
+    groups: any;
+  };
+  const candidates = (candidateBookings ?? []) as unknown as CandidateRow[];
+
+  const byOtaNumber = new Map<string, CandidateRow>();
+  for (const b of candidates) {
+    const otaNumber = b.groups?.ota_booking_number as string | null | undefined;
+    if (otaNumber) byOtaNumber.set(otaNumber, b);
   }
 
   for (const row of rows) {
@@ -240,7 +261,7 @@ async function checkAgainstPMS(rows: ArrivalRow[]): Promise<Issue[]> {
     if (matched) continue; // OK, co booking khop ma OTA
 
     // Khong khop theo ma -> tim candidate cung ngay check_in + ten giong
-    const candidate = (candidateBookings ?? []).find(
+    const candidate = candidates.find(
       (b) => b.check_in === row.check_in && namesLikelyMatch(b.guest_name ?? "", row.guest_name),
     );
 
@@ -252,7 +273,7 @@ async function checkAgainstPMS(rows: ArrivalRow[]): Promise<Issue[]> {
         check_in: row.check_in,
         check_out: row.check_out,
         candidate_booking_id: candidate.id,
-        candidate_ota_booking_number: candidate.ota_booking_number ?? null,
+        candidate_ota_booking_number: candidate.groups?.ota_booking_number ?? null,
       });
     } else {
       issues.push({
@@ -268,6 +289,221 @@ async function checkAgainstPMS(rows: ArrivalRow[]): Promise<Issue[]> {
   }
 
   return issues;
+}
+
+// ─── Dong bo huy booking tu email "Dat phong da huy" ─────────────────────────
+// Subject dang: 'Booking.com - Đặt phòng đã hủy! (<res_id>, <ngay>)'
+// res_id trong subject/link chinh la groups.ota_booking_number.
+// Khac voi email arrival-list (chi doi chieu), email nay TU DONG HUY booking
+// trong PMS khi khop ma OTA — khong can Hieu duyet, theo yeu cau.
+
+interface CancellationEmailResult {
+  message_id: string;
+  ota_booking_number: string | null;
+  result: "cancelled" | "already_cancelled" | "not_found" | "error";
+  group_id: string | null;
+  bookings_cancelled_count: number;
+  error_message: string | null;
+}
+
+async function findCancellationEmailIds(token: string): Promise<string[]> {
+  const q = `from:noreply@booking.com subject:"Đặt phòng đã hủy" newer_than:2d`;
+  const url = new URL("https://gmail.googleapis.com/gmail/v1/users/me/messages");
+  url.searchParams.set("q", q);
+  url.searchParams.set("maxResults", "20");
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) throw new Error(`Gmail list (cancellation) failed: ${res.status} ${await res.text()}`);
+  const json = await res.json();
+  // deno-lint-ignore no-explicit-any
+  return (json.messages ?? []).map((m: any) => m.id as string);
+}
+
+// Gmail search theo subject co the match long (vd email "Yeu cau huy MIEN PHI" tu
+// noreply-email@booking.com lot qua vi cung chua tu "huy"). BAT BUOC doc lai subject
+// that tu header va kiem tra dung mau "Booking.com - Đặt phòng đã hủy!" + dung
+// nguoi gui noreply@booking.com (khac noreply-email@booking.com cua email loai 1)
+// truoc khi coi day la tin hieu HUY THAT SU.
+// deno-lint-ignore no-explicit-any
+function getHeader(payload: any, name: string): string | null {
+  const h = payload?.headers?.find((x: { name: string; value: string }) => x.name.toLowerCase() === name.toLowerCase());
+  return h?.value ?? null;
+}
+
+function isConfirmedCancellationEmail(subject: string | null, from: string | null): boolean {
+  if (!subject || !from) return false;
+  const subjectOk = subject.includes("Đặt phòng đã hủy");
+  const fromOk = from.includes("noreply@booking.com") && !from.includes("noreply-email@booking.com");
+  return subjectOk && fromOk;
+}
+
+// Lay res_id tu URL admin.booking.com trong than email, vd:
+// https://admin.booking.com/hotel/hoteladmin/extranet_ng/manage/booking.html?res_id=6795256275&hotel_id=...
+function extractResId(html: string): string | null {
+  const m = html.match(/res_id=(\d+)/);
+  return m ? m[1] : null;
+}
+
+async function processCancellationEmail(
+  token: string,
+  messageId: string,
+): Promise<CancellationEmailResult> {
+  const message = await getMessage(token, messageId);
+  const subject = getHeader(message.payload, "Subject");
+  const from = getHeader(message.payload, "From");
+
+  if (!isConfirmedCancellationEmail(subject, from)) {
+    // Gmail search co the match long (vd email "yeu cau huy mien phi" tu
+    // noreply-email@ lot qua filter subject). Day KHONG phai tin hieu huy that,
+    // bo qua hoan toan -- khong ghi log, khong coi la loi, khong huy gi ca.
+    return {
+      message_id: messageId,
+      ota_booking_number: null,
+      result: "not_found",
+      group_id: null,
+      bookings_cancelled_count: 0,
+      error_message: null,
+    };
+  }
+
+  const html = extractHtmlBody(message.payload);
+  const otaBookingNumber = extractResId(html);
+
+  if (!otaBookingNumber) {
+    return {
+      message_id: messageId,
+      ota_booking_number: null,
+      result: "error",
+      group_id: null,
+      bookings_cancelled_count: 0,
+      error_message: "Khong tim thay res_id trong noi dung email",
+    };
+  }
+
+  // Tim group khop ma OTA
+  const { data: group, error: groupError } = await supabase
+    .from("groups")
+    .select("id, status")
+    .eq("ota_booking_number", otaBookingNumber)
+    .eq("is_deleted", false)
+    .maybeSingle();
+
+  if (groupError) {
+    return {
+      message_id: messageId,
+      ota_booking_number: otaBookingNumber,
+      result: "error",
+      group_id: null,
+      bookings_cancelled_count: 0,
+      error_message: `Query groups failed: ${groupError.message}`,
+    };
+  }
+
+  if (!group) {
+    // Khong khop group nao trong PMS -- khong phai loi, co the booking chua
+    // duoc import hoac dat qua kenh khac. Khong bao Telegram cho case nay.
+    return {
+      message_id: messageId,
+      ota_booking_number: otaBookingNumber,
+      result: "not_found",
+      group_id: null,
+      bookings_cancelled_count: 0,
+      error_message: null,
+    };
+  }
+
+  // Lay toan bo bookings con active cua group (1 group co the nhieu phong)
+  const { data: bookings, error: bookingsError } = await supabase
+    .from("bookings")
+    .select("id, room_id, check_in, check_out, price_per_night, guests_count, guest_name, note, status")
+    .eq("group_id", group.id)
+    .eq("is_deleted", false);
+
+  if (bookingsError) {
+    return {
+      message_id: messageId,
+      ota_booking_number: otaBookingNumber,
+      result: "error",
+      group_id: group.id,
+      bookings_cancelled_count: 0,
+      error_message: `Query bookings failed: ${bookingsError.message}`,
+    };
+  }
+
+  const activeBookings = (bookings ?? []).filter((b) => b.status !== "cancelled");
+
+  if (activeBookings.length === 0) {
+    // Tat ca booking con cua group da cancelled tu truoc -- email den muon
+    // hoac job da xu ly roi. Khong coi la loi, khong goi lai RPC.
+    return {
+      message_id: messageId,
+      ota_booking_number: otaBookingNumber,
+      result: "already_cancelled",
+      group_id: group.id,
+      bookings_cancelled_count: 0,
+      error_message: null,
+    };
+  }
+
+  let cancelledCount = 0;
+  const rpcErrors: string[] = [];
+
+  for (const b of activeBookings) {
+    const { error: rpcError } = await supabase.rpc("update_booking_txn", {
+      p_booking_id: b.id,
+      p_room_id: b.room_id,
+      p_check_in: b.check_in,
+      p_check_out: b.check_out,
+      p_price_per_night: b.price_per_night,
+      p_guests_count: b.guests_count,
+      p_guest_name: b.guest_name,
+      p_note: `${b.note ?? ""} | Tu dong huy tu email Booking.com (res_id=${otaBookingNumber})`.trim(),
+      p_cancel: true,
+      p_override_checkin: false,
+    });
+
+    if (rpcError) {
+      rpcErrors.push(`booking ${b.id}: ${rpcError.message}`);
+    } else {
+      cancelledCount++;
+    }
+  }
+
+  if (rpcErrors.length > 0) {
+    return {
+      message_id: messageId,
+      ota_booking_number: otaBookingNumber,
+      result: "error",
+      group_id: group.id,
+      bookings_cancelled_count: cancelledCount,
+      error_message: rpcErrors.join("; "),
+    };
+  }
+
+  return {
+    message_id: messageId,
+    ota_booking_number: otaBookingNumber,
+    result: "cancelled",
+    group_id: group.id,
+    bookings_cancelled_count: cancelledCount,
+    error_message: null,
+  };
+}
+
+async function sendCancellationErrorAlert(errors: CancellationEmailResult[]): Promise<void> {
+  let msg = `🔴 <b>Lỗi tự động hủy booking từ email</b>\n`;
+  msg += `Email báo hủy từ Booking.com nhưng xử lý trong PMS bị lỗi — cần kiểm tra tay:\n\n`;
+  for (const e of errors) {
+    msg += `• Mã ${escapeHtml(e.ota_booking_number ?? "?")} — ${escapeHtml(e.error_message ?? "unknown error")}\n`;
+  }
+
+  const res = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: msg.trim(), parse_mode: "HTML" }),
+  });
+  if (!res.ok) {
+    console.error("Telegram sendMessage (cancellation error) failed:", res.status, await res.text());
+  }
 }
 
 // ─── Telegram ────────────────────────────────────────────────────────────────
@@ -346,65 +582,147 @@ Deno.serve(async (req) => {
 
   try {
     const token = await getAccessToken();
-    const messageId = await findLatestArrivalEmailId(token);
 
-    if (!messageId) {
-      const detail = { reason: "no_email_found" };
-      if (!dryRun) await reportRun("ok", Date.now() - startedAt, detail);
-      return jsonResponse({ ok: true, ...detail });
+    // ─── Phan 1: arrival-check (doi chieu, khong tu sua gi) ──────────────────
+    const messageId = await findLatestArrivalEmailId(token);
+    let arrivalDetail: Record<string, unknown> = { reason: "no_email_found" };
+    let arrivalRows: ArrivalRow[] = [];
+    let arrivalIssues: Issue[] = [];
+    let arrivalEmailDate: string | null = null;
+
+    if (messageId) {
+      const message = await getMessage(token, messageId);
+      arrivalEmailDate = message.internalDate
+        ? new Date(Number(message.internalDate)).toISOString()
+        : null;
+      const html = extractHtmlBody(message.payload);
+      arrivalRows = parseArrivalEmail(html);
+
+      if (!dryRun) {
+        const { data: alreadyProcessed, error: checkError } = await supabase.rpc(
+          "check_arrival_email_processed",
+          { p_email_message_id: messageId },
+        );
+        if (checkError) throw new Error(`check_arrival_email_processed failed: ${checkError.message}`);
+
+        if (alreadyProcessed) {
+          arrivalDetail = { reason: "already_processed", email_message_id: messageId };
+        } else {
+          arrivalIssues = await checkAgainstPMS(arrivalRows);
+
+          const { error: ingestError } = await supabase.rpc("ingest_arrival_check", {
+            p_email_message_id: messageId,
+            p_email_date: arrivalEmailDate,
+            p_issues: arrivalIssues,
+          });
+          if (ingestError) throw new Error(`ingest_arrival_check failed: ${ingestError.message}`);
+
+          if (arrivalIssues.length > 0) await sendTelegramAlert(arrivalIssues);
+
+          arrivalDetail = {
+            email_message_id: messageId,
+            rows_total: arrivalRows.length,
+            missing_count: arrivalIssues.filter((i) => i.issue_type === "missing").length,
+            mismatch_count: arrivalIssues.filter((i) => i.issue_type === "mismatch").length,
+          };
+        }
+      }
     }
 
-    const message = await getMessage(token, messageId);
-    const emailDate = message.internalDate
-      ? new Date(Number(message.internalDate)).toISOString()
-      : null;
-    const html = extractHtmlBody(message.payload);
-    const rows = parseArrivalEmail(html);
+    // ─── Phan 2: cancellation-sync (doc lap voi phan 1, luon chay) ───────────
+    const cancellationEmailIds = await findCancellationEmailIds(token);
 
     if (dryRun) {
-      const issues = rows.length > 0 ? await checkAgainstPMS(rows) : [];
+      const cancellationPreview: Array<{ message_id: string; ota_booking_number: string | null; would_match_group_id: string | null; note: string }> = [];
+
+      for (const emailId of cancellationEmailIds) {
+        const msg = await getMessage(token, emailId);
+        const subject = getHeader(msg.payload, "Subject");
+        const from = getHeader(msg.payload, "From");
+
+        if (!isConfirmedCancellationEmail(subject, from)) {
+          cancellationPreview.push({
+            message_id: emailId,
+            ota_booking_number: null,
+            would_match_group_id: null,
+            note: `BO QUA - khong phai email huy that su (subject="${subject}", from="${from}")`,
+          });
+          continue;
+        }
+
+        const cHtml = extractHtmlBody(msg.payload);
+        const resId = extractResId(cHtml);
+        if (!resId) {
+          cancellationPreview.push({ message_id: emailId, ota_booking_number: null, would_match_group_id: null, note: "khong tim thay res_id" });
+          continue;
+        }
+        const { data: grp } = await supabase
+          .from("groups")
+          .select("id")
+          .eq("ota_booking_number", resId)
+          .eq("is_deleted", false)
+          .maybeSingle();
+        cancellationPreview.push({
+          message_id: emailId,
+          ota_booking_number: resId,
+          would_match_group_id: grp?.id ?? null,
+          note: grp ? "se huy neu chay that" : "khong khop group nao trong PMS",
+        });
+      }
+
+      const arrivalIssuesForPreview = messageId && arrivalRows.length > 0 ? await checkAgainstPMS(arrivalRows) : [];
+
       return jsonResponse({
         dry_run: true,
-        email_message_id: messageId,
-        email_date: emailDate,
-        rows_parsed: rows.length,
-        rows,
-        issues,
+        arrival_email_message_id: messageId,
+        arrival_email_date: arrivalEmailDate,
+        rows_parsed: arrivalRows.length,
+        rows: arrivalRows,
+        issues: arrivalIssuesForPreview,
+        cancellation_emails_found: cancellationEmailIds.length,
+        cancellation_preview: cancellationPreview,
       });
     }
 
-    // Da xu ly email nay chua? (dedupe qua unique index, nhung check truoc de tranh spam Telegram)
-    const { data: existingLog } = await supabase
-      .from("arrival_check_log")
-      .select("id")
-      .eq("email_message_id", messageId)
-      .maybeSingle();
+    const cancellationResults: CancellationEmailResult[] = [];
 
-    if (existingLog) {
-      const detail = { reason: "already_processed", email_message_id: messageId };
-      await reportRun("ok", Date.now() - startedAt, detail);
-      return jsonResponse({ ok: true, ...detail });
+    for (const emailId of cancellationEmailIds) {
+      const { data: alreadyProcessed, error: checkError } = await supabase.rpc(
+        "check_cancellation_email_processed",
+        { p_email_message_id: emailId },
+      );
+      if (checkError) throw new Error(`check_cancellation_email_processed failed: ${checkError.message}`);
+
+      if (alreadyProcessed) continue;
+
+      const result = await processCancellationEmail(token, emailId);
+      cancellationResults.push(result);
+
+      const { error: logInsertError } = await supabase.rpc("ingest_cancellation_sync_log", {
+        p_email_message_id: result.message_id,
+        p_ota_booking_number: result.ota_booking_number ?? "unknown",
+        p_result: result.result,
+        p_group_id: result.group_id,
+        p_bookings_cancelled_count: result.bookings_cancelled_count,
+        p_error_message: result.error_message,
+      });
+      if (logInsertError) {
+        console.error("ingest_cancellation_sync_log failed:", logInsertError.message);
+      }
     }
 
-    const issues = await checkAgainstPMS(rows);
-
-    const { error: ingestError } = await supabase.rpc("ingest_arrival_check", {
-      p_email_message_id: messageId,
-      p_email_date: emailDate,
-      p_issues: issues,
-    });
-
-    if (ingestError) throw new Error(`ingest_arrival_check failed: ${ingestError.message}`);
-
-    if (issues.length > 0) {
-      await sendTelegramAlert(issues);
+    const cancellationErrors = cancellationResults.filter((r) => r.result === "error");
+    if (cancellationErrors.length > 0) {
+      await sendCancellationErrorAlert(cancellationErrors);
     }
 
     const detail = {
-      email_message_id: messageId,
-      rows_total: rows.length,
-      missing_count: issues.filter((i) => i.issue_type === "missing").length,
-      mismatch_count: issues.filter((i) => i.issue_type === "mismatch").length,
+      arrival: arrivalDetail,
+      cancellation_emails_processed: cancellationResults.length,
+      cancellation_cancelled_count: cancellationResults.filter((r) => r.result === "cancelled").length,
+      cancellation_already_cancelled_count: cancellationResults.filter((r) => r.result === "already_cancelled").length,
+      cancellation_not_found_count: cancellationResults.filter((r) => r.result === "not_found").length,
+      cancellation_error_count: cancellationErrors.length,
     };
 
     await reportRun("ok", Date.now() - startedAt, detail);
