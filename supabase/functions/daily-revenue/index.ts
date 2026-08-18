@@ -63,9 +63,12 @@ Deno.serve(async (_req) => {
     }
 
     const formatted = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(total);
+    // Label ro rang: day la DOANH THU GHI NHAN theo check_in (moc thue/So S1a),
+    // khac voi "TIEN THU DUOC" trong room-report-bot (tien mat thuc te tu payment_history).
+    // Hai con so nay khong bao gio bang nhau — dung thiet ke.
     const msg = total > 0
-      ? `💰 <b>Doanh thu ${todayVN}</b>\n${formatted} đ\n📋 Đã ghi vào Sổ doanh thu`
-      : `📋 <b>${todayVN}</b>\nKhông có doanh thu hôm nay`;
+      ? `💰 <b>Doanh thu ghi nhận ${todayVN}</b>\n${formatted}\n<i>(theo check-in — mốc Sổ S1a)</i>\n📋 Đã ghi vào Sổ doanh thu`
+      : `📋 <b>Doanh thu ghi nhận ${todayVN}</b>\nKhông có doanh thu hôm nay`;
 
     await sendTelegram(msg);
 
