@@ -69,6 +69,27 @@ Deno.serve(async () => {
     const occ = occSet.size;
     const pct = TOTAL_ROOMS > 0 ? Math.round((occ / TOTAL_ROOMS) * 100) : 0;
 
+    // ─── Peer check: giám sát ngược ops-guardian ─────────────────────────────
+    // task-reminder (job duy nhất gọi check_peer_job) đã tắt 18/08/2026, nên
+    // ops-guardian không còn ai giám sát. Nhét vào đây: nếu guardian im lặng
+    // hoặc lỗi thì cảnh báo ngay trên tin báo cáo sáng — không tốn tin nhắn mới.
+    // Bọc try/catch: quan trắc KHÔNG được làm chết báo cáo nghiệp vụ.
+    let peerHealthy = null;
+    let peerIssue = null;
+    try {
+      const { data: peer, error: peerErr } = await supabase.rpc("check_peer_job", {
+        p_job_name: "ops-guardian",
+      });
+      if (peerErr) {
+        console.error("check_peer_job that bai:", peerErr.message);
+      } else if (peer) {
+        peerHealthy = peer.healthy === true;
+        peerIssue = peer.issue ?? null;
+      }
+    } catch (e) {
+      console.error("check_peer_job exception:", e instanceof Error ? e.message : String(e));
+    }
+
     const dLabel = new Date().toLocaleDateString("vi-VN", {
       timeZone: "Asia/Ho_Chi_Minh",
       day: "2-digit", month: "2-digit", year: "numeric",
@@ -97,6 +118,17 @@ Deno.serve(async () => {
       "📊 Công suất hôm nay: " + occ + "/" + TOTAL_ROOMS + " phòng (" + pct + "%)",
     ];
 
+    // Cảnh báo lên ĐẦU tin: nếu hệ giám sát chết thì đây là thứ phải đọc trước.
+    // peerIssue là enum nội bộ ('never_run' | 'error' | 'silent' | 'not_registered'),
+    // không chứa ký tự < > nên an toàn với parse_mode HTML.
+    if (peerHealthy === false) {
+      lines.unshift(
+        "🔴 <b>CẢNH BÁO: ops-guardian đang lỗi (" + (peerIssue ?? "unknown") + ")</b>",
+        "<i>Hệ giám sát tự động không hoạt động — kiểm tra automation.guardian_alerts</i>",
+        "",
+      );
+    }
+
     const tgRes = await fetch(
       "https://api.telegram.org/bot" + TELEGRAM_TOKEN + "/sendMessage",
       {
@@ -116,6 +148,8 @@ Deno.serve(async () => {
       revenue: totalRev,
       check_ins: ci.length,
       staying: st.length,
+      peer_checked: peerHealthy !== null,
+      peer_healthy: peerHealthy,
     });
 
     return new Response(
