@@ -27,6 +27,7 @@ import type {
   BookingDiscountItem,
 } from '@/features/bookings/hooks/useBookingDetail'
 import { useVoidBooking } from '@/features/bookings/hooks/useVoidBooking'
+import { BreakfastSection } from './BreakfastSection'
 import {
   STATUS_COLOR,
   STATUS_LABEL,
@@ -190,6 +191,10 @@ export function BookingRoomCard({
               </Tag>
             ))}
           </div>
+        )}
+
+        {status !== 'cancelled' && (
+          <BreakfastSection booking={booking} groupId={groupId} readOnly={isReadOnly} />
         )}
 
         {booking.note && (

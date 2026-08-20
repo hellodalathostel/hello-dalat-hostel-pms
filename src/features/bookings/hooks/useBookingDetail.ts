@@ -41,6 +41,9 @@ export type BookingRow = {
   status: 'booked' | 'checked-in' | 'checked-out' | 'cancelled'
   has_early_check_in: boolean
   has_late_check_out: boolean
+  has_breakfast: boolean
+  breakfast_type: 'free' | 'paid' | null
+  breakfast_qty_per_night: number
   booking_guests: BookingPrimaryGuest[]
   note: string | null
   created_at: string
