@@ -41,10 +41,17 @@ function isToday(date: string): boolean {
 
 function useDragScroll() {
   const wrapperRef = useRef<HTMLDivElement | null>(null)
-  const dragState = useRef({ active: false, moved: false, startX: 0, scrollLeft: 0 })
+  const dragState = useRef({
+    active: false,
+    moved: false,
+    startX: 0,
+    startTime: 0,
+    scrollLeft: 0,
+  })
   const [isDragging, setIsDragging] = useState(false)
 
-  const DRAG_THRESHOLD = 5
+  const DRAG_THRESHOLD = 8
+  const DRAG_TIME_THRESHOLD_MS = 100
 
   const onPointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     const element = wrapperRef.current
@@ -60,6 +67,7 @@ function useDragScroll() {
       active: true,
       moved: false,
       startX: event.clientX,
+      startTime: performance.now(),
       scrollLeft: element.scrollLeft,
     }
 
@@ -77,8 +85,15 @@ function useDragScroll() {
     }
 
     const deltaX = event.clientX - dragState.current.startX
+    const elapsed = performance.now() - dragState.current.startTime
 
-    if (!dragState.current.moved && Math.abs(deltaX) > DRAG_THRESHOLD) {
+    // Chỉ coi là kéo khi vượt cả ngưỡng khoảng cách LẪN ngưỡng thời gian —
+    // click chuột thật luôn rất nhanh (<100ms), kéo cố ý để cuộn luôn chậm hơn.
+    if (
+      !dragState.current.moved &&
+      Math.abs(deltaX) > DRAG_THRESHOLD &&
+      elapsed > DRAG_TIME_THRESHOLD_MS
+    ) {
       dragState.current.moved = true
       setIsDragging(true)
       element.classList.add('calendar-table-wrapper--dragging')
