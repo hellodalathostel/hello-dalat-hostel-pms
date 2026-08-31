@@ -41,6 +41,7 @@ export interface BookingRoomCardProps {
   booking: BookingDetailItem
   groupId: string
   onCheckin?: (bookingId: string) => void
+  onCheckinImport?: (bookingId: string) => void
   onCheckout?: (bookingId: string) => void
   onAddService?: (bookingId: string) => void
   onEarlyLate?: (bookingId: string) => void
@@ -54,6 +55,7 @@ export function BookingRoomCard({
   booking,
   groupId,
   onCheckin,
+  onCheckinImport,
   onCheckout,
   onAddService,
   onEarlyLate,
@@ -213,7 +215,7 @@ export function BookingRoomCard({
                   <Button type="primary" size="small" icon={<LoginOutlined />} onClick={() => onCheckin?.(booking.id)}>
                     Check-in
                   </Button>
-                  <Button size="small" icon={<FileExcelOutlined />} onClick={() => onCheckin?.(booking.id)}>
+                  <Button size="small" icon={<FileExcelOutlined />} onClick={() => onCheckinImport?.(booking.id)}>
                     Nhập Excel
                   </Button>
                 </>

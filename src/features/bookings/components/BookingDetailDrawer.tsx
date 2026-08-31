@@ -39,6 +39,8 @@ import BookingFolioEditModal from '@/features/bookings/components/BookingFolioEd
 import { AddServiceModal } from '@/features/bookings/components/AddServiceModal'
 import { AddRoomModal } from '@/components/bookings/AddRoomModal'
 import { CheckinImportModal } from '@/features/checkin/components/CheckinImportModal'
+import { CheckInModal } from '@/features/checkin/components/CheckInModal'
+import type { DashboardRoom } from '@/types/dashboard'
 import { CheckoutModal } from '@/features/checkout/components/CheckoutModal'
 import { DocumentActionsMenu } from '@/features/documents/DocumentActionsMenu'
 import { DocumentHistoryDrawer } from '@/features/documents/DocumentHistoryDrawer'
@@ -94,6 +96,7 @@ export default function BookingDetailDrawer({ groupId = null, bookingId = null, 
   const shouldShowResolveError = open && !hasNoInput && !isLoading && (isResolvingError || isDetailError || !data)
   const [editingBooking, setEditingBooking] = useState<BookingDetailItem | null>(null)
   const [checkinImportOpen, setCheckinImportOpen] = useState(false)
+  const [manualCheckinBookingId, setManualCheckinBookingId] = useState<string | null>(null)
   const [checkoutBookingId, setCheckoutBookingId] = useState<string | null>(null)
   const [historyOpen, setHistoryOpen] = useState(false)
   // State for folio edit modal
@@ -145,6 +148,42 @@ export default function BookingDetailDrawer({ groupId = null, bookingId = null, 
       },
     })
   }
+
+  // Tìm booking đang check-in tay để build shape DashboardRoom tối thiểu cho CheckInModal.
+  // CheckInModal chỉ đọc: room_id, booking_id, guest_name, check_in, check_out — các field
+  // còn lại không được component này sử dụng nên để giá trị mặc định an toàn.
+  const manualCheckinBooking = data?.bookings.find((b) => b.id === manualCheckinBookingId) ?? null
+
+  const manualCheckinRoom: DashboardRoom | null = manualCheckinBooking
+    ? {
+        room_id: manualCheckinBooking.room_id,
+        room_name: '',
+        room_type: '',
+        capacity: 0,
+        housekeeping_status: 'clean',
+        housekeeping_note: null,
+        booking_id: manualCheckinBooking.id,
+        check_in: manualCheckinBooking.check_in,
+        check_out: manualCheckinBooking.check_out,
+        status: manualCheckinBooking.status,
+        guest_name: manualCheckinBooking.guest_name,
+        guests_count: manualCheckinBooking.guests_count,
+        customer_phone: null,
+        source: null,
+        paid: null,
+        net_revenue: null,
+        price_per_night: null,
+        grand_total: manualCheckinBooking.grand_total,
+        balance_due: null,
+        group_id: effectiveGroupId,
+        group_grand_total: null,
+        group_balance_due: null,
+        group_active_booking_count: null,
+        is_last_active_booking: false,
+        is_blocked: false,
+        block_reason: null,
+      }
+    : null
 
   const totalGrandTotal = data?.grand_total ?? 0
   const balanceDue = data?.balance_due ?? 0
@@ -330,7 +369,8 @@ export default function BookingDetailDrawer({ groupId = null, bookingId = null, 
                     booking={{ ...booking, services: [], discounts: [] }}
                     groupId={effectiveGroupId ?? ''}
                     isCancelling={cancelBookingMutation.isPending}
-                    onCheckin={() => setCheckinImportOpen(true)}
+                    onCheckin={(bookingIdToCheckin) => setManualCheckinBookingId(bookingIdToCheckin)}
+                    onCheckinImport={() => setCheckinImportOpen(true)}
                     onCheckout={(bookingIdToCheckout) => {
                       setCheckoutBookingId(bookingIdToCheckout)
                     }}
@@ -493,6 +533,18 @@ export default function BookingDetailDrawer({ groupId = null, bookingId = null, 
         onSuccess={() => {
           setCheckinImportOpen(false)
 
+          if (effectiveGroupId) {
+            void queryClient.invalidateQueries({ queryKey: ['booking-detail', effectiveGroupId] })
+          }
+        }}
+      />
+
+      <CheckInModal
+        open={!!manualCheckinBookingId}
+        room={manualCheckinRoom}
+        onClose={() => setManualCheckinBookingId(null)}
+        onSuccess={() => {
+          setManualCheckinBookingId(null)
           if (effectiveGroupId) {
             void queryClient.invalidateQueries({ queryKey: ['booking-detail', effectiveGroupId] })
           }
