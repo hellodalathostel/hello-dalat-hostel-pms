@@ -11,7 +11,7 @@
 -- audit-followup-20260902, Việc 3. KHÔNG apply migration này cho tới khi Hiếu và
 -- Claude.ai (Lead Dev) duyệt.
 
-CREATE OR REPLACE FUNCTION public.checkout_last_booking_and_settle_txn(p_booking_id uuid, p_expected_group_grand_total integer, p_expected_group_paid integer, p_payment_method payment_method DEFAULT NULL::payment_method, p_note text DEFAULT NULL::text)
+CREATE OR REPLACE FUNCTION public.checkout_last_booking_and_settle_txn(p_booking_id uuid, p_expected_group_grand_total integer, p_expected_group_paid integer, p_payment_method public.payment_method DEFAULT NULL::public.payment_method, p_note text DEFAULT NULL::text)
  RETURNS json
  LANGUAGE plpgsql
  SECURITY DEFINER
@@ -114,8 +114,10 @@ BEGIN
 END;
 $function$;
 
-REVOKE EXECUTE ON FUNCTION public.checkout_last_booking_and_settle_txn(uuid, integer, integer, payment_method, text) FROM PUBLIC, anon;
-GRANT  EXECUTE ON FUNCTION public.checkout_last_booking_and_settle_txn(uuid, integer, integer, payment_method, text) TO authenticated, service_role;
+ALTER FUNCTION public.checkout_last_booking_and_settle_txn(uuid, integer, integer, public.payment_method, text) OWNER TO postgres;
+
+REVOKE EXECUTE ON FUNCTION public.checkout_last_booking_and_settle_txn(uuid, integer, integer, public.payment_method, text) FROM PUBLIC, anon;
+GRANT  EXECUTE ON FUNCTION public.checkout_last_booking_and_settle_txn(uuid, integer, integer, public.payment_method, text) TO authenticated, service_role;
 
 
 CREATE OR REPLACE FUNCTION public.checkout_single_booking_txn(p_booking_id uuid)
@@ -170,6 +172,8 @@ BEGIN
   RETURN json_build_object('ok', true, 'booking_id', p_booking_id, 'group_id', v_group_id, 'group_closed', false);
 END;
 $function$;
+
+ALTER FUNCTION public.checkout_single_booking_txn(uuid) OWNER TO postgres;
 
 REVOKE EXECUTE ON FUNCTION public.checkout_single_booking_txn(uuid) FROM PUBLIC, anon;
 GRANT  EXECUTE ON FUNCTION public.checkout_single_booking_txn(uuid) TO authenticated, service_role;
