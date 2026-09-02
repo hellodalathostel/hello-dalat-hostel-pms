@@ -1,3 +1,12 @@
+-- ==========================================================================
+-- CANH BAO: 2 ham nay DANG CHAY TREN PRODUCTION (93 luot goi tinh toi 02/09/2026).
+-- Migration goc la BACKFILL — no KHONG tao ra gi moi, chi ghi lai thu da ton tai
+-- tren DB tu 15/07/2026.
+-- ROLLBACK DUNG cua mot backfill la XOA BAN GHI trong
+--   supabase_migrations.schema_migrations
+-- CHU KHONG PHAI drop function. Bo comment may dong DROP ben duoi = giet luong checkout.
+-- ==========================================================================
+
 -- ROLLBACK đối xứng cho 20260902100000_backfill_checkout_rpc_definitions.sql
 --
 -- CỐ Ý không đánh số migration (không có prefix YYYYMMDDHHMMSS) — Supabase CLI sẽ
