@@ -1,0 +1,25 @@
+-- ROLLBACK đối xứng cho 20260902100000_backfill_checkout_rpc_definitions.sql
+--
+-- CỐ Ý không đánh số migration (không có prefix YYYYMMDDHHMMSS) — Supabase CLI sẽ
+-- KHÔNG tự chạy file này trong `migration up`. Đây chỉ là bản lưu tham khảo, không
+-- phải thao tác an toàn để chạy tuỳ tiện.
+--
+-- CẢNH BÁO: đối xứng thật của CREATE OR REPLACE FUNCTION là DROP FUNCTION. Nhưng
+-- 2 hàm này KHÔNG phải do migration 20260902100000 tạo ra — chúng đã tồn tại và
+-- đang chạy production từ 15/07/2026 (checkout_last_booking_and_settle_txn: 80 lượt
+-- gọi tích luỹ, checkout_single_booking_txn: 13 lượt, theo pg_stat_statements audit
+-- 02/09/2026). Toàn bộ luồng checkout hiện tại (useCheckOut.ts, useCheckoutBooking.ts,
+-- useBookingFolio.ts) phụ thuộc trực tiếp vào 2 hàm này.
+--
+-- CHẠY DROP FUNCTION DƯỚI ĐÂY TRÊN PRODUCTION SẼ LÀM GÃY LUỒNG CHECKOUT NGAY LẬP TỨC
+-- (PGRST202 / function does not exist) — đúng loại lỗi mà Việc 1 của audit này đã
+-- xác nhận KHÔNG xảy ra với checkout_booking (đã deprecate an toàn). Đừng tạo lại
+-- tình huống đó với 2 hàm đang sống.
+--
+-- Chỉ dùng file này nếu: quyết định KHÔNG backfill migration này nữa (Hiếu +
+-- Claude.ai không duyệt) VÀ đã xác nhận không còn code nào gọi 2 hàm này nữa
+-- (tức là sau khi đã thay thế bằng hàm khác, tương tự trường hợp checkout_booking_txn
+-- / checkout_group_txn đã deprecate theo quyết định 15/07/2026).
+
+-- DROP FUNCTION public.checkout_last_booking_and_settle_txn(uuid, integer, integer, payment_method, text);
+-- DROP FUNCTION public.checkout_single_booking_txn(uuid);
