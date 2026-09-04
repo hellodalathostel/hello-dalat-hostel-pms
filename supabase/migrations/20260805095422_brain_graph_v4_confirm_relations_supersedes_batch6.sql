@@ -1,0 +1,18 @@
+-- ============================================================================
+-- KHOI PHUC TU supabase_migrations.schema_migrations NGAY 04/09/2026.
+-- Migration nay DA APPLY tren production tu 05/08/2026.
+-- File duoc ghi nguoc ra de repo khop voi DB — KHONG apply lai.
+-- ============================================================================
+
+-- Confirm relation supersedes duy nhat vua populate (batch6)
+-- Dung dung RPC confirm_relation()
+
+DO $$
+DECLARE
+  r record;
+BEGIN
+  FOR r IN SELECT id FROM brain.relations WHERE predicate = 'supersedes' AND review_status = 'suggested'
+  LOOP
+    PERFORM brain.confirm_relation(r.id);
+  END LOOP;
+END $$;
