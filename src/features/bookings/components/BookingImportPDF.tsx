@@ -242,7 +242,7 @@ const BookingImportPDF: React.FC<BookingImportPDFProps> = ({ onParsed, onImport 
 
       {/* Preview */}
       {parsed && (
-        <div style={{ background: '#fafafa', padding: 16, borderRadius: 8, border: '1px solid #e8e8e8' }}>
+        <div style={{ background: 'var(--surface-raised)', padding: 16, borderRadius: 8, border: '1px solid var(--rule)' }}>
           <Typography.Title level={5} style={{ marginBottom: 12 }}>
             Xem trước dữ liệu #{parsed.bookingNumber ?? '—'}
           </Typography.Title>

@@ -313,7 +313,7 @@ export default function BookPage() {
 const styles = {
   pageWrapper: {
     minHeight: '100vh',
-    background: '#f5f5f5',
+    background: 'var(--bg)',
     display: 'flex',
     alignItems: 'flex-start',
     justifyContent: 'center',
@@ -334,8 +334,8 @@ const styles = {
 
   qrCard: {
     textAlign: 'center',
-    background: '#fafafa',
-    border: '1px solid #e8e8e8',
+    background: 'var(--surface-raised)',
+    border: '1px solid var(--rule)',
   } as CSSProperties,
 
   qrImage: {

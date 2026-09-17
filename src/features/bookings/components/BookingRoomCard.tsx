@@ -113,10 +113,10 @@ export function BookingRoomCard({
     >
       <div
         style={{
-          border: '1px solid #f0f0f0',
+          border: '1px solid var(--rule)',
           borderRadius: 8,
           padding: '12px 16px',
-          background: booking.status === 'cancelled' ? '#fafafa' : '#fff',
+          background: booking.status === 'cancelled' ? 'var(--surface-sunken)' : 'var(--surface)',
           overflowX: 'hidden',
         }}
       >
@@ -207,7 +207,7 @@ export function BookingRoomCard({
 
         {/* Action buttons — hiển thị có điều kiện theo status */}
         {(status !== 'cancelled') && (
-          <div style={{ marginTop: 12, borderTop: '1px solid #f0f0f0', paddingTop: 12 }}>
+          <div style={{ marginTop: 12, borderTop: '1px solid var(--rule)', paddingTop: 12 }}>
             <Space wrap size="small">
               {/* Check-in */}
               {canCheckin && (

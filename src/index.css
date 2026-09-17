@@ -418,6 +418,14 @@ body {
   background-color: #ffebe8 !important;
 }
 
+[data-theme='dark'] .ota-row-conflict td {
+  background-color: #3d1f1c !important;
+}
+
+[data-theme='dark'] .ota-row-conflict:hover td {
+  background-color: #4a2521 !important;
+}
+
 /* ============================================================
    DARK MODE — cột đặc biệt trong lịch phòng (hôm nay / weekend / lễ)
    Bản light ở trên giữ nguyên; khối này chỉ áp khi [data-theme='dark'],
