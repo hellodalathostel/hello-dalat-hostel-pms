@@ -116,7 +116,7 @@ export function BookingRoomCard({
           border: '1px solid var(--rule)',
           borderRadius: 8,
           padding: '12px 16px',
-          background: booking.status === 'cancelled' ? 'var(--surface-raised)' : 'var(--surface)',
+          background: booking.status === 'cancelled' ? 'var(--surface-sunken)' : 'var(--surface)',
           overflowX: 'hidden',
         }}
       >
