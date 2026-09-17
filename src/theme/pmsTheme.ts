@@ -5,6 +5,7 @@
  * once at app root, then wrap app with <ConfigProvider theme={getPmsTheme(mode)}>.
  */
 import type { ThemeConfig } from 'antd'
+import { theme as antdTheme } from 'antd'
 
 // ---- Raw values mirrored from tokens.css (AntD không đọc CSS var trực tiếp) ----
 const palette = {
@@ -43,7 +44,12 @@ const palette = {
 export function getPmsTheme(mode: 'light' | 'dark' = 'light'): ThemeConfig {
   const c = palette[mode]
   return {
-    algorithm: undefined, // dark palette không phải đảo cơ học, set token rõ ràng
+    // algorithm derive các token AntD không được set tường minh ở dưới
+    // (colorBgElevated, colorTextDescription, colorFillQuaternary...).
+    // Không dùng undefined — AntD sẽ ngầm rơi về defaultAlgorithm (light)
+    // cho các token đó dù mode đang là dark. Xem brain.decisions việc
+    // sửa 2026-09-17 — bug Modal trắng + text đen trên dark mode.
+    algorithm: mode === 'dark' ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
     token: {
       colorPrimary: c.accent,
       colorBgLayout: c.bg,
