@@ -75,16 +75,16 @@
   --rule: #2E2E2B;
   --rule-strong: #3D3D38;
 
-  --signal-go: #8FA37D;
-  --signal-go-bg: #232A1F;
-  --signal-hold: #D98256;
-  --signal-hold-bg: #2E2018;
-  --signal-stop: #E06A6A;
-  --signal-stop-bg: #2E1A1A;
-  --signal-occupied: #ACACB4;
-  --signal-occupied-bg: #232325;
-  --signal-checkout: #D9B563;
-  --signal-checkout-bg: #332C18;
+  --signal-go: #A8D68F;
+  --signal-go-bg: #1E2E17;
+  --signal-hold: #FF9D6E;
+  --signal-hold-bg: #33200F;
+  --signal-stop: #FF7A7A;
+  --signal-stop-bg: #331414;
+  --signal-occupied: #D4D4DC;
+  --signal-occupied-bg: #2A2A30;
+  --signal-checkout: #F0C868;
+  --signal-checkout-bg: #362A0D;
 
   --accent: #F0F0EC;          /* = --ink dark mode — đã tách khỏi --signal-hold */
   --accent-ink: #14141A;
