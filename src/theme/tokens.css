@@ -66,14 +66,14 @@
 
 /* ---- Dark mode ---- */
 [data-theme='dark'] {
-  --bg: #121212;
-  --surface: #1B1B1A;
-  --surface-raised: #232322;
+  --bg: #0F0F0F;
+  --surface: #1A1A1A;
+  --surface-raised: #232323;
   --ink: #F0F0EC;
-  --ink-dim: #9A9A93;
-  --ink-faint: #6B6B66;
-  --rule: #2E2E2B;
-  --rule-strong: #3D3D38;
+  --ink-dim: #ABABA4;
+  --ink-faint: #7A7A73;
+  --rule: #3A3A36;
+  --rule-strong: #4D4D47;
 
   --signal-go: #A8D68F;
   --signal-go-bg: #1E2E17;
@@ -88,9 +88,9 @@
 
   --accent: #F0F0EC;          /* = --ink dark mode — đã tách khỏi --signal-hold */
   --accent-ink: #14141A;
-  --accent-soft: #232325;
+  --accent-soft: #2A2A2A;
 
-  --shadow-overlay: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --shadow-overlay: 0 8px 24px rgba(0, 0, 0, 0.6);
 }
 
 /* ---- Base reset for operator board feel ---- */

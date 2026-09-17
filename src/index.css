@@ -417,3 +417,42 @@ body {
 .ota-row-conflict:hover td {
   background-color: #ffebe8 !important;
 }
+
+/* ============================================================
+   DARK MODE — cột đặc biệt trong lịch phòng (hôm nay / weekend / lễ)
+   Bản light ở trên giữ nguyên; khối này chỉ áp khi [data-theme='dark'],
+   vì dùng chung 1 giá trị cho cả 2 mode sẽ hỏng light (ô tối giữa bảng sáng).
+   ============================================================ */
+[data-theme='dark'] .calendar-date-header--today {
+  border-left: 2px solid #5B9BFF;
+  border-right: 2px solid #5B9BFF;
+  background: #142235;
+}
+
+[data-theme='dark'] .calendar-vacant-cell--today {
+  border-left: 1px solid rgba(91, 155, 255, 0.35);
+  border-right: 1px solid rgba(91, 155, 255, 0.35);
+  background: rgba(91, 155, 255, 0.08);
+}
+
+[data-theme='dark'] .calendar-date-header--weekend {
+  background: #202024;
+}
+
+[data-theme='dark'] .calendar-vacant-cell--weekend {
+  background: rgba(150, 150, 158, 0.06);
+}
+
+[data-theme='dark'] .calendar-date-header--holiday {
+  background: #2E2410;
+  border-left: 2px solid #E0A93A;
+  border-right: 2px solid #E0A93A;
+}
+
+[data-theme='dark'] .calendar-vacant-cell--holiday {
+  background: rgba(224, 169, 58, 0.08);
+}
+
+[data-theme='dark'] .calendar-date-header--today.calendar-date-header--holiday {
+  background: #3D3216;
+}
