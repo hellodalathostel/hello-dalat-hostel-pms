@@ -22,6 +22,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { usePendingRequestCount } from '@/features/booking-requests/hooks/useBookingRequests'
 import { BottomNav } from '@/features/layout/components/BottomNav'
 import { useBreakpoint } from '@/shared/hooks/useBreakpoint'
+import { ThemeToggle } from '@/theme/ThemeToggle'
 
 const { Header, Content } = Layout
 
@@ -100,15 +101,18 @@ export function MainLayout(): JSX.Element {
             {isMobile ? 'PMS' : 'Hệ thống PMS / CRM'}
           </Typography.Title>
         </Space>
-        {!isMobile && (
-          <Menu
-            mode="horizontal"
-            items={menuItems}
-            selectedKeys={selectedKeys}
-            onClick={(event) => navigate(event.key)}
-            className="main-menu"
-          />
-        )}
+        <Space size={16} align="center">
+          {!isMobile && (
+            <Menu
+              mode="horizontal"
+              items={menuItems}
+              selectedKeys={selectedKeys}
+              onClick={(event) => navigate(event.key)}
+              className="main-menu"
+            />
+          )}
+          <ThemeToggle />
+        </Space>
       </Header>
       <Content
         className="main-content"
