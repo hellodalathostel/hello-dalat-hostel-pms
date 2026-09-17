@@ -207,8 +207,8 @@ export function CheckoutModal({ bookingId, open, onClose }: Props) {
 
           <div
             style={{
-              background: '#fafafa',
-              border: '1px solid #f0f0f0',
+              background: 'var(--surface-raised)',
+              border: '1px solid var(--rule)',
               borderRadius: 8,
               padding: '12px 16px',
               marginBottom: 16,
@@ -337,8 +337,8 @@ export function CheckoutModal({ bookingId, open, onClose }: Props) {
             {paymentMethod === 'card' && (
               <div
                 style={{
-                  background: '#fffbe6',
-                  border: '1px solid #ffe58f',
+                  background: 'var(--signal-hold-bg)',
+                  border: '1px solid var(--signal-hold)',
                   borderRadius: 8,
                   padding: '12px 16px',
                 }}

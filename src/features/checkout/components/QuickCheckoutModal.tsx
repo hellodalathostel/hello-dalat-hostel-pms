@@ -181,8 +181,8 @@ export function QuickCheckoutModal({ target, onClose }: CheckoutModalProps) {
             {paymentMethod === 'card' && (
               <div
                 style={{
-                  background: '#fffbe6',
-                  border: '1px solid #ffe58f',
+                  background: 'var(--signal-hold-bg)',
+                  border: '1px solid var(--signal-hold)',
                   borderRadius: 8,
                   padding: '10px 12px',
                 }}
