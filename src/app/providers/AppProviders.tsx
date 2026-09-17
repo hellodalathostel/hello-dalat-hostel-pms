@@ -1,10 +1,12 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { App as AntdApp, ConfigProvider, theme } from 'antd'
+import { App as AntdApp, ConfigProvider } from 'antd'
 import viVN from 'antd/locale/vi_VN'
 import dayjs from 'dayjs'
 import 'dayjs/locale/vi'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { JSX, PropsWithChildren } from 'react'
+import { getPmsTheme } from '@/theme/pmsTheme'
+import { useThemeStore } from '@/stores/useThemeStore'
 
 dayjs.locale('vi')
 
@@ -23,18 +25,15 @@ export function AppProviders({ children }: AppProvidersProps): JSX.Element {
       }),
   )
 
+  const mode = useThemeStore((state) => state.mode)
+
+  // Set data-theme lên <html> để tokens.css (CSS variable) áp dụng đúng mode
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', mode)
+  }, [mode])
+
   return (
-    <ConfigProvider
-      locale={viVN}
-      theme={{
-        token: {
-          colorPrimary: '#0d8a6a',
-          borderRadius: 10,
-          fontFamily: '"Be Vietnam Pro", "Noto Sans", sans-serif',
-        },
-        algorithm: theme.defaultAlgorithm,
-      }}
-    >
+    <ConfigProvider locale={viVN} theme={getPmsTheme(mode)}>
       <AntdApp>
         <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
       </AntdApp>

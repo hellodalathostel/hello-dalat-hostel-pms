@@ -5,6 +5,7 @@
  * once at app root, then wrap app with <ConfigProvider theme={getPmsTheme(mode)}>.
  */
 import type { ThemeConfig } from 'antd'
+import { theme as antdTheme } from 'antd'
 
 // ---- Raw values mirrored from tokens.css (AntD không đọc CSS var trực tiếp) ----
 const palette = {
@@ -24,26 +25,31 @@ const palette = {
     stopBg: '#F5DEDE',
   },
   dark: {
-    bg: '#121212',
-    surface: '#1B1B1A',
+    bg: '#0F0F0F',
+    surface: '#1A1A1A',
     ink: '#F0F0EC',
-    inkDim: '#9A9A93',
-    rule: '#2E2E2B',
+    inkDim: '#ABABA4',
+    rule: '#3A3A36',
     accent: '#F0F0EC',      // trước: '#D98256' — đã tách khỏi --signal-hold
     accentInk: '#14141A',
-    go: '#8FA37D',
-    goBg: '#232A1F',
-    hold: '#D98256',
-    holdBg: '#2E2018',
-    stop: '#E06A6A',
-    stopBg: '#2E1A1A',
+    go: '#A8D68F',
+    goBg: '#1E2E17',
+    hold: '#FF9D6E',
+    holdBg: '#33200F',
+    stop: '#FF7A7A',
+    stopBg: '#331414',
   },
 } as const
 
 export function getPmsTheme(mode: 'light' | 'dark' = 'light'): ThemeConfig {
   const c = palette[mode]
   return {
-    algorithm: undefined, // dark palette không phải đảo cơ học, set token rõ ràng
+    // algorithm derive các token AntD không được set tường minh ở dưới
+    // (colorBgElevated, colorTextDescription, colorFillQuaternary...).
+    // Không dùng undefined — AntD sẽ ngầm rơi về defaultAlgorithm (light)
+    // cho các token đó dù mode đang là dark. Xem brain.decisions việc
+    // sửa 2026-09-17 — bug Modal trắng + text đen trên dark mode.
+    algorithm: mode === 'dark' ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
     token: {
       colorPrimary: c.accent,
       colorBgLayout: c.bg,
