@@ -6,6 +6,7 @@ import { useCallback, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { CalendarEvent, RoomRow } from '@/types/calendar'
 import { computeCalendarBlockLayout } from '@/features/calendar/utils/calendarBlockLayout'
+import { useHolidayMap } from '@/features/calendar/hooks/useHolidays'
 import { HousekeepingBadge } from './HousekeepingBadge'
 
 interface CalendarTimelineProps {
@@ -37,6 +38,11 @@ function formatEventTime(dateTime: string | null): string {
 
 function isToday(date: string): boolean {
   return dayjs(date).isSame(dayjs(), 'day')
+}
+
+function isWeekend(date: string): boolean {
+  const day = dayjs(date).day() // 0 = Chủ Nhật, 6 = Thứ 7
+  return day === 0 || day === 6
 }
 
 function useDragScroll() {
@@ -127,6 +133,7 @@ function useDragScroll() {
 export function CalendarTimeline({ dates, rooms, onBookingClick }: CalendarTimelineProps): JSX.Element {
   const navigate = useNavigate()
   const { wrapperRef, isDragging, onPointerDown, onPointerMove, onPointerUp } = useDragScroll()
+  const holidayMap = useHolidayMap()
 
   const numDays = dates.length
   const gridWidth = ROOM_COLUMN_WIDTH + numDays * DAY_COLUMN_WIDTH
@@ -177,15 +184,34 @@ export function CalendarTimeline({ dates, rooms, onBookingClick }: CalendarTimel
         <div className="calendar-grid" style={{ width: gridWidth, gridTemplateColumns }}>
           {/* Header row */}
           <div className="calendar-grid-cell calendar-room-header">Phòng</div>
-          {dates.map((date) => (
-            <div
-              key={date}
-              className={`calendar-grid-cell calendar-date-header${isToday(date) ? ' calendar-date-header--today' : ''}`}
-            >
-              <div>{formatHeaderDate(date)}</div>
-              <Typography.Text type="secondary">{formatWeekday(date)}</Typography.Text>
-            </div>
-          ))}
+          {dates.map((date) => {
+            const holiday = holidayMap.get(date)
+            const headerClass = [
+              'calendar-grid-cell',
+              'calendar-date-header',
+              isToday(date) ? 'calendar-date-header--today' : '',
+              !holiday && isWeekend(date) ? 'calendar-date-header--weekend' : '',
+              holiday ? 'calendar-date-header--holiday' : '',
+            ]
+              .filter(Boolean)
+              .join(' ')
+
+            const headerContent = (
+              <div key={date} className={headerClass}>
+                <div>{formatHeaderDate(date)}</div>
+                <Typography.Text type="secondary">{formatWeekday(date)}</Typography.Text>
+              </div>
+            )
+
+            // Có ngày lễ — bọc Tooltip hiện tên lễ khi hover
+            return holiday ? (
+              <Tooltip key={date} title={holiday.name}>
+                {headerContent}
+              </Tooltip>
+            ) : (
+              headerContent
+            )
+          })}
 
           {/* Room rows */}
           {rooms.map((room) => (
@@ -211,32 +237,44 @@ export function CalendarTimeline({ dates, rooms, onBookingClick }: CalendarTimel
                 className="calendar-vacant-layer"
                 style={{ left: ROOM_COLUMN_WIDTH, width: numDays * DAY_COLUMN_WIDTH }}
               >
-                {dates.map((date) => (
-                  <div
-                    key={date}
-                    className={`calendar-vacant-cell${isToday(date) ? ' calendar-vacant-cell--today' : ''}`}
-                    style={{ width: DAY_COLUMN_WIDTH }}
-                    onClick={() => handleCellClick(room.room_id, date)}
-                  >
-                    <Button
-                      type="default"
-                      size="small"
-                      icon={<PlusOutlined />}
-                      className="calendar-add-button"
-                      onClick={(event) => {
-                        event.stopPropagation()
+                {dates.map((date) => {
+                  const holiday = holidayMap.get(date)
+                  const vacantClass = [
+                    'calendar-vacant-cell',
+                    isToday(date) ? 'calendar-vacant-cell--today' : '',
+                    !holiday && isWeekend(date) ? 'calendar-vacant-cell--weekend' : '',
+                    holiday ? 'calendar-vacant-cell--holiday' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')
 
-                        if (isDragging) {
-                          return
-                        }
-
-                        navigate(`/new-booking?roomId=${room.room_id}&checkIn=${date}`)
-                      }}
+                  return (
+                    <div
+                      key={date}
+                      className={vacantClass}
+                      style={{ width: DAY_COLUMN_WIDTH }}
+                      onClick={() => handleCellClick(room.room_id, date)}
                     >
-                      Add
-                    </Button>
-                  </div>
-                ))}
+                      <Button
+                        type="default"
+                        size="small"
+                        icon={<PlusOutlined />}
+                        className="calendar-add-button"
+                        onClick={(event) => {
+                          event.stopPropagation()
+
+                          if (isDragging) {
+                            return
+                          }
+
+                          navigate(`/new-booking?roomId=${room.room_id}&checkIn=${date}`)
+                        }}
+                      >
+                        Add
+                      </Button>
+                    </div>
+                  )
+                })}
               </div>
 
               {/* Block layer — absolute positioned theo % */}

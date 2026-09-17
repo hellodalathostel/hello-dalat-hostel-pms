@@ -361,6 +361,37 @@ body {
   background: rgba(37, 99, 235, 0.04);
 }
 
+/* Thứ 7 / Chủ Nhật — nền xám nhạt, phân biệt với ngày thường.
+   Ưu tiên thấp hơn ngày lễ (xem .calendar-date-header--holiday dưới) và
+   thấp hơn "hôm nay" — logic ưu tiên đã xử lý ở component (không gắn
+   class weekend nếu ngày đó là ngày lễ). */
+.calendar-date-header--weekend {
+  background: #F1F5F9;
+}
+
+.calendar-vacant-cell--weekend {
+  background: rgba(100, 116, 139, 0.05);
+}
+
+/* Ngày lễ/nghỉ bù — tô nền vàng, viền cam để nổi bật nhất trong 3 loại
+   (đã chốt: dùng vàng vì khác biệt rõ với xanh dương của "hôm nay" và
+   xám của weekend) */
+.calendar-date-header--holiday {
+  background: #FEF3C7;
+  border-left: 2px solid #D97706;
+  border-right: 2px solid #D97706;
+}
+
+.calendar-vacant-cell--holiday {
+  background: rgba(217, 119, 6, 0.06);
+}
+
+/* Ngày vừa là hôm nay vừa là lễ — giữ viền xanh của "hôm nay", thêm nền
+   vàng đậm hơn để không mất tín hiệu "hôm nay" nhưng vẫn thấy rõ là lễ */
+.calendar-date-header--today.calendar-date-header--holiday {
+  background: #FDE68A;
+}
+
 @media (max-width: 992px) {
   .calendar-room-row {
     height: 56px !important;
