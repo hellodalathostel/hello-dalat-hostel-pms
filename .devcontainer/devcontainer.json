@@ -14,5 +14,5 @@
       ]
     }
   },
-  "postCreateCommand": "npm install && npm install -g supabase"
+  "postCreateCommand": "pnpm install && npm install -g supabase"
 }
