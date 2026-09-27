@@ -6,8 +6,14 @@
 //
 // Auth: theo convention job hàng ngày/tuần khác trong project — dùng
 // pms_service_role_jwt qua header Authorization Bearer.
+//
+// Heartbeat: mọi nhánh return đều gọi reportRun() để Ops Guardian thấy job
+// chạy (job_registry 'hotel-kpi-snapshot', expected_interval 31 days).
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { reportRun } from "../_shared/heartbeat.ts";
+
+const JOB = "hotel-kpi-snapshot";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -17,7 +23,9 @@ const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 // SỬA SỐ NÀY THEO — không tự đồng bộ động để tránh gọi thêm 1 query.
 const REVPAR_TARGET = 186760;
 
-Deno.serve(async (req) => {
+Deno.serve(async (_req) => {
+  const t0 = performance.now();
+
   try {
     const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
@@ -35,11 +43,10 @@ Deno.serve(async (req) => {
       .single();
 
     if (kpiError || !kpi) {
+      const msg = `Không lấy được KPI tháng ${monthStr}: ${kpiError?.message ?? "no data"}`;
+      await reportRun(JOB, "error", t0, { month: monthStr }, msg);
       return new Response(
-        JSON.stringify({
-          ok: false,
-          error: `Không lấy được KPI tháng ${monthStr}: ${kpiError?.message ?? "no data"}`,
-        }),
+        JSON.stringify({ ok: false, error: msg }),
         { status: 500, headers: { "Content-Type": "application/json" } },
       );
     }
@@ -67,19 +74,24 @@ Deno.serve(async (req) => {
       );
 
     if (insertError) {
+      await reportRun(JOB, "error", t0, { month: monthStr }, insertError.message);
       return new Response(
         JSON.stringify({ ok: false, error: insertError.message }),
         { status: 500, headers: { "Content-Type": "application/json" } },
       );
     }
 
+    await reportRun(JOB, "ok", t0, { month: monthStr, revpar: kpi.revpar });
+
     return new Response(
       JSON.stringify({ ok: true, month: monthStr, revpar: kpi.revpar }),
       { status: 200, headers: { "Content-Type": "application/json" } },
     );
   } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    await reportRun(JOB, "error", t0, null, msg);
     return new Response(
-      JSON.stringify({ ok: false, error: String(err) }),
+      JSON.stringify({ ok: false, error: msg }),
       { status: 500, headers: { "Content-Type": "application/json" } },
     );
   }
