@@ -1,0 +1,207 @@
+name: DB Backup
+
+# Backup hằng đêm lúc 03:17 ICT (20:17 UTC). Chạy tay: Actions → DB Backup → Run workflow.
+# Tick "restore_test" để thử restore file vừa backup vào Postgres tạm (không đụng DB thật).
+on:
+  schedule:
+    - cron: '17 20 * * *'
+  workflow_dispatch:
+    inputs:
+      restore_test:
+        description: 'Thử restore vào Postgres tạm sau khi backup'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: db-backup
+  cancel-in-progress: false
+
+env:
+  # Các schema do mình sở hữu. Thêm schema mới vào đây (cách nhau bằng dấu cách).
+  SCHEMAS: 'public brain automation'
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      pg_major: ${{ steps.ver.outputs.major }}
+      artifact_name: ${{ steps.dump.outputs.base }}
+    steps:
+      - name: Kiểm tra secret
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ] || [ -z "$BACKUP_PASSPHRASE" ]; then
+            echo "::error::Thiếu secret SUPABASE_DB_URL hoặc BACKUP_PASSPHRASE (Settings → Secrets and variables → Actions)"
+            exit 1
+          fi
+
+      # pg_dump phải có phiên bản >= server, nên đọc phiên bản server trước rồi cài đúng bản client.
+      - name: Xác định phiên bản Postgres của server
+        id: ver
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -euo pipefail
+          command -v psql >/dev/null || sudo apt-get install -y -qq postgresql-client
+          num=$(psql "$SUPABASE_DB_URL" -Atc "SHOW server_version_num")
+          major=$((num / 10000))
+          echo "Server Postgres major: $major"
+          echo "major=$major" >> "$GITHUB_OUTPUT"
+
+      - name: Cài pg_dump đúng phiên bản
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y -qq postgresql-client-${{ steps.ver.outputs.major }}
+          echo "/usr/lib/postgresql/${{ steps.ver.outputs.major }}/bin" >> "$GITHUB_PATH"
+
+      - name: Dump, kiểm tra và mã hoá
+        id: dump
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          pg_dump --version
+
+          base="hd-db-backup-$(TZ=Asia/Ho_Chi_Minh date +%Y%m%d-%H%M)"
+          args=()
+          for s in $SCHEMAS; do args+=("--schema=$s"); done
+
+          # --no-owner: owner là role nội bộ Supabase, không cần khi restore.
+          # Giữ nguyên GRANT/ACL để có bản ghi trạng thái quyền (anon/authenticated/service_role).
+          pg_dump "$SUPABASE_DB_URL" \
+            --format=custom --compress=6 --no-owner \
+            "${args[@]}" \
+            --file="$base.dump"
+
+          # Kiểm tra file đọc được và không rỗng bất thường
+          pg_restore --list "$base.dump" > toc.txt
+          tables=$(grep -c " TABLE DATA " toc.txt || true)
+          size=$(stat -c%s "$base.dump")
+          echo "Dump: $size bytes, $tables bảng có dữ liệu"
+          if [ "$size" -lt 20000 ] || [ "$tables" -lt 5 ]; then
+            echo "::error::Dump bất thường (size=$size, tables=$tables) - kiểm tra SUPABASE_DB_URL và SCHEMAS"
+            exit 1
+          fi
+
+          # Mã hoá AES256 (DB có PII khách, không để file dump trần trên GitHub)
+          printf '%s' "$BACKUP_PASSPHRASE" | gpg --batch --yes --pinentry-mode loopback \
+            --passphrase-fd 0 --symmetric --cipher-algo AES256 \
+            --output "$base.dump.gpg" "$base.dump"
+          rm -f "$base.dump" toc.txt
+
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+          {
+            echo "### DB Backup"
+            echo "- File: \`$base.dump.gpg\`"
+            echo "- Dung lượng dump gốc: $size bytes"
+            echo "- Bảng có dữ liệu: $tables"
+            echo "- Postgres server: ${{ steps.ver.outputs.major }}"
+            echo "- Schema: $SCHEMAS"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.dump.outputs.base }}
+          path: ${{ steps.dump.outputs.base }}.dump.gpg
+          retention-days: 30
+          if-no-files-found: error
+
+  # Chỉ chạy khi bấm tay và tick restore_test. Restore vào Postgres tạm trong runner.
+  restore-test:
+    needs: backup
+    if: ${{ inputs.restore_test }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: pgvector/pgvector:pg${{ needs.backup.outputs.pg_major }}
+        env:
+          POSTGRES_PASSWORD: restore_test_pw
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGUSER: postgres
+      PGPASSWORD: restore_test_pw
+      PGDATABASE: postgres
+    steps:
+      - name: Tải artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.backup.outputs.artifact_name }}
+          path: backup
+
+      - name: Cài client đúng phiên bản
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y -qq postgresql-client-${{ needs.backup.outputs.pg_major }}
+          echo "/usr/lib/postgresql/${{ needs.backup.outputs.pg_major }}/bin" >> "$GITHUB_PATH"
+
+      - name: Giải mã
+        env:
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$BACKUP_PASSPHRASE" | gpg --batch --yes --pinentry-mode loopback \
+            --passphrase-fd 0 --decrypt \
+            --output restore.dump backup/*.dump.gpg
+
+      # Dựng sẵn thứ mà dump tham chiếu tới nhưng nằm ngoài các schema đã backup:
+      # role Supabase, extension vector (schema extensions), và stub auth.* cho policy/FK.
+      - name: Chuẩn bị môi trường giả lập Supabase
+        run: |
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE anon NOLOGIN;
+          CREATE ROLE authenticated NOLOGIN;
+          CREATE ROLE service_role NOLOGIN BYPASSRLS;
+          CREATE SCHEMA extensions;
+          CREATE EXTENSION vector WITH SCHEMA extensions;
+          CREATE SCHEMA auth;
+          CREATE TABLE auth.users (id uuid PRIMARY KEY, email text);
+          CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT NULL::uuid $$;
+          CREATE FUNCTION auth.role() RETURNS text LANGUAGE sql STABLE AS $$ SELECT NULL::text $$;
+          CREATE FUNCTION auth.jwt() RETURNS jsonb LANGUAGE sql STABLE AS $$ SELECT '{}'::jsonb $$;
+          SQL
+
+      - name: Restore và báo cáo
+        run: |
+          set +e
+          pg_restore --no-owner --no-privileges --dbname "$PGDATABASE" restore.dump 2> restore.log
+          set -e
+          errors=$(grep -c "error:" restore.log || true)
+          psql -c "ANALYZE" > /dev/null
+          {
+            echo "### Restore test"
+            echo "- Số dòng lỗi khi restore: $errors"
+            echo ""
+            echo "**20 bảng nhiều dòng nhất sau restore** (so với DB thật):"
+            echo '```'
+            psql -Atc "SELECT schemaname || '.' || relname || ' = ' || n_live_tup FROM pg_stat_user_tables ORDER BY n_live_tup DESC LIMIT 20"
+            echo '```'
+            if [ "$errors" -gt 0 ]; then
+              echo "**Lỗi đầu tiên (tối đa 30 dòng):**"
+              echo '```'
+              grep "error:" restore.log | head -30
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          cat restore.log | tail -50
