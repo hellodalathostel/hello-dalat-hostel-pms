@@ -175,6 +175,9 @@ jobs:
           CREATE ROLE service_role NOLOGIN BYPASSRLS;
           CREATE SCHEMA extensions;
           CREATE EXTENSION vector WITH SCHEMA extensions;
+          CREATE EXTENSION "uuid-ossp" WITH SCHEMA extensions;
+          CREATE EXTENSION pgcrypto WITH SCHEMA extensions;
+          CREATE EXTENSION btree_gist WITH SCHEMA public;
           CREATE SCHEMA auth;
           CREATE TABLE auth.users (id uuid PRIMARY KEY, email text);
           CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT NULL::uuid $$;
