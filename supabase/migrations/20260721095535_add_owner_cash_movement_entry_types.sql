@@ -1,4 +1,4 @@
-﻿-- Them 2 entry_type cho luong tien giua ket hostel va Hieu (owner).
+-- Them 2 entry_type cho luong tien giua ket hostel va Hieu (owner).
 -- Dong thoi rang buoc direction phai khop entry_type (fix bug RPC
 -- cho phep tao 'in' + 'petty_expense' -> chi phi lam tang quy).
 
@@ -35,7 +35,7 @@ COMMENT ON CONSTRAINT cash_book_entries_direction_matches_type
   'Moi entry_type co chieu tien co dinh. Ngan tao chi phi lam tang quy hoac nguoc lai.';
 
 COMMENT ON COLUMN public.cash_book_entries.entry_type IS
-  'owner_withdrawal = tien ra khoi ket ve tay Hieu (gop ca truong hop Loi giao tien va Hieu rut tieu rieng - ghi ro muc dich vao description). owner_contribution = Hieu bo tien vao ket.';
+  'owner_withdrawal = tien ra khoi ket ve tay Hieu (gop ca truong hop Loi giao tien va Hieu rut tieu rieng — ghi ro muc dich vao description). owner_contribution = Hieu bo tien vao ket.';
 
 -- RPC tu suy ra direction, khong de frontend truyen sai
 CREATE OR REPLACE FUNCTION public.add_cash_book_entry_txn(

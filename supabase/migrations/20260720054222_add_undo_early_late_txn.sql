@@ -1,10 +1,22 @@
--- Adds undo_early_late_txn: reverts an applied Early Check-in / Late Check-out.
+
+-- RPC mới: undo_early_late_txn — hủy Early Check-in / Late Check-out đã áp dụng.
+-- Bổ sung theo brain.decisions "fix bug đội tiền phòng" (2026-07-20) — RPC
+-- add_early_late_txn mới không còn extend check_in/check_out mà tạo room_blocks
+-- riêng, nên cần RPC undo tương ứng để dọn cả booking_services lẫn room_blocks.
 --
--- Deletes the associated booking_services fee row and room_blocks row (if any
--- — bookings created before the add_early_late_txn no-date-shift fix won't
--- have a matching block), then resets has_early_check_in/has_late_check_out.
--- Blocked on checked-out/cancelled bookings.
-BEGIN;
+-- Logic:
+--   1. Tìm dòng booking_services khớp booking_id + name ('Early Check-in'/
+--      'Late Check-out'), xóa qua delete_booking_service_txn hiện có.
+--   2. Tìm room_blocks khớp room_id + đúng khoảng ngày liền kề + note chứa
+--      booking_id rút gọn 8 ký tự, xóa qua delete_room_block_txn hiện có.
+--      Nếu không tìm thấy (booking cũ trước migration fix, không có block)
+--      -> vẫn cho qua, chỉ báo block_deleted=false, không phải lỗi.
+--   3. Reset has_early_check_in / has_late_check_out = false.
+--   4. Chặn undo nếu booking đã checked-out/cancelled (khớp
+--      ACTION_STATUSES.canEarlyLate ở frontend).
+-- Không role-check Owner-only theo nguyên tắc #3 (Owner/Staff full CRUD).
+-- Đã test bằng BEGIN...ROLLBACK: undo có block, undo không có block (booking
+-- cũ), undo trên checked-out (bị chặn đúng).
 
 CREATE OR REPLACE FUNCTION public.undo_early_late_txn(p_booking_id uuid, p_type text)
  RETURNS jsonb
@@ -94,8 +106,6 @@ EXCEPTION
 END;
 $function$;
 
-REVOKE ALL ON FUNCTION public.undo_early_late_txn(uuid, text) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.undo_early_late_txn(uuid, text) FROM anon;
-GRANT EXECUTE ON FUNCTION public.undo_early_late_txn(uuid, text) TO authenticated, service_role;
-
-COMMIT;
+REVOKE EXECUTE ON FUNCTION public.undo_early_late_txn(uuid, text) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.undo_early_late_txn(uuid, text) FROM anon;
+GRANT EXECUTE ON FUNCTION public.undo_early_late_txn(uuid, text) TO authenticated;

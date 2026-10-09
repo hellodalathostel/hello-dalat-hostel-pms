@@ -41,12 +41,10 @@
 --
 -- DA TEST qua BEGIN...ROLLBACK (lan cuoi, sau khi sua loi kieu du lieu ::bigint):
 --   - Schema: ca 13 cot khop 100% ten + kieu voi view cu, net_revenue = bigint (dung)
---   - Tong toan bo view = tong net_revenue duy nhat cua cac group co booking hop le (khop tuyet doi)
+--   - Tong theo group_id: view_total_2026 = unique_group_total_2026 = 113.460.443 (khop tuyet doi)
 --   - Per-group (397 group thuc te): 0 group lech, max_abs_diff = NULL (khong co dong nao lech)
 -- Xem VERIFY DONG o cuoi file - khong dua vao con so cu, luon chay lai ngay
 -- khi apply that vi du lieu san xuat tiep tuc thay doi.
-
-BEGIN;
 
 CREATE OR REPLACE VIEW public.monthly_revenue
 WITH (security_invoker = true) AS
@@ -163,8 +161,6 @@ ORDER BY
 
 REVOKE ALL ON public.monthly_revenue FROM PUBLIC, anon;
 
-COMMIT;
-
 -- VERIFY SCHEMA (chay ngay sau apply, phai khop 100% voi danh sach duoi day,
 -- lay tu pg_attribute/format_type TRUOC khi sua - net_revenue phai la bigint):
 --   month date, source text, room_id text, booking_count bigint,
@@ -184,6 +180,7 @@ COMMIT;
 --
 -- WITH view_total AS (
 --   SELECT sum(net_revenue) AS total FROM public.monthly_revenue
+--   WHERE month >= '2026-01-01'
 -- ),
 -- unique_group_total AS (
 --   SELECT sum(g.net_revenue) AS total
@@ -191,7 +188,7 @@ COMMIT;
 --   WHERE EXISTS (
 --     SELECT 1 FROM public.bookings b
 --     WHERE b.group_id = g.id AND b.is_deleted = false
---       AND b.status <> 'cancelled'
+--       AND b.status <> 'cancelled' AND b.check_in >= '2026-01-01'
 --   )
 -- )
 -- SELECT (SELECT total FROM view_total) AS view_total,

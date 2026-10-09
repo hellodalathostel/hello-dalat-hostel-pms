@@ -1,7 +1,8 @@
--- create_room_txn / update_room_txn / toggle_room_active_txn — chuyển INSERT/UPDATE trực tiếp
--- trên rooms (useRoomMutations.ts) vào RPC transactional, để validate tập trung ở DB (nguyên tắc
--- #2 của repo: All Mutations Via RPC). Đi cùng migration
--- 20260702061142_rooms_full_crud_owner_staff.sql (bỏ owner_write, mở CRUD rooms cho Owner+Staff).
+-- Backlog #6 (audit 2026-06-26): bọc RPC _txn cho create/update/toggle room, đồng bộ pattern
+-- với các RPC _txn khác (booking, payment...). RLS đã cho phép authenticated full CRUD
+-- (migration rooms_full_crud_owner_staff), RPC này thêm validation + token generation ở DB
+-- thay vì frontend tự tính (ical_export_token dùng pgcrypto, tránh trùng token).
+
 CREATE OR REPLACE FUNCTION public.create_room_txn(
   p_id text,
   p_name text,
@@ -10,10 +11,10 @@ CREATE OR REPLACE FUNCTION public.create_room_txn(
   p_base_price integer,
   p_floor integer DEFAULT NULL
 )
-RETURNS json
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path TO 'public'
+ RETURNS json
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
 AS $function$
 DECLARE
   v_room_id text;
@@ -62,12 +63,12 @@ CREATE OR REPLACE FUNCTION public.update_room_txn(
   p_capacity integer DEFAULT NULL,
   p_base_price integer DEFAULT NULL,
   p_floor integer DEFAULT NULL,
-  p_floor_set boolean DEFAULT FALSE
+  p_floor_set boolean DEFAULT FALSE  -- true nếu muốn ghi đè floor = NULL (phân biệt "không đổi" vs "xóa floor")
 )
-RETURNS json
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path TO 'public'
+ RETURNS json
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
 AS $function$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM rooms WHERE id = p_id) THEN
@@ -98,18 +99,24 @@ EXCEPTION
 END;
 $function$;
 
-CREATE OR REPLACE FUNCTION public.toggle_room_active_txn(p_id text, p_is_active boolean)
-RETURNS json
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path TO 'public'
+CREATE OR REPLACE FUNCTION public.toggle_room_active_txn(
+  p_id text,
+  p_is_active boolean
+)
+ RETURNS json
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
 AS $function$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM rooms WHERE id = p_id) THEN
     RAISE EXCEPTION 'ROOM_NOT_FOUND: %', p_id USING ERRCODE = 'P0001';
   END IF;
 
-  UPDATE rooms SET is_active = p_is_active, updated_at = NOW() WHERE id = p_id;
+  UPDATE rooms
+     SET is_active = p_is_active,
+         updated_at = NOW()
+   WHERE id = p_id;
 
   RETURN JSON_BUILD_OBJECT('success', TRUE, 'room_id', p_id, 'is_active', p_is_active);
 
@@ -121,12 +128,3 @@ $function$;
 GRANT EXECUTE ON FUNCTION public.create_room_txn(text, text, text, integer, integer, integer) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.update_room_txn(text, text, text, integer, integer, integer, boolean) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.toggle_room_active_txn(text, boolean) TO authenticated, service_role;
-
--- Chặn PUBLIC/anon gọi trực tiếp khi chưa đăng nhập (Postgres grant EXECUTE cho PUBLIC theo
--- default khi tạo function, anon kế thừa qua đó nếu không revoke rõ ràng)
-REVOKE EXECUTE ON FUNCTION public.create_room_txn(text, text, text, integer, integer, integer) FROM PUBLIC;
-REVOKE EXECUTE ON FUNCTION public.create_room_txn(text, text, text, integer, integer, integer) FROM anon;
-REVOKE EXECUTE ON FUNCTION public.update_room_txn(text, text, text, integer, integer, integer, boolean) FROM PUBLIC;
-REVOKE EXECUTE ON FUNCTION public.update_room_txn(text, text, text, integer, integer, integer, boolean) FROM anon;
-REVOKE EXECUTE ON FUNCTION public.toggle_room_active_txn(text, boolean) FROM PUBLIC;
-REVOKE EXECUTE ON FUNCTION public.toggle_room_active_txn(text, boolean) FROM anon;

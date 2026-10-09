@@ -1,18 +1,9 @@
--- Reconstructed 2026-07-31 from live schema introspection: this migration was
--- applied directly to production (not via a local migration file), so the
--- original SQL text was never captured in git. Content below matches the
--- live function definition exactly (verified via pg_get_functiondef).
---
--- NOT related to ops-guardian: this writes automation-sourced daily-log
--- entries into brain.daily_log (category='automation'), separate from the
--- automation.* heartbeat/watchdog schema added in
--- 20260731030000_ops_guardian_stage1_schema.sql.
-
-CREATE OR REPLACE FUNCTION public.log_automation_run(p_log_date date, p_source text, p_content text)
-RETURNS void
+CREATE OR REPLACE FUNCTION public.log_automation_run(
+  p_log_date date, p_source text, p_content text
+) RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = 'brain', 'public'
+SET search_path = brain, public
 AS $$
 BEGIN
   -- Scoped theo source + category='automation'. KHONG dung
@@ -26,3 +17,6 @@ BEGIN
   VALUES (p_log_date, 'automation', p_content, p_source);
 END;
 $$;
+
+REVOKE ALL ON FUNCTION public.log_automation_run(date, text, text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.log_automation_run(date, text, text) TO service_role;

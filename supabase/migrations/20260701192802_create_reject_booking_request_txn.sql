@@ -1,8 +1,3 @@
--- supabase/migrations/20260701192802_create_reject_booking_request_txn.sql
--- useRejectRequest() trước đó update trực tiếp booking_requests.status (bypass RPC).
--- Gộp vào RPC transactional để lock row (FOR UPDATE) chặn race condition với confirm,
--- và chặn reject request đã ở trạng thái khác 'pending'.
-
 CREATE OR REPLACE FUNCTION public.reject_booking_request_txn(
   p_request_id UUID,
   p_reason TEXT DEFAULT NULL
@@ -47,10 +42,4 @@ EXCEPTION
 END;
 $function$;
 
--- Grant thực thi cho cả 2 role (đúng data access model: Owner + Staff full CRUD)
 GRANT EXECUTE ON FUNCTION public.reject_booking_request_txn(UUID, TEXT) TO authenticated;
-
--- Chặn PUBLIC/anon gọi trực tiếp RPC này khi chưa đăng nhập (Postgres grant EXECUTE cho
--- PUBLIC theo default khi tạo function, anon kế thừa qua đó nếu không revoke rõ ràng)
-REVOKE EXECUTE ON FUNCTION public.reject_booking_request_txn(UUID, TEXT) FROM PUBLIC;
-REVOKE EXECUTE ON FUNCTION public.reject_booking_request_txn(UUID, TEXT) FROM anon;
