@@ -1,17 +1,25 @@
--- Fix add_early_late_txn: stop shifting booking.check_in/check_out.
+
+-- Fix: add_early_late_txn trước đây dịch chuyển check_in/check_out của booking
+-- (check_in - 1 ngày cho early, check_out + 1 ngày cho late). Vì bookings.nights
+-- là GENERATED ALWAYS AS (check_out - check_in), việc này khiến room_subtotal
+-- (trigger-computed) cộng thêm nguyên 1 đêm phòng ngoài ý muốn.
+-- Bug báo bởi Hiếu 2026-07-20 (đối chiếu hóa đơn HD-86AB0308: 4 đêm x450k lúc
+-- 16:03 -> 2 đêm x450k lúc 16:39 sau khi sửa lại booking).
 --
--- bookings.nights is a GENERATED column (check_out - check_in), so extending
--- check_in/check_out to "reserve" the adjacent night silently added an extra
--- night of room_subtotal on top of the early/late fee.
+-- Fix: KHÔNG đụng check_in/check_out của booking. Thay vào đó:
+--   1. Check phòng trống ở đêm liền kề (giữ nguyên logic cũ)
+--   2. INSERT trực tiếp vào room_blocks cho đêm đó (reason='other') — không
+--      gọi create_room_block_txn() vì hàm đó tự raise ROOM_HAS_ACTIVE_BOOKING
+--      do overlap với chính booking đang xử lý (ranh giới ngày trùng nhau).
+--   3. Set has_early_check_in / has_late_check_out = true (giữ nguyên)
+--   4. Insert phí vào booking_services với service_id = NULL (khớp cách
+--      production đã ghi nhận trước đây — 'early-check-in'/'late-check-out'
+--      không tồn tại trong bảng services nên insert string sẽ vi phạm FK
+--      booking_services_service_id_fkey).
 --
--- Now inserts a room_blocks row for the adjacent night instead of touching
--- the booking's own check_in/check_out. nights/room_subtotal/grand_total stay
--- correct; only the early/late service fee is added via booking_services.
---
--- booking_services.service_id is inserted as NULL (previously a synthetic
--- 'early-check-in'/'late-check-out' string) since no such row exists in the
--- services table and a non-null value would violate the FK.
-BEGIN;
+-- Xác nhận với Hiếu 2026-07-20: CÓ tạo room_block cho đêm liền kề để tránh
+-- double-book, KHÔNG đổi ngày check_in/check_out của booking.
+-- Đã test bằng BEGIN...ROLLBACK trước khi apply — xem chi tiết brain.daily_log.
 
 CREATE OR REPLACE FUNCTION public.add_early_late_txn(p_booking_id uuid, p_type text, p_fee integer)
  RETURNS jsonb
@@ -124,4 +132,6 @@ EXCEPTION
 END;
 $function$;
 
-COMMIT;
+REVOKE EXECUTE ON FUNCTION public.add_early_late_txn(uuid, text, integer) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.add_early_late_txn(uuid, text, integer) FROM anon;
+GRANT EXECUTE ON FUNCTION public.add_early_late_txn(uuid, text, integer) TO authenticated;

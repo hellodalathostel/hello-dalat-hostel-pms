@@ -20,8 +20,6 @@
 -- REVOKE ca PUBLIC lan anon (theo yeu cau Hieu - phong grant an qua PUBLIC
 -- khong hien trong information_schema.role_table_grants).
 
-BEGIN;
-
 REVOKE SELECT ON public.rooms FROM PUBLIC, anon;
 
 GRANT SELECT (
@@ -35,8 +33,6 @@ GRANT SELECT (
   created_at,
   updated_at
 ) ON public.rooms TO anon;
-
-COMMIT;
 
 -- VERIFY sau khi apply:
 -- SELECT has_table_privilege('anon','public.rooms','SELECT'); -- ky vong: false (khong con full-table)

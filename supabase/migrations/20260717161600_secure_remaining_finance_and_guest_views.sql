@@ -15,8 +15,6 @@
 -- authenticated GIU NGUYEN quyen SELECT - PMS frontend dang doc cac view nay
 -- qua session authenticated, khong duoc lam gian doan.
 
-BEGIN;
-
 ALTER VIEW public.dk14_luu_tru SET (security_invoker = true);
 REVOKE ALL ON public.dk14_luu_tru FROM PUBLIC, anon;
 
@@ -31,8 +29,6 @@ REVOKE ALL ON public.room_calendar FROM PUBLIC, anon;
 
 ALTER VIEW public.v_s1a_hkd SET (security_invoker = true);
 REVOKE ALL ON public.v_s1a_hkd FROM PUBLIC, anon;
-
-COMMIT;
 
 -- VERIFY sau khi apply:
 -- SELECT relname,

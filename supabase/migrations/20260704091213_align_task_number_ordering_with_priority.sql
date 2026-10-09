@@ -1,24 +1,21 @@
 -- Migration: align_task_number_ordering_with_priority
--- Ngày: 2026-07-04
--- Bối cảnh (brain.decisions "Align task_number ordering giua task-reminder va RPC quan ly task"):
---   task-reminder (hiển thị số cho Lợi qua Telegram) sort theo priority trước
---   (Khẩn lên đầu), nhưng 3 RPC complete/skip/extend_task_txn ban đầu chỉ sort
---   theo created_at ASC thuần. Nếu trong ngày có nhiều priority khác nhau, số
---   Lợi thấy trên Telegram sẽ lệch với số RPC hiểu -> nguy cơ complete/skip
---   nhầm task.
--- Quyết định: sửa 3 RPC dùng CASE priority (Khan=0, Cao=1, Binh Thuong=2,
---   Thap=3) rồi created_at ASC làm tie-break, để khớp với hành vi hiển thị
---   task-reminder đã quen thuộc với Lợi từ thời Notion.
+-- Muc dich: Sua thu tu tinh task_number trong 3 RPC (complete/skip/extend)
+-- de khop voi thu tu hien thi trong task-reminder (uu tien Khan > Cao > Binh Thuong > Thap,
+-- tie-break theo created_at ASC). Truoc do ca 3 RPC chi ORDER BY created_at ASC,
+-- gay lech so neu co task khac priority trong cung ngay.
 
--- ============================================================
--- 1. complete_task_txn — thêm ưu tiên theo priority
--- ============================================================
-CREATE OR REPLACE FUNCTION public.complete_task_txn(p_task_date date, p_task_number integer)
- RETURNS json
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+-- ============================================
+-- 1. complete_task_txn (sua thu tu ROW_NUMBER)
+-- ============================================
+CREATE OR REPLACE FUNCTION public.complete_task_txn(
+  p_task_date date,
+  p_task_number integer
+)
+RETURNS json
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
 DECLARE
   v_task_id bigint;
   v_task_name text;
@@ -58,17 +55,21 @@ BEGIN
     'status', 'Hoan Thanh'
   );
 END;
-$function$;
+$$;
 
--- ============================================================
--- 2. skip_task_txn — thêm ưu tiên theo priority
--- ============================================================
-CREATE OR REPLACE FUNCTION public.skip_task_txn(p_task_date date, p_task_number integer, p_reason text DEFAULT NULL::text)
- RETURNS json
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+-- ============================================
+-- 2. skip_task_txn (sua thu tu ROW_NUMBER)
+-- ============================================
+CREATE OR REPLACE FUNCTION public.skip_task_txn(
+  p_task_date date,
+  p_task_number integer,
+  p_reason text DEFAULT NULL
+)
+RETURNS json
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
 DECLARE
   v_task_id bigint;
   v_task_name text;
@@ -113,17 +114,21 @@ BEGIN
     'status', 'Bo Qua'
   );
 END;
-$function$;
+$$;
 
--- ============================================================
--- 3. extend_task_txn — thêm ưu tiên theo priority
--- ============================================================
-CREATE OR REPLACE FUNCTION public.extend_task_txn(p_task_date date, p_task_number integer, p_new_date date DEFAULT NULL::date)
- RETURNS json
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+-- ============================================
+-- 3. extend_task_txn (sua thu tu ROW_NUMBER)
+-- ============================================
+CREATE OR REPLACE FUNCTION public.extend_task_txn(
+  p_task_date date,
+  p_task_number integer,
+  p_new_date date DEFAULT NULL
+)
+RETURNS json
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
 DECLARE
   v_task_id bigint;
   v_task_name text;
@@ -166,7 +171,4 @@ BEGIN
     'new_task_date', v_target_date
   );
 END;
-$function$;
-
--- GRANT/REVOKE không đổi so với migration trước (CREATE OR REPLACE giữ nguyên
--- quyền hiện có), không cần lặp lại ở đây.
+$$;

@@ -1,5 +1,6 @@
 // ops-task-creator v2 - thay the notion-task-creator. Insert truc tiep vao public.ops_tasks
-// Trigger: Supabase DB Webhook INSERT bookings (giu nguyen config webhook cu, doi URL function)
+// KHONG CON GHI tu 02/08/2026: ops_tasks tu dong do DB function call_ops_task_creator() ghi (trigger AFTER INSERT ON bookings,
+// created_by = 'trigger_bookings') va dong bo boi sync_ops_tasks_on_booking_update() (trigger AFTER UPDATE). File nay giu lai de tham khao.
 // v2: bo dayBefore() - task don phong nay cung ngay check-in (theo yeu cau Hieu 18/06/2026)
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
