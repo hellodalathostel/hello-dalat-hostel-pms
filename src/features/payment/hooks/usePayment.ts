@@ -79,7 +79,7 @@ export function useRecordPayment() {
         queryClient.invalidateQueries({ queryKey: ['groups'] }),
       ])
 
-      if (result.replayed) {
+      if (result?.replayed) {
         // Cùng request_id đã ghi trước đó (retry sau timeout/double submit) — không ghi thêm.
         message.info('Khoản này đã được ghi trước đó.')
       } else {

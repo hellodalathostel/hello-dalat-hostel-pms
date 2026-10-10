@@ -65,6 +65,10 @@ export function PaymentModal({ visible, room, onCancel }: PaymentModalProps): JS
   const selectedMethod = watch('method')
 
   const handleClose = () => {
+    // Không cho đóng khi request đang bay: mở lại sẽ rotate id → bấm Ghi lần nữa có thể ghi trùng.
+    if (submittingRef.current || recordPaymentMutation.isPending) {
+      return
+    }
     reset(getDefaultValues(room))
     onCancel()
   }
@@ -123,10 +127,11 @@ export function PaymentModal({ visible, room, onCancel }: PaymentModalProps): JS
       open={visible}
       title="Thanh toán"
       onCancel={handleClose}
+      maskClosable={!recordPaymentMutation.isPending}
       destroyOnClose
       footer={
         <>
-          <Button onClick={handleClose}>Huỷ</Button>
+          <Button onClick={handleClose} disabled={recordPaymentMutation.isPending}>Huỷ</Button>
           <Button
             type="primary"
             onClick={handleSubmit(onSubmit)}
