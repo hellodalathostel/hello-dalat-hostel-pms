@@ -121,8 +121,8 @@ Bookings have `is_deleted` column. Always filter:
 | `create_group_booking_txn` | Create booking (group + bookings + services + discounts) |
 | `update_booking_txn` | Update booking (pass `p_cancel: true` to cancel) |
 | `checkin_booking_txn` | Check-in (upsert customers + link guests + update status) |
-| `checkout_booking_txn` | Checkout single booking |
-| `checkout_group_txn` | Checkout multiple bookings in a group |
+| `checkout_single_booking_txn` | Checkout one booking (group still has other active bookings) |
+| `checkout_last_booking_and_settle_txn` | Checkout the last active booking of a group + settle group |
 | `record_payment_txn` | Record payment (auto-adds 4% surcharge if method='card') |
 | `void_checkedout_booking_txn` | Soft-delete checked-out booking (owner only) |
 | `void_payment_txn` | Void a payment |
@@ -137,6 +137,8 @@ Bookings have `is_deleted` column. Always filter:
 - `check_booking_conflict`
 - `checkout_booking`
 - `process_checkout`
+- `checkout_booking_txn` — replaced by `checkout_single_booking_txn` / `checkout_last_booking_and_settle_txn`; EXECUTE revoked from `authenticated`
+- `checkout_group_txn` — replaced by `checkout_single_booking_txn` / `checkout_last_booking_and_settle_txn` (see `useCheckOut.ts` v3); EXECUTE revoked from `authenticated`
 
 ## Key Database Tables
 
@@ -323,7 +325,7 @@ This repo follows a multi-AI workflow:
 - ❌ Use `any` in TypeScript
 - ❌ Hardcode Supabase URL/key (use `import.meta.env`)
 - ❌ Bypass RLS with `service_role` key in frontend
-- ❌ Use legacy RPC functions: `checkout_booking`, `process_checkout`
+- ❌ Use legacy RPC functions: `checkout_booking`, `process_checkout`, `checkout_booking_txn`, `checkout_group_txn`
 - ❌ Use field name `price` in bookings (must be `price_per_night`)
 - ❌ Calculate `room_subtotal` or `grand_total` in frontend (read from DB)
 - ❌ Use `import { message } from 'antd'` static API (use `useAppFeedback`)
