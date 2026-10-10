@@ -1,10 +1,13 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Alert, Button, Form, Input, InputNumber, Modal, Select } from 'antd'
+import { useEffect, useRef } from 'react'
 import type { JSX } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { paymentSchema } from '@/lib/schemas'
 import type { PaymentFormValues } from '@/lib/schemas'
 import { useRecordPayment } from '@/features/payment/hooks/usePayment'
+import { usePaymentRequestId } from '@/features/payment/hooks/usePaymentRequestId'
+import { PaymentError } from '@/features/payment/hooks/recordPaymentIdempotent'
 import type { DashboardRoom } from '@/types/dashboard'
 import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
 
@@ -35,6 +38,17 @@ function getDefaultValues(room: DashboardRoom): PaymentFormValues {
 export function PaymentModal({ visible, room, onCancel }: PaymentModalProps): JSX.Element {
   const { notification } = useAppFeedback()
   const recordPaymentMutation = useRecordPayment()
+  const { get: getRequestId, rotate: rotateRequestId } = usePaymentRequestId()
+  // Chặn double submit đồng bộ — isPending chỉ cập nhật sau lần render kế tiếp.
+  const submittingRef = useRef(false)
+
+  // Modal vẫn mounted giữa các lần mở (DashboardPage chỉ đổi visible) → mỗi lần mở là một
+  // khoản mới, phải có id mới, nếu không lần thu thứ hai sẽ bị replay oan.
+  useEffect(() => {
+    if (visible) {
+      rotateRequestId()
+    }
+  }, [visible, rotateRequestId])
 
   const {
     control,
@@ -56,6 +70,10 @@ export function PaymentModal({ visible, room, onCancel }: PaymentModalProps): JS
   }
 
   const onSubmit = async (values: PaymentFormValues) => {
+    if (submittingRef.current || recordPaymentMutation.isPending) {
+      return
+    }
+
     if (!room.group_id) {
       notification.error({
         message: 'Thiếu dữ liệu thanh toán',
@@ -73,8 +91,10 @@ export function PaymentModal({ visible, room, onCancel }: PaymentModalProps): JS
       return
     }
 
+    submittingRef.current = true
     try {
       await recordPaymentMutation.mutateAsync({
+        requestId: getRequestId(),
         groupId: room.group_id,
         // Chỉ truyền firstBookingId khi có — hook sẽ fallback về null
         firstBookingId: room.booking_id ?? undefined,
@@ -83,10 +103,18 @@ export function PaymentModal({ visible, room, onCancel }: PaymentModalProps): JS
         note: values.note,
       })
 
+      // Ghi xong (kể cả replayed) → id mới cho khoản kế tiếp
+      rotateRequestId()
       reset(getDefaultValues(room))
       onCancel()
-    } catch {
+    } catch (error) {
       // Lỗi mutation đã được xử lý trong hook (onError toast).
+      // Chỉ đổi id khi id đã gắn với khoản khác; lỗi khác giữ id để retry không ghi trùng.
+      if (error instanceof PaymentError && error.kind === 'REQUEST_ID_REUSED') {
+        rotateRequestId()
+      }
+    } finally {
+      submittingRef.current = false
     }
   }
 
@@ -103,6 +131,7 @@ export function PaymentModal({ visible, room, onCancel }: PaymentModalProps): JS
             type="primary"
             onClick={handleSubmit(onSubmit)}
             loading={recordPaymentMutation.isPending}
+            disabled={recordPaymentMutation.isPending}
           >
             Xác nhận thu tiền
           </Button>
