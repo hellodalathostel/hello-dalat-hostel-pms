@@ -7,25 +7,28 @@
 // Giờ dịch các mã lỗi cụ thể từ RPC sang tiếng Việt dễ hiểu. PaymentModal.tsx đã đúng sẵn —
 // catch rỗng, KHÔNG gọi onCancel() khi mutateAsync throw — nên modal tự nhiên không đóng khi
 // lỗi, không cần sửa gì ở component.
+//
+// v3 — Đổi sang record_payment_idempotent_txn (chống ghi trùng). PaymentModal giữ requestId
+// (usePaymentRequestId), retry/lỗi dùng lại cùng id; DB trả replayed: true nếu id đã ghi.
+// Luồng checkout/cọc/tạo booking vẫn gọi record_payment_txn — không đổi.
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { supabase } from '@/api/supabase'
 import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
-import { normalizeError } from '@/shared/utils/normalizeError'
 import type { PaymentFormValues } from '@/lib/schemas'
+import { PaymentError, recordPaymentIdempotent } from './recordPaymentIdempotent'
+import type { RecordPaymentResult } from './recordPaymentIdempotent'
 
 interface RecordPaymentPayload extends PaymentFormValues {
   groupId: string
+  // Giữ nguyên khi retry; modal đổi id mới sau khi ghi thành công
+  requestId: string
   // undefined khi method !== 'card' — RPC nhận null, không bắt buộc
   firstBookingId?: string
 }
 
 // Dịch mã lỗi RPC sang thông báo tiếng Việt rõ ràng cho staff.
 //
-// LƯU Ý QUAN TRỌNG: mutationFn ở dưới gọi qua normalizeError() TRƯỚC KHI throw, và
-// normalizeError() (đã đọc source thật: src/shared/utils/normalizeError.ts) LUÔN trả về
-// `new Error(...)` — một Error chuẩn, KHÔNG giữ lại field `code` (Supabase PostgREST error
-// object có `.code` = SQLSTATE, nhưng plain Error thì không). Vì vậy hàm này CHỈ dựa vào
-// error.message (chứa nguyên văn message trong RAISE EXCEPTION của RPC), KHÔNG dùng error.code.
+// Lỗi P0015/P0016/P0017 đã được recordPaymentIdempotent map theo SQLSTATE thành PaymentError.
+// Các lỗi khác (kind 'UNKNOWN') giữ message gốc của RAISE EXCEPTION → dịch tiếp theo message.
 function translatePaymentError(error: unknown): string | null {
   const msg = error instanceof Error ? error.message : String(error ?? '')
 
@@ -55,28 +58,18 @@ export function useRecordPayment() {
 
   return useMutation({
     mutationKey: ['record-payment'],
-    mutationFn: async (payload: RecordPaymentPayload) => {
-      try {
-        const { data, error } = await supabase.rpc('record_payment_txn', {
-          p_group_id: payload.groupId,
-          // Làm tròn tránh float gây lỗi Postgres integer
-          p_amount: Math.round(payload.amount),
-          p_method: payload.method,
-          p_note: payload.note ?? null,
-          // Truyền null khi không có — RPC chỉ bắt buộc khi method = 'card'
-          p_first_booking_id: payload.firstBookingId ?? null,
-        })
-
-        if (error) {
-          throw error
-        }
-
-        return data
-      } catch (error) {
-        throw normalizeError(error)
-      }
-    },
-    onSuccess: async () => {
+    mutationFn: (payload: RecordPaymentPayload): Promise<RecordPaymentResult> =>
+      recordPaymentIdempotent({
+        requestId: payload.requestId,
+        groupId: payload.groupId,
+        // Làm tròn tránh float gây lỗi Postgres integer
+        amount: Math.round(payload.amount),
+        method: payload.method,
+        note: payload.note ?? null,
+        // Truyền null khi không có — RPC chỉ bắt buộc khi method = 'card'
+        firstBookingId: payload.firstBookingId ?? null,
+      }),
+    onSuccess: async (result) => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['dashboard', 'today'] }),
         queryClient.invalidateQueries({ queryKey: ['room-calendar'] }),
@@ -86,11 +79,20 @@ export function useRecordPayment() {
         queryClient.invalidateQueries({ queryKey: ['groups'] }),
       ])
 
-      message.success('Ghi nhận thanh toán thành công')
+      if (result?.replayed) {
+        // Cùng request_id đã ghi trước đó (retry sau timeout/double submit) — không ghi thêm.
+        message.info('Khoản này đã được ghi trước đó.')
+      } else {
+        message.success('Ghi nhận thanh toán thành công')
+      }
     },
     onError: async (error) => {
       // SỬA: dịch lỗi cụ thể thay vì bỏ qua hoàn toàn (`void error`).
-      const translated = translatePaymentError(error)
+      // Lỗi đã map theo SQLSTATE (P0015/P0016/P0017) → dùng thẳng message của PaymentError.
+      const translated =
+        error instanceof PaymentError && error.kind !== 'UNKNOWN'
+          ? error.message
+          : translatePaymentError(error)
       if (translated) {
         message.error(translated)
       } else {
