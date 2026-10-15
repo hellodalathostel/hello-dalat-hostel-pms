@@ -22,7 +22,7 @@ export function FinanceTabs({ summary, unpaid, unpaidLoading, month }: Props) {
       children: (
         <Row gutter={[16, 16]}>
           <Col span={24}>
-            <RevenueKPICards summary={summary} />
+            <RevenueKPICards summary={summary} month={month} />
           </Col>
           <Col span={24}>
             <WeeklyBarChart groups={summary.groups} month={month} />
