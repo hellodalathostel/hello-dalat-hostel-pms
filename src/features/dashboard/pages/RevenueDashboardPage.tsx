@@ -207,7 +207,7 @@ export default function RevenueDashboard(): React.JSX.Element {
 
           <Col xs={24} sm={12} md={8} xl={3}>
             <Card>
-              <Statistic title="Số đêm" value={totals.bookingCount} />
+              <Statistic title="Số booking" value={totals.bookingCount} />
             </Card>
           </Col>
 

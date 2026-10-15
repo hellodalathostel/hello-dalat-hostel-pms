@@ -1,4 +1,5 @@
 import { Card, Col, Row, Statistic, Tooltip } from 'antd'
+import type dayjs from 'dayjs'
 import {
   DollarOutlined,
   CheckCircleOutlined,
@@ -14,9 +15,10 @@ function fmt(amount: number): string {
 
 interface Props {
   summary: MonthlyRevenueSummary
+  month: dayjs.Dayjs
 }
 
-export function RevenueKPICards({ summary }: Props) {
+export function RevenueKPICards({ summary, month }: Props) {
   // Clamp — không hiển thị số âm khi khách đã thanh toán trước cho nhiều tháng
   const totalDebt = Math.max(0, summary.total_debt)
 
@@ -46,7 +48,7 @@ export function RevenueKPICards({ summary }: Props) {
         <Tooltip title="Chênh lệch do khách đã thanh toán trước cho nhiều tháng">
           <Card>
             <Statistic
-              title="Còn nợ"
+              title={`Còn nợ (check-out tháng ${month.format('MM/YYYY')})`}
               value={fmt(totalDebt)}
               prefix={<WarningOutlined />}
               valueStyle={{ color: totalDebt > 0 ? '#ff4d4f' : '#52c41a' }}

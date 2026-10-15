@@ -153,6 +153,9 @@ export function UnpaidTable({ data, loading }: Props) {
 
   return (
     <Card title={cardTitle} extra={cardExtra}>
+      <Text type="secondary" style={{ display: 'block', fontSize: 12, marginBottom: 12 }}>
+        Toàn kỳ — mọi nhóm có booking đã check-out còn nợ, không theo tháng đang chọn.
+      </Text>
       {isMobile ? (
         <UnpaidCardList data={data} />
       ) : (
