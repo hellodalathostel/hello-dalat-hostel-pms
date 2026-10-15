@@ -13,4 +13,8 @@ describe('getOtaRoundingDiff', () => {
   it('tổng OTA = 0 → không lệch', () => {
     expect(getOtaRoundingDiff(0, 0, 4)).toBe(0)
   })
+
+  it('số đêm <= 0 → không lệch', () => {
+    expect(getOtaRoundingDiff(946_890, 946_890, 0)).toBe(0)
+  })
 })

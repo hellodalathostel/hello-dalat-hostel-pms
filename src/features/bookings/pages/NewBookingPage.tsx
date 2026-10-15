@@ -349,7 +349,7 @@ export default function NewBooking(): JSX.Element {
                 type="warning"
                 showIcon
                 style={{ marginBottom: 16 }}
-                message={`Tổng OTA gốc là ${formatVND(importedOtaTotal)} nhưng PMS tính ${formatVND(importedPricePerNight)} × ${importedNights} = ${formatVND(importedPricePerNight * importedNights)} (lệch ${formatVND(Math.abs(otaRoundingDiff))} do làm tròn giá/đêm). Đối chiếu với extranet nếu cần.`}
+                message={`Tổng OTA gốc là ${formatVND(importedOtaTotal)} nhưng PMS tính ${formatVND(importedPricePerNight)} × ${importedNights} = ${formatVND(importedPricePerNight * importedNights)} (lệch ${formatVND(Math.abs(otaRoundingDiff))}). Đối chiếu với extranet nếu cần.`}
               />
             ) : null}
 
