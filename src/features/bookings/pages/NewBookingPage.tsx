@@ -5,6 +5,7 @@ import dayjs from 'dayjs'
 import { useEffect, useMemo, useState } from 'react'
 import type { JSX } from 'react'
 import {
+  Alert,
   Button,
   Card,
   Col,
@@ -30,6 +31,8 @@ import { ServiceSection } from '@/features/bookings/components/ServiceSection'
 import { DiscountSection } from '@/features/bookings/components/DiscountSection'
 import { DepositSection } from '@/features/bookings/components/DepositSection'
 import type { DepositInput, DiscountLineItem, ServiceLineItem } from '@/features/bookings/types/booking'
+import { formatVND } from '@/features/bookings/components/bookingDetailShared'
+import { getOtaRoundingDiff } from '@/features/bookings/utils/otaRounding'
 
 const sourceOptions: Array<{ label: NewBookingFormValues['source']; value: NewBookingFormValues['source'] }> = [
   { label: 'Booking.com', value: 'Booking.com' },
@@ -88,6 +91,8 @@ export default function NewBooking(): JSX.Element {
   const [services, setServices] = useState<ServiceLineItem[]>([])
   const [discounts, setDiscounts] = useState<DiscountLineItem[]>([])
   const [deposit, setDeposit] = useState<DepositInput | null>(null)
+  // Tổng OTA gốc từ PDF — chỉ để cảnh báo lệch do làm tròn giá/đêm, không ghi DB.
+  const [importedOtaTotal, setImportedOtaTotal] = useState<number | null>(null)
 
   const defaultValues = useMemo(
     () => getDefaultValues(prefilledRoomId, prefilledCheckIn),
@@ -165,6 +170,7 @@ export default function NewBooking(): JSX.Element {
     setValue('source', 'Booking.com', { shouldDirty: true })
     setValue('customer_name', data.guestName, { shouldDirty: true })
     replace([mappedBooking])
+    setImportedOtaTotal(data.grandTotal ?? null)
 
     message.success('Đã import dữ liệu booking từ PDF.')
   }
@@ -181,6 +187,18 @@ export default function NewBooking(): JSX.Element {
       surcharge: 0,
     })
   }
+
+  // So với giá trị form hiện tại (booking #1 = booking import) nên sửa giá/ngày thì cảnh báo cập nhật theo.
+  const importedBooking = bookingValues?.[0]
+  const importedNights =
+    importedBooking?.check_in && importedBooking?.check_out
+      ? importedBooking.check_out.diff(importedBooking.check_in, 'day')
+      : 0
+  const importedPricePerNight = importedBooking?.price_per_night ?? 0
+  const otaRoundingDiff =
+    importedOtaTotal !== null
+      ? getOtaRoundingDiff(importedOtaTotal, importedPricePerNight, importedNights)
+      : 0
 
   const onSubmit = async (values: NewBookingFormValues) => {
     const feeRate = values.channel_fee_rate ?? DEFAULT_FEE_RATES[values.source] ?? 0
@@ -200,6 +218,7 @@ export default function NewBooking(): JSX.Element {
       setServices([])
       setDiscounts([])
       setDeposit(null)
+      setImportedOtaTotal(null)
       navigate('/dashboard')
     } catch {
       // Lỗi đã được hook mutation xử lý bằng notification.
@@ -324,6 +343,15 @@ export default function NewBooking(): JSX.Element {
             <div style={{ marginBottom: 16 }}>
               <BookingImportPDF onImport={applyImportedBooking} />
             </div>
+
+            {importedOtaTotal !== null && otaRoundingDiff !== 0 ? (
+              <Alert
+                type="warning"
+                showIcon
+                style={{ marginBottom: 16 }}
+                message={`Tổng OTA gốc là ${formatVND(importedOtaTotal)} nhưng PMS tính ${formatVND(importedPricePerNight)} × ${importedNights} = ${formatVND(importedPricePerNight * importedNights)} (lệch ${formatVND(Math.abs(otaRoundingDiff))} do làm tròn giá/đêm). Đối chiếu với extranet nếu cần.`}
+              />
+            ) : null}
 
             <Card
               title="Thông tin đặt phòng"
