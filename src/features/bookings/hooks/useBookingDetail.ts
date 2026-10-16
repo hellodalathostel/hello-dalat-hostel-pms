@@ -99,10 +99,13 @@ export async function fetchGroupDetail(groupId: string): Promise<GroupDetail> {
         .eq('group_id', groupId)
         .eq('is_deleted', false)
         .order('created_at', { ascending: true }),
+      // "Lịch sử thanh toán" trong drawer chỉ hiện khoản thu hợp lệ — dòng gốc đã void và bút toán
+      // đảo đều mang is_void = true. Lịch sử void đầy đủ vẫn xem được trong Sổ folio (useBookingFolio).
       supabase
         .from('payment_history')
         .select('*')
         .eq('group_id', groupId)
+        .eq('is_void', false)
         .order('date', { ascending: true }),
     ])
 
