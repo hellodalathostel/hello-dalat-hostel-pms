@@ -46,6 +46,9 @@ type CheckoutParamsLast = {
 
 export type CheckoutParams = CheckoutParamsNotLast | CheckoutParamsLast
 
+// P0031: booking không còn checked-in (vd. đã được check-out ở nơi khác).
+const NOT_CHECKED_IN_MESSAGE = 'Booking không còn ở trạng thái đang ở.'
+
 type RecordPaymentResult = {
   success: boolean
   surcharge_amount: number
@@ -135,6 +138,12 @@ export function useCheckoutBooking() {
             if (error.code === 'P0036' || error.message?.includes('STALE_BOOKING')) {
               throw new Error('Booking đã thay đổi (có thể vừa bị sửa ở nơi khác). Vui lòng đóng và mở lại.')
             }
+            if (error.code === 'P0015' || error.message?.includes('OVERPAYMENT')) {
+              throw new Error('Số tiền thu không hợp lệ, vui lòng tải lại.')
+            }
+            if (error.code === 'P0031') {
+              throw new Error(NOT_CHECKED_IN_MESSAGE)
+            }
             throw error
           }
 
@@ -151,6 +160,9 @@ export function useCheckoutBooking() {
         })
 
         if (error) {
+          if (error.code === 'P0031') {
+            throw new Error(NOT_CHECKED_IN_MESSAGE)
+          }
           throw error
         }
 
@@ -176,10 +188,13 @@ export function useCheckoutBooking() {
         queryClient.invalidateQueries({ queryKey: ['booking-detail'] }),
         queryClient.invalidateQueries({ queryKey: ['booking-folio'] }),
         queryClient.invalidateQueries({ queryKey: ['groups'] }),
+        queryClient.invalidateQueries({ queryKey: ['dashboard', 'overdue-bookings'] }),
       ])
     },
     onError: (error: Error) => {
       message.error(`Lỗi checkout: ${error.message}`)
+      // Lỗi stale (P0035/P0031...) nghĩa là dữ liệu staff đang thấy đã cũ — tải lại danh sách quá hạn.
+      void queryClient.invalidateQueries({ queryKey: ['dashboard', 'overdue-bookings'] })
     },
   })
 }
