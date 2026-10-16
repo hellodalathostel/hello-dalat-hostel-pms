@@ -104,6 +104,59 @@ body {
   padding: 24px;
 }
 
+/* ---- C2: menu gom nhóm ---- */
+.main-new-booking {
+  flex-shrink: 0;
+}
+
+/* Nhóm chứa trang đang xem được đánh dấu cả khi dropdown đang đóng */
+.nav-group-label--active {
+  font-weight: 600;
+}
+
+.main-menu .ant-menu-submenu-selected > .ant-menu-submenu-title,
+.main-menu .ant-menu-submenu-selected > .ant-menu-submenu-title .nav-group-label {
+  color: var(--ink);
+}
+
+.main-nav-toggle {
+  flex-shrink: 0;
+  min-width: 44px;
+  min-height: 44px;
+}
+
+/* Ngăn kéo menu (mobile/tablet): mục chạm cao >= 44px */
+.main-nav-drawer .ant-drawer-body {
+  padding: 8px 0;
+}
+
+.main-nav-drawer-menu.ant-menu-inline {
+  border-inline-end: 0;
+}
+
+.main-nav-drawer-menu .ant-menu-item {
+  height: 48px;
+  line-height: 48px;
+  margin-block: 2px;
+}
+
+.main-nav-drawer-menu .ant-menu-item-group-title {
+  padding-top: 16px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 13px;
+  color: var(--ink-dim);
+}
+
+.main-nav-drawer-menu .nav-group-label--active {
+  color: var(--ink);
+}
+
+.main-nav-drawer .ant-drawer-close {
+  min-width: 44px;
+  min-height: 44px;
+}
+
 .main-content-inner {
   width: 100%;
   max-width: var(--layout-max-width);
@@ -447,13 +500,8 @@ body {
 }
 
 @media (max-width: 992px) {
-  .main-header-inner {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .main-nav {
-    width: 100%;
+  .main-header {
+    padding: 10px 16px;
   }
 
   .main-content {

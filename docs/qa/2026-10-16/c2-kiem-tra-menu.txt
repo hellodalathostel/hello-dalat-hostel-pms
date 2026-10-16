@@ -1,0 +1,89 @@
+PASS desktop Vận hành → Tổng quan url=/ popupOpen=0
+PASS desktop Vận hành → Lịch phòng url=/calendar popupOpen=0
+PASS desktop Vận hành → Đặt phòng url=/bookings popupOpen=0
+PASS desktop Vận hành → Đặt phòng trực tiếp url=/booking-requests popupOpen=0
+PASS desktop Vận hành → Khách url=/guests popupOpen=0
+PASS desktop Vận hành → Housekeeping url=/housekeeping popupOpen=0
+PASS desktop Báo cáo → Sổ quỹ url=/so-quy popupOpen=0
+PASS desktop Báo cáo → Tài chính url=/finance popupOpen=0
+PASS desktop Báo cáo → Doanh thu url=/revenue popupOpen=0
+PASS desktop Báo cáo → Báo cáo ĐK14 url=/dk14-report popupOpen=0
+PASS desktop Báo cáo → Sổ S1a — Doanh thu HKD url=/s1a popupOpen=0
+PASS desktop nhóm cha "Báo cáo" được đánh dấu khi ở /s1a 
+PASS desktop Thiết lập → Import Check-in (Excel) url=/checkin-import popupOpen=0
+INFO modal tự mở trên /checkin-import: Import check-in từ Excel 1Upload file 2Xem trước 3Kết quả  K
+PASS desktop Thiết lập → Quản lý phòng url=/settings/rooms popupOpen=0
+PASS desktop Thiết lập → iCal Feed url=/settings/ical popupOpen=0
+PASS desktop nút chính → /new-booking 
+PASS aria-expanded=true khi mở 
+PASS Esc đóng dropdown 
+PASS Click ngoài đóng dropdown 
+PASS Tab vào được menu 
+PASS Enter mở dropdown bằng bàn phím 
+PASS Bàn phím chọn mục trong dropdown → đổi trang url=/finance
+PASS Menu có aria-label 
+PASS 375 nút menu >= 44x44 44x44
+PASS 375 nút "Tạo đặt phòng mới" hiển thị 
+PASS 375 aria-expanded khi mở ngăn kéo 
+PASS 375 ngăn kéo → Tổng quan url=/ drawerOpen=false h=48
+PASS 375 aria-expanded khi mở ngăn kéo 
+PASS 375 ngăn kéo → Lịch phòng url=/calendar drawerOpen=false h=48
+PASS 375 aria-expanded khi mở ngăn kéo 
+PASS 375 ngăn kéo → Đặt phòng url=/bookings drawerOpen=false h=48
+PASS 375 aria-expanded khi mở ngăn kéo 
+PASS 375 ngăn kéo → Đặt phòng trực tiếp url=/booking-requests drawerOpen=false h=48
+PASS 375 aria-expanded khi mở ngăn kéo 
+PASS 375 ngăn kéo → Khách url=/guests drawerOpen=false h=48
+PASS 375 aria-expanded khi mở ngăn kéo 
+PASS 375 ngăn kéo → Housekeeping url=/housekeeping drawerOpen=false h=48
+PASS 375 aria-expanded khi mở ngăn kéo 
+PASS 375 ngăn kéo → Sổ quỹ url=/so-quy drawerOpen=false h=48
+PASS 375 aria-expanded khi mở ngăn kéo 
+PASS 375 ngăn kéo → Tài chính url=/finance drawerOpen=false h=48
+PASS 375 aria-expanded khi mở ngăn kéo 
+PASS 375 ngăn kéo → Doanh thu url=/revenue drawerOpen=false h=48
+PASS 375 aria-expanded khi mở ngăn kéo 
+PASS 375 ngăn kéo → Báo cáo ĐK14 url=/dk14-report drawerOpen=false h=48
+PASS 375 aria-expanded khi mở ngăn kéo 
+PASS 375 ngăn kéo → Sổ S1a — Doanh thu HKD url=/s1a drawerOpen=false h=48
+PASS 375 aria-expanded khi mở ngăn kéo 
+PASS 375 ngăn kéo → Import Check-in (Excel) url=/checkin-import drawerOpen=false h=48
+INFO 375 /checkin-import là trang dạng modal — Esc rồi bấm lại
+PASS 375 aria-expanded khi mở ngăn kéo 
+PASS 375 ngăn kéo → Quản lý phòng url=/settings/rooms drawerOpen=false h=48
+PASS 375 aria-expanded khi mở ngăn kéo 
+PASS 375 ngăn kéo → iCal Feed url=/settings/ical drawerOpen=false h=48
+PASS 375 Esc đóng ngăn kéo 
+PASS 768 nút menu >= 44x44 44x44
+PASS 768 nút "Tạo đặt phòng mới" hiển thị 
+PASS 768 aria-expanded khi mở ngăn kéo 
+PASS 768 ngăn kéo → Tổng quan url=/ drawerOpen=false h=48
+PASS 768 aria-expanded khi mở ngăn kéo 
+PASS 768 ngăn kéo → Lịch phòng url=/calendar drawerOpen=false h=48
+PASS 768 aria-expanded khi mở ngăn kéo 
+PASS 768 ngăn kéo → Đặt phòng url=/bookings drawerOpen=false h=48
+PASS 768 aria-expanded khi mở ngăn kéo 
+PASS 768 ngăn kéo → Đặt phòng trực tiếp url=/booking-requests drawerOpen=false h=48
+PASS 768 aria-expanded khi mở ngăn kéo 
+PASS 768 ngăn kéo → Khách url=/guests drawerOpen=false h=48
+PASS 768 aria-expanded khi mở ngăn kéo 
+PASS 768 ngăn kéo → Housekeeping url=/housekeeping drawerOpen=false h=48
+PASS 768 aria-expanded khi mở ngăn kéo 
+PASS 768 ngăn kéo → Sổ quỹ url=/so-quy drawerOpen=false h=48
+PASS 768 aria-expanded khi mở ngăn kéo 
+PASS 768 ngăn kéo → Tài chính url=/finance drawerOpen=false h=48
+PASS 768 aria-expanded khi mở ngăn kéo 
+PASS 768 ngăn kéo → Doanh thu url=/revenue drawerOpen=false h=48
+PASS 768 aria-expanded khi mở ngăn kéo 
+PASS 768 ngăn kéo → Báo cáo ĐK14 url=/dk14-report drawerOpen=false h=48
+PASS 768 aria-expanded khi mở ngăn kéo 
+PASS 768 ngăn kéo → Sổ S1a — Doanh thu HKD url=/s1a drawerOpen=false h=48
+PASS 768 aria-expanded khi mở ngăn kéo 
+PASS 768 ngăn kéo → Import Check-in (Excel) url=/checkin-import drawerOpen=false h=48
+INFO 768 /checkin-import là trang dạng modal — Esc rồi bấm lại
+PASS 768 aria-expanded khi mở ngăn kéo 
+PASS 768 ngăn kéo → Quản lý phòng url=/settings/rooms drawerOpen=false h=48
+PASS 768 aria-expanded khi mở ngăn kéo 
+PASS 768 ngăn kéo → iCal Feed url=/settings/ical drawerOpen=false h=48
+PASS 768 Esc đóng ngăn kéo 
+0 FAIL / 88
