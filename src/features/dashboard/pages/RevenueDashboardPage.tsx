@@ -15,9 +15,11 @@ import {
   Cell,
 } from 'recharts'
 import { useRevenue, aggregateByMonth, type MonthSummary } from '@/features/finance/hooks/useRevenue'
+import { formatMoney } from '@/shared/utils/format'
 
+// Hiển thị tiền dạng 300.000đ — dùng hàm format chung (U-09)
 function formatVND(amount: number): string {
-  return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount)
+  return formatMoney(amount)
 }
 
 function formatShortVND(amount: number): string {

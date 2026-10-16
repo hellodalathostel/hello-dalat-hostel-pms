@@ -50,6 +50,7 @@ import type { EarlyLateType } from '@/hooks/useAddEarlyLate'
 import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
 import { useBreakpoint } from '@/shared/hooks/useBreakpoint'
 import { formatVND } from './bookingDetailShared'
+import { formatDate, formatPaymentMethod } from '@/shared/utils/format'
 import { BookingRoomCard } from './BookingRoomCard'
 
 interface Props {
@@ -193,7 +194,7 @@ export default function BookingDetailDrawer({ groupId = null, bookingId = null, 
       title: 'Ngày',
       dataIndex: 'date',
       key: 'date',
-      render: (v: string) => dayjs(v).format('DD/MM/YYYY'),
+      render: (v: string) => formatDate(v),
     },
     {
       title: 'Số tiền',
@@ -205,7 +206,8 @@ export default function BookingDetailDrawer({ groupId = null, bookingId = null, 
       title: 'Phương thức',
       dataIndex: 'method',
       key: 'method',
-      render: (v: string | null) => v ?? '—',
+      // U-05: hiển thị tiếng Việt (Tiền mặt / Chuyển khoản / Thẻ), giá trị DB giữ nguyên
+      render: (v: string | null) => formatPaymentMethod(v),
     },
     {
       title: 'Ghi chú',
@@ -480,7 +482,7 @@ export default function BookingDetailDrawer({ groupId = null, bookingId = null, 
         cancelText="Huỷ"
       >
         <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
-          Đoàn này có {data?.bookings.length ?? 0} phòng. Dịch vụ/giảm giá/cọc sẽ được ghi vào phòng bạn chọn.
+          Đoàn này có {data?.bookings.length ?? 0} phòng. Dịch vụ/giảm giá/thanh toán sẽ được ghi vào phòng bạn chọn.
         </Typography.Paragraph>
         <Select
           style={{ width: '100%' }}

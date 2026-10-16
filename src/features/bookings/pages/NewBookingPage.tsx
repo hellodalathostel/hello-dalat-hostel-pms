@@ -2,7 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useFieldArray, useForm, Controller } from 'react-hook-form'
 import dayjs from 'dayjs'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { JSX } from 'react'
 import {
   Alert,
@@ -32,6 +32,8 @@ import { DiscountSection } from '@/features/bookings/components/DiscountSection'
 import { DepositSection } from '@/features/bookings/components/DepositSection'
 import type { DepositInput, DiscountLineItem, ServiceLineItem } from '@/features/bookings/types/booking'
 import { formatVND } from '@/features/bookings/components/bookingDetailShared'
+import { supabase } from '@/api/supabase'
+import { formatMoney, formatRoomLabel } from '@/shared/utils/format'
 import { getOtaRoundingDiff } from '@/features/bookings/utils/otaRounding'
 
 const sourceOptions: Array<{ label: NewBookingFormValues['source']; value: NewBookingFormValues['source'] }> = [
@@ -131,6 +133,54 @@ export default function NewBooking(): JSX.Element {
     control,
     name: 'bookings',
   })
+
+  // U-02: điền sẵn giá từ get_suggested_price(p_room_id, p_date) khi đổi phòng/ngày check-in.
+  // Chỉ ghi đè khi giá đang 0 hoặc vẫn là giá gợi ý lần trước (chưa bị sửa tay / chưa import PDF).
+  const suggestedRef = useRef<Map<string, { key: string; price: number }>>(new Map())
+  const suggestKeys = (bookingValues ?? [])
+    .map((b, i) => `${fields[i]?.id ?? i}|${b?.room_id ?? ''}|${b?.check_in?.format('YYYY-MM-DD') ?? ''}`)
+    .join(',')
+
+  useEffect(() => {
+    let cancelled = false
+    ;(bookingValues ?? []).forEach((booking, index) => {
+      const fieldId = fields[index]?.id
+      const roomId = booking?.room_id
+      const checkIn = booking?.check_in
+      if (!fieldId || !roomId || !checkIn) return
+
+      const key = `${roomId}|${checkIn.format('YYYY-MM-DD')}`
+      const prev = suggestedRef.current.get(fieldId)
+      if (prev?.key === key) return
+
+      const currentPrice = booking.price_per_night ?? 0
+      const isUntouched = currentPrice === 0 || currentPrice === prev?.price
+      if (!isUntouched) return
+
+      void supabase
+        .rpc('get_suggested_price', { p_room_id: roomId, p_date: checkIn.format('YYYY-MM-DD') })
+        .then(({ data, error }: { data: number | null; error: unknown }) => {
+          if (cancelled || error || !data || data <= 0) return
+          suggestedRef.current.set(fieldId, { key, price: data })
+          setValue(`bookings.${index}.price_per_night`, data, { shouldDirty: true })
+        })
+    })
+    return () => {
+      cancelled = true
+    }
+    // suggestKeys gom room_id + check_in của mọi dòng — đủ để chạy lại đúng lúc
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [suggestKeys])
+
+  // U-04: lỗi số khách theo sức chứa phòng — không tự ép giá trị, khoá nút tạo khi còn lỗi
+  const guestsErrors = (bookingValues ?? []).map((booking) => {
+    const count = booking?.guests_count
+    if (count == null || count < 1) return 'Số khách phải từ 1 trở lên'
+    const capacity = rooms.find((r) => r.id === booking?.room_id)?.capacity
+    if (capacity && count > capacity) return `Phòng này tối đa ${capacity} khách`
+    return null
+  })
+  const hasGuestsError = guestsErrors.some(Boolean)
 
   const bookingLabels = useMemo(
     () =>
@@ -389,7 +439,10 @@ export default function NewBooking(): JSX.Element {
                             >
                               <Select
                                 {...bookingField}
-                                options={rooms.map((r) => ({ value: r.id, label: `${r.id} - ${r.name}` }))}
+                                // U-03: "301 — Standard Double — tối đa 2 khách"
+                                options={rooms.map((r) => ({ value: r.id, label: formatRoomLabel(r) }))}
+                                showSearch
+                                optionFilterProp="label"
                                 loading={roomsLoading}
                                 placeholder="Chọn phòng"
                               />
@@ -462,12 +515,25 @@ export default function NewBooking(): JSX.Element {
                         <Controller
                           control={control}
                           name={`bookings.${index}.price_per_night`}
-                          render={({ field: bookingField, fieldState }) => (
+                          render={({ field: bookingField, fieldState }) => {
+                            // U-02: "Tạm tính" chỉ hiển thị trước khi lưu — KHÔNG lưu, KHÔNG gửi DB.
+                            // Tổng chính thức (room_subtotal/grand_total) do trigger DB tính sau khi tạo.
+                            const row = bookingValues?.[index]
+                            const draftNights =
+                              row?.check_in && row?.check_out ? row.check_out.diff(row.check_in, 'day') : 0
+                            const draftPrice = bookingField.value ?? 0
+                            const draftText =
+                              draftNights > 0 && draftPrice > 0
+                                ? `Tạm tính: ${draftNights} đêm × ${formatMoney(draftPrice)} = ${formatMoney(draftNights * draftPrice)}`
+                                : null
+
+                            return (
                             <Form.Item
-                              label="Giá phòng"
+                              label="Giá/đêm"
                               required
                               validateStatus={fieldState.error ? 'error' : ''}
                               help={fieldState.error?.message}
+                              extra={draftText}
                             >
                               <InputNumber
                                 value={bookingField.value}
@@ -485,7 +551,8 @@ export default function NewBooking(): JSX.Element {
                                 parser={(value) => Number(String(value ?? '').replace(/[^\d.-]/g, ''))}
                               />
                             </Form.Item>
-                          )}
+                            )
+                          }}
                         />
                       </Col>
 
@@ -501,14 +568,13 @@ export default function NewBooking(): JSX.Element {
                               <Form.Item
                                 label={roomCapacity ? `Số khách (tối đa ${roomCapacity})` : 'Số khách'}
                                 required
-                                validateStatus={fieldState.error ? 'error' : ''}
-                                help={fieldState.error?.message}
+                                validateStatus={guestsErrors[index] || fieldState.error ? 'error' : ''}
+                                help={guestsErrors[index] ?? fieldState.error?.message}
                               >
+                                {/* U-04: bỏ min/max (tự ép giá trị) — giữ nguyên đầu vào, báo lỗi cạnh ô */}
                                 <InputNumber
                                   value={bookingField.value}
-                                  onChange={(value) => bookingField.onChange(value ?? 1)}
-                                  min={1}
-                                  max={roomCapacity}
+                                  onChange={(value) => bookingField.onChange(value ?? null)}
                                   precision={0}
                                   style={{ width: '100%' }}
                                 />
@@ -604,6 +670,7 @@ export default function NewBooking(): JSX.Element {
                   type="primary"
                   htmlType="submit"
                   loading={createBookingMutation.isPending}
+                  disabled={hasGuestsError}
                   size="large"
                 >
                   Tạo Booking

@@ -8,6 +8,7 @@ import { useCancelBooking, useUpdateBooking } from '@/features/bookings/hooks/us
 import type { BookingRow } from '@/features/bookings/hooks/useBookingDetail'
 import { useRooms } from '@/features/bookings/hooks/useRooms'
 import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
+import { formatRoomLabel } from '@/shared/utils/format'
 
 type EditBookingModalProps = {
   booking: BookingRow | null
@@ -21,7 +22,11 @@ const schema = z
     check_in: z.custom<Dayjs>((v) => dayjs.isDayjs(v)),
     check_out: z.custom<Dayjs>((v) => dayjs.isDayjs(v)),
     price_per_night: z.number().min(1, 'Nhap gia'),
-    guests_count: z.number().min(1),
+    // U-04: cho phép null khi ô trống — không tự ép về 1, hiện lỗi cạnh ô
+    guests_count: z
+      .number()
+      .nullable()
+      .refine((v) => v != null && v >= 1, 'Số khách phải từ 1 trở lên'),
     guest_name: z.string().optional(),
     note: z.string().optional(),
   })
@@ -52,11 +57,23 @@ export function EditBookingModal({ booking, onClose, onSuccess }: EditBookingMod
   const { message, modal } = useAppFeedback()
   const { data: rooms = [], isLoading: roomsLoading } = useRooms()
 
-  const { control, handleSubmit, reset } = useForm<FormValues>({
+  const { control, handleSubmit, reset, watch } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: getDefaultValues(),
     mode: 'onSubmit',
   })
+
+  // U-04: kiểm tra sức chứa phòng ngay khi nhập — giữ nguyên giá trị, chỉ báo lỗi + khoá nút lưu
+  // eslint-disable-next-line react-hooks/incompatible-library -- RHF watch() không tương thích React Compiler, known issue
+  const watchedRoomId = watch('room_id')
+  const watchedGuests = watch('guests_count')
+  const selectedRoomCapacity = rooms.find((r) => r.id === watchedRoomId)?.capacity ?? null
+  const guestsError =
+    watchedGuests == null || watchedGuests < 1
+      ? 'Số khách phải từ 1 trở lên'
+      : selectedRoomCapacity && watchedGuests > selectedRoomCapacity
+        ? `Phòng này tối đa ${selectedRoomCapacity} khách`
+        : null
 
   useEffect(() => {
     if (!booking) {
@@ -76,6 +93,10 @@ export function EditBookingModal({ booking, onClose, onSuccess }: EditBookingMod
 
   const onSubmit = async (values: FormValues) => {
     if (!booking) return
+    if (guestsError) {
+      message.error(guestsError)
+      return
+    }
 
     const doUpdate = async (override: boolean) => {
       try {
@@ -85,7 +106,7 @@ export function EditBookingModal({ booking, onClose, onSuccess }: EditBookingMod
           checkIn: values.check_in,
           checkOut: values.check_out,
           pricePerNight: values.price_per_night,
-          guestsCount: values.guests_count,
+          guestsCount: values.guests_count ?? undefined,
           guestName: values.guest_name,
           note: values.note,
           overrideCheckin: override,
@@ -145,7 +166,12 @@ export function EditBookingModal({ booking, onClose, onSuccess }: EditBookingMod
 
           <Button onClick={onClose}>Dong</Button>
 
-          <Button type='primary' loading={updateMutation.isPending} onClick={handleSubmit(onSubmit)}>
+          <Button
+            type='primary'
+            loading={updateMutation.isPending}
+            disabled={Boolean(guestsError)}
+            onClick={handleSubmit(onSubmit)}
+          >
             Luu thay doi
           </Button>
         </>
@@ -164,7 +190,10 @@ export function EditBookingModal({ booking, onClose, onSuccess }: EditBookingMod
             >
               <Select
                 {...field}
-                options={rooms.map((r) => ({ value: r.id, label: r.name }))}
+                // U-03: "301 — Standard Double — tối đa 2 khách" cả trong danh sách lẫn giá trị đã chọn
+                options={rooms.map((r) => ({ value: r.id, label: formatRoomLabel(r) }))}
+                showSearch
+                optionFilterProp='label'
                 loading={roomsLoading}
               />
             </Form.Item>
@@ -216,7 +245,7 @@ export function EditBookingModal({ booking, onClose, onSuccess }: EditBookingMod
           name='price_per_night'
           render={({ field, fieldState }) => (
             <Form.Item
-              label='Giá phòng'
+              label='Giá/đêm'
               required
               validateStatus={fieldState.error ? 'error' : ''}
               help={fieldState.error?.message}
@@ -247,13 +276,12 @@ export function EditBookingModal({ booking, onClose, onSuccess }: EditBookingMod
             <Form.Item
               label='Số khách'
               required
-              validateStatus={fieldState.error ? 'error' : ''}
-              help={fieldState.error?.message}
+              validateStatus={guestsError || fieldState.error ? 'error' : ''}
+              help={guestsError ?? fieldState.error?.message}
             >
               <InputNumber
                 value={field.value}
-                onChange={(value) => field.onChange(value ?? 1)}
-                min={1}
+                onChange={(value) => field.onChange(value ?? null)}
                 precision={0}
                 style={{ width: '100%' }}
               />

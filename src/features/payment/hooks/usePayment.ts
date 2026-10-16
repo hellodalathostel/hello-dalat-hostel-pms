@@ -11,6 +11,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/api/supabase'
 import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
 import { normalizeError } from '@/shared/utils/normalizeError'
+import { useRefreshBookingData } from '@/shared/hooks/useRefreshBookingData'
 import type { PaymentFormValues } from '@/lib/schemas'
 
 interface RecordPaymentPayload extends PaymentFormValues {
@@ -52,6 +53,7 @@ function translatePaymentError(error: unknown): string | null {
 export function useRecordPayment() {
   const queryClient = useQueryClient()
   const { message } = useAppFeedback()
+  const refreshBookingData = useRefreshBookingData()
 
   return useMutation({
     mutationKey: ['record-payment'],
@@ -77,16 +79,9 @@ export function useRecordPayment() {
       }
     },
     onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['dashboard', 'today'] }),
-        queryClient.invalidateQueries({ queryKey: ['room-calendar'] }),
-        queryClient.invalidateQueries({ queryKey: ['booking-detail'] }),
-        // Đồng bộ thêm bookings + groups để folio/summary đúng
-        queryClient.invalidateQueries({ queryKey: ['bookings'] }),
-        queryClient.invalidateQueries({ queryKey: ['groups'] }),
-      ])
-
       message.success('Ghi nhận thanh toán thành công')
+      // Tải lại danh sách + drawer + folio + dashboard (B-02)
+      await refreshBookingData()
     },
     onError: async (error) => {
       // SỬA: dịch lỗi cụ thể thay vì bỏ qua hoàn toàn (`void error`).

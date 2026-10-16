@@ -37,10 +37,12 @@ export const newBookingSchema = z.object({
           check_out: dayjsSchema,
           price_per_night: z.number({ message: 'Vui lòng nhập giá phòng' }).gt(0, 'Giá phòng phải lớn hơn 0'),
           guest_name: z.string().trim().max(120, 'Tên khách không vượt quá 120 ký tự').optional().or(z.literal('')),
+          // U-04: nullable để ô trống giữ nguyên (không tự ép về 1) — refine báo lỗi cạnh ô
           guests_count: z
             .number({ message: 'Vui lòng nhập số khách' })
             .int('Số khách phải là số nguyên')
-            .min(1, 'Số khách phải lớn hơn hoặc bằng 1'),
+            .nullable()
+            .refine((v) => v != null && v >= 1, 'Số khách phải lớn hơn hoặc bằng 1'),
           note: z.string().trim().max(500, 'Ghi chú booking không vượt quá 500 ký tự').optional().or(z.literal('')),
           surcharge: z
             .number({ message: 'Vui lòng nhập phụ thu' })

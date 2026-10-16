@@ -1,6 +1,7 @@
 // src/features/bookings/components/bookingDetailShared.ts
 // Constants/types chung dùng bởi BookingDetailDrawer.tsx và BookingRoomCard.tsx.
 // Tách từ BookingDetailDrawer.tsx (M4 — file splitting, không đổi logic).
+import { formatMoney } from '@/shared/utils/format'
 
 export type BookingStatus = 'booked' | 'checked-in' | 'checked-out' | 'cancelled'
 
@@ -34,7 +35,7 @@ export const ACTION_STATUSES = {
   canCancel: ['booked'] as BookingStatus[],
 } as const
 
+// Hiển thị tiền dạng 300.000đ — dùng hàm format chung (U-09)
 export function formatVND(amount: number | null | undefined): string {
-  if (amount == null) return '—'
-  return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount)
+  return formatMoney(amount)
 }

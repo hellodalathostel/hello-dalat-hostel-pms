@@ -26,11 +26,13 @@ import { useBookingFolio } from '@/features/bookings/hooks/useBookingFolio'
 import { useCheckoutBooking } from '@/features/checkout/hooks/useCheckoutBooking'
 import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
 import type { PaymentMethod } from '@/types/database'
+import { formatMoney } from '@/shared/utils/format'
 
 const { Text, Title } = Typography
 
+// Hiển thị tiền dạng 300.000đ — dùng hàm format chung (U-09)
 function formatVND(amount: number): string {
-  return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount)
+  return formatMoney(amount)
 }
 
 interface Props {
@@ -246,7 +248,7 @@ export function CheckoutModal({ bookingId, open, onClose }: Props) {
               <Divider style={{ margin: '6px 0' }} />
 
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <Text strong>Grand Total cả đoàn</Text>
+                <Text strong>Tổng cộng cả đoàn</Text>
                 <Text strong style={{ fontSize: 16 }}>{formatVND(folio.group.grandTotal)}</Text>
               </div>
 

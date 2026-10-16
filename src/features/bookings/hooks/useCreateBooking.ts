@@ -91,7 +91,8 @@ async function createBookingMutationFn(input: CreateBookingMutationInput): Promi
         check_out: booking.check_out.format('YYYY-MM-DD'),
         price_per_night: booking.price_per_night,
         guest_name: booking.guest_name ?? '',
-        guests_count: booking.guests_count,
+        // schema đã refine guests_count >= 1 trước khi submit — ?? 1 chỉ để thoả type nullable
+        guests_count: booking.guests_count ?? 1,
         note: booking.note ?? '',
       })),
       p_services:

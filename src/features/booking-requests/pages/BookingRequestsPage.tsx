@@ -30,7 +30,7 @@ const STATUS_COLOR: Record<BookingRequestStatus, string> = {
 
 const STATUS_LABEL: Record<BookingRequestStatus, string> = {
   pending: 'Chờ xử lý',
-  confirmed: 'Đã convert',
+  confirmed: 'Đã chuyển thành đặt phòng',
   rejected: 'Đã từ chối',
 }
 
@@ -105,7 +105,7 @@ export default function BookingRequestsPage() {
       width: 130,
       filters: [
         { text: 'Chờ xử lý', value: 'pending' },
-        { text: 'Đã convert', value: 'confirmed' },
+        { text: 'Đã chuyển thành đặt phòng', value: 'confirmed' },
         { text: 'Đã từ chối', value: 'rejected' },
       ],
       onFilter: (value, request) => request.status === value,

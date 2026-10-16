@@ -1,5 +1,5 @@
 // FILE: src/features/bookings/components/BookingFolioEditModal.tsx
-// Modal chỉnh sửa folio: Cọc | Dịch vụ | Giảm giá
+// Modal chỉnh sửa folio: Thanh toán | Dịch vụ | Giảm giá
 // Mở từ BookingDetailDrawer hoặc bất kỳ nơi nào có bookingId + groupId
 import {
   Modal, Tabs, Form, InputNumber, Select, Input, Button,
@@ -7,7 +7,6 @@ import {
 } from 'antd'
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons'
 import { useState, useEffect } from 'react'
-import dayjs from 'dayjs'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/api/supabase'
 import { useBookingFolio } from '@/features/bookings/hooks/useBookingFolio'
@@ -15,17 +14,14 @@ import { useDepositActions } from '@/features/bookings/hooks/useDepositActions'
 import { useServiceActions } from '@/features/bookings/hooks/useServiceActions'
 import { useDiscountActions } from '@/features/bookings/hooks/useDiscountActions'
 import { useVoidPayment } from '@/features/bookings/hooks/useVoidPayment'
+import { formatMoney, formatDate, formatPaymentMethod, PAYMENT_METHOD_LABEL } from '@/shared/utils/format'
 
 const { Text } = Typography
 
-const METHOD_OPTIONS = [
-  { value: 'cash',     label: 'Tiền mặt' },
-  { value: 'transfer', label: 'Chuyển khoản' },
-  { value: 'card',     label: 'Thẻ' },
-  { value: 'momo',     label: 'MoMo' },
-  { value: 'zalopay',  label: 'ZaloPay' },
-  { value: 'other',    label: 'Khác' },
-]
+const METHOD_OPTIONS = (['cash', 'transfer', 'card', 'momo', 'zalopay', 'other'] as const).map((value) => ({
+  value,
+  label: PAYMENT_METHOD_LABEL[value],
+}))
 
 // Key dùng chung với AddServiceModal để share TanStack Query cache
 const SERVICE_CATALOG_KEY = ['service-catalog']
@@ -36,8 +32,16 @@ interface ServiceCatalogItem {
   price: number
 }
 
-const fmt = (n?: number | null) =>
-  typeof n === 'number' && !isNaN(n) ? n.toLocaleString('vi-VN') + ' ₫' : '—'
+// Hiển thị tiền dạng 300.000đ — hàm format chung (U-09)
+const fmt = (n?: number | null) => formatMoney(n)
+
+// U-04: kiểm tra số tiền ghi thu — KHÔNG tự ép giá trị, chỉ trả lỗi để hiện cạnh ô
+function getPaymentAmountError(amount: number | null | undefined, remaining: number): string | null {
+  if (amount == null) return null
+  if (!(amount > 0)) return 'Số tiền phải lớn hơn 0'
+  if (amount > remaining) return `Vượt số còn nợ ${formatMoney(Math.max(0, remaining))}`
+  return null
+}
 
 interface Props {
   open: boolean
@@ -59,15 +63,26 @@ type FolioPaymentRow = {
 
 export default function BookingFolioEditModal({ open, onClose, bookingId, groupId }: Props) {
   const { data: folio, isLoading } = useBookingFolio(bookingId)
-  const { addDeposit } = useDepositActions(bookingId, groupId)
-  const { addService, deleteService } = useServiceActions(bookingId, groupId)
-  const { addDiscount, deleteDiscount } = useDiscountActions(bookingId, groupId)
-  const voidPaymentMutation = useVoidPayment(bookingId, groupId)
+  const { addDeposit } = useDepositActions()
+  const { addService, deleteService } = useServiceActions()
+  const { addDiscount, deleteDiscount } = useDiscountActions()
+  const voidPaymentMutation = useVoidPayment()
 
   const [depositForm] = Form.useForm()
   const [serviceForm] = Form.useForm()
   const [discountForm] = Form.useForm()
   const [pendingVoidPaymentId, setPendingVoidPaymentId] = useState<string | null>(null)
+
+  // U-04: theo dõi giá trị nhập để hiện lỗi ngay + khoá nút lưu khi chưa hợp lệ
+  const watchedAmount = Form.useWatch<number | null | undefined>('amount', depositForm)
+  const watchedMethod = Form.useWatch<string | undefined>('method', depositForm)
+  // Số còn nợ lấy từ groups.grand_total - groups.paid (folio.remaining) — không tự cộng từ bookings
+  const remaining = folio?.remaining ?? 0
+  const amountError = getPaymentAmountError(watchedAmount, remaining)
+  const canSubmitPayment = watchedAmount != null && !amountError && Boolean(watchedMethod)
+
+  // B-06: đang chọn dịch vụ từ catalog thì khoá ô tên (tên lấy theo catalog)
+  const watchedServiceId = Form.useWatch<string | undefined>('serviceId', serviceForm)
 
   // Fetch catalog động từ DB — share cache với AddServiceModal
   const { data: serviceCatalog = [], isLoading: catalogLoading } = useQuery<ServiceCatalogItem[]>({
@@ -108,7 +123,7 @@ export default function BookingFolioEditModal({ open, onClose, bookingId, groupI
     if (svc) serviceForm.setFieldsValue({ name: svc.name, price: svc.price })
   }
 
-  // Submit cọc — try/catch để không nuốt lỗi validate
+  // Submit thanh toán — try/catch để không nuốt lỗi validate
   const handleDepositSubmit = async () => {
     try {
       const values = await depositForm.validateFields()
@@ -157,14 +172,19 @@ export default function BookingFolioEditModal({ open, onClose, bookingId, groupI
     }
   }
 
-  // ── Tab Cọc ──────────────────────────────────────────────
+  // ── Tab Thanh toán ───────────────────────────────────────
   const DepositTab = (
     <div>
       <Form form={depositForm} layout="inline" style={{ marginBottom: 16 }}>
-        <Form.Item name="amount" rules={[{ required: true, message: 'Nhập số tiền' }]}>
+        {/* U-04: bỏ min (InputNumber tự ép giá trị khi blur) — hiện lỗi cạnh ô thay vào đó */}
+        <Form.Item
+          name="amount"
+          rules={[{ required: true, message: 'Nhập số tiền' }]}
+          validateStatus={amountError ? 'error' : undefined}
+          help={amountError ?? undefined}
+        >
           <InputNumber<number>
             placeholder="Số tiền"
-            min={1000}
             step={50000}
             formatter={(v): string => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
             parser={v => Number(v!.replace(/,/g, ''))}
@@ -179,14 +199,23 @@ export default function BookingFolioEditModal({ open, onClose, bookingId, groupI
           <Input placeholder="Ghi chú (tuỳ chọn)" style={{ width: 180 }} />
         </Form.Item>
         <Form.Item>
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            loading={addDeposit.isPending}
-            onClick={handleDepositSubmit}
-          >
-            Ghi cọc
-          </Button>
+          <Space size={8}>
+            <Button
+              disabled={remaining <= 0}
+              onClick={() => depositForm.setFieldsValue({ amount: remaining })}
+            >
+              Thu đủ số còn lại
+            </Button>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              loading={addDeposit.isPending}
+              disabled={!canSubmitPayment}
+              onClick={handleDepositSubmit}
+            >
+              Ghi thanh toán
+            </Button>
+          </Space>
         </Form.Item>
       </Form>
 
@@ -197,7 +226,7 @@ export default function BookingFolioEditModal({ open, onClose, bookingId, groupI
         pagination={false}
         columns={[
           { title: 'Ngày', dataIndex: 'date', width: 100,
-            render: (d: string) => dayjs(d).format('DD/MM/YYYY') },
+            render: (d: string) => formatDate(d) },
           {
             title: 'Số tiền',
             dataIndex: 'amount',
@@ -217,14 +246,14 @@ export default function BookingFolioEditModal({ open, onClose, bookingId, groupI
             },
           },
           { title: 'Phương thức', dataIndex: 'method', width: 120,
-            render: (m: string) => METHOD_OPTIONS.find(o => o.value === m)?.label ?? m },
+            render: (m: string) => formatPaymentMethod(m) },
           {
             title: 'Ghi chú',
             dataIndex: 'note',
             ellipsis: true,
             render: (note: string | null, row) => {
               const isReverseEntry = row.isVoid && Boolean(row.voidedPaymentId)
-              if (isReverseEntry) return <Tag color="default">Void entry</Tag>
+              if (isReverseEntry) return <Tag color="default">Dòng đảo (void)</Tag>
               return note || <Text type="secondary">—</Text>
             },
           },
@@ -237,7 +266,7 @@ export default function BookingFolioEditModal({ open, onClose, bookingId, groupI
               const isVoidedOrigin = row.isVoid && !row.voidedPaymentId
               const isRowPending = pendingVoidPaymentId === row.id
 
-              if (isReverseEntry) return <Tag color="default">Void entry</Tag>
+              if (isReverseEntry) return <Tag color="default">Dòng đảo (void)</Tag>
 
               if (isVoidedOrigin) {
                 return (
@@ -250,7 +279,7 @@ export default function BookingFolioEditModal({ open, onClose, bookingId, groupI
 
               return (
                 <Popconfirm
-                  title={`Void payment ${row.amount.toLocaleString('vi-VN')}đ — không thể hoàn tác`}
+                  title={`Void thanh toán ${formatMoney(row.amount)} — không thể hoàn tác`}
                   onConfirm={() => handleVoidPayment(row.id)}
                   okText="Xác nhận Void"
                   cancelText="Huỷ"
@@ -267,7 +296,7 @@ export default function BookingFolioEditModal({ open, onClose, bookingId, groupI
           return (
             <Table.Summary.Row>
               <Table.Summary.Cell index={0} colSpan={2} align="right">
-                <Text strong>Tổng cọc: {fmt(total)}</Text>
+                <Text strong>Tổng đã thu: {fmt(total)}</Text>
               </Table.Summary.Cell>
               <Table.Summary.Cell index={2} colSpan={3} />
             </Table.Summary.Row>
@@ -293,8 +322,18 @@ export default function BookingFolioEditModal({ open, onClose, bookingId, groupI
             options={serviceCatalog.map((s) => ({ value: s.id, label: s.name }))}
           />
         </Form.Item>
-        <Form.Item name="name" rules={[{ required: true, message: 'Nhập tên' }]}>
-          <Input placeholder="Tên dịch vụ" style={{ width: 180 }} />
+        {/* B-06: chọn từ catalog → khoá ô tên (hiện tên catalog). Muốn tên riêng: bỏ chọn catalog
+            → chế độ dịch vụ tuỳ chỉnh, tên gửi qua p_custom_name. */}
+        <Form.Item
+          name="name"
+          rules={[{ required: true, message: 'Nhập tên' }]}
+          tooltip={watchedServiceId ? 'Tên theo danh mục. Muốn tên riêng: bỏ chọn danh mục (dịch vụ tuỳ chỉnh).' : undefined}
+        >
+          <Input
+            placeholder="Tên dịch vụ tuỳ chỉnh"
+            style={{ width: 180 }}
+            disabled={Boolean(watchedServiceId)}
+          />
         </Form.Item>
         <Form.Item name="price" rules={[{ required: true, message: 'Nhập giá' }]}>
           <InputNumber<number>
@@ -446,11 +485,15 @@ export default function BookingFolioEditModal({ open, onClose, bookingId, groupI
       </Space>
       <Space split={<Divider type="vertical" />}>
         <Text>
-          Grand Total:{' '}
+          Tổng cộng phòng:{' '}
           <Text strong style={{ fontSize: 16 }}>{fmt(folio.booking.grandTotal)}</Text>
         </Text>
         <Text>
-          Đã cọc:{' '}
+          Tổng nhóm:{' '}
+          <Text strong>{fmt(folio.group.grandTotal)}</Text>
+        </Text>
+        <Text>
+          Đã thanh toán:{' '}
           <Text strong style={{ color: '#52c41a' }}>
             {fmt(folio.group.paid)}
           </Text>
@@ -459,9 +502,10 @@ export default function BookingFolioEditModal({ open, onClose, bookingId, groupI
           Còn lại:{' '}
           <Text
             strong
-            style={{ color: folio.group.paid >= folio.booking.grandTotal ? '#52c41a' : '#ff4d4f' }}
+            style={{ color: folio.remaining <= 0 ? '#52c41a' : '#ff4d4f' }}
           >
-            {fmt(Math.max(0, folio.booking.grandTotal - folio.group.paid))}
+            {/* Còn lại theo nhóm: groups.grand_total - groups.paid (DB), không trộn số booking */}
+            {fmt(Math.max(0, folio.remaining))}
           </Text>
         </Text>
       </Space>
@@ -485,7 +529,7 @@ export default function BookingFolioEditModal({ open, onClose, bookingId, groupI
           <Divider style={{ margin: '12px 0' }} />
           <Tabs
             items={[
-              { key: 'deposit',  label: '💰 Cọc',      children: DepositTab  },
+              { key: 'deposit',  label: '💰 Thanh toán', children: DepositTab  },
               { key: 'services', label: '🛎 Dịch vụ',  children: ServiceTab  },
               { key: 'discount', label: '🏷 Giảm giá', children: DiscountTab },
             ]}

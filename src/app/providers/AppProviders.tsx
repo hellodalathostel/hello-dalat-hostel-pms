@@ -10,6 +10,9 @@ import { useThemeStore } from '@/stores/useThemeStore'
 
 dayjs.locale('vi')
 
+// U-09: locale vi_VN mặc định để Empty là "Trống" — đổi sang "Không có dữ liệu" cho rõ nghĩa
+const pmsLocale = { ...viVN, Empty: { ...viVN.Empty, description: 'Không có dữ liệu' } }
+
 type AppProvidersProps = PropsWithChildren
 
 export function AppProviders({ children }: AppProvidersProps): JSX.Element {
@@ -33,7 +36,7 @@ export function AppProviders({ children }: AppProvidersProps): JSX.Element {
   }, [mode])
 
   return (
-    <ConfigProvider locale={viVN} theme={getPmsTheme(mode)}>
+    <ConfigProvider locale={pmsLocale} theme={getPmsTheme(mode)}>
       <AntdApp>
         <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
       </AntdApp>

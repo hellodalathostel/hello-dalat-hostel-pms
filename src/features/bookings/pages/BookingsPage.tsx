@@ -18,6 +18,7 @@ import { useNavigate } from 'react-router-dom'
 import { useBookingsList } from '@/features/bookings/hooks/useBookingsList'
 import type { BookingsListItem } from '@/features/bookings/hooks/useBookingsList'
 import BookingDetailDrawer from '@/features/bookings/components/BookingDetailDrawer'
+import { formatMoney } from '@/shared/utils/format'
 
 const STATUS_COLOR: Record<string, string> = {
   booked: 'blue',
@@ -40,11 +41,9 @@ function getGroupStatus(statuses: string[]): string {
   return 'cancelled'
 }
 
+// Hiển thị tiền dạng 300.000đ — dùng hàm format chung (U-09)
 function formatVND(amount: number): string {
-  return new Intl.NumberFormat('vi-VN', {
-    style: 'currency',
-    currency: 'VND',
-  }).format(amount)
+  return formatMoney(amount)
 }
 
 export function BookingsPage(): JSX.Element {

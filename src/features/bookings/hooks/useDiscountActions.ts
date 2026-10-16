@@ -1,8 +1,9 @@
 // FILE: src/features/bookings/hooks/useDiscountActions.ts
 // Hook CRUD booking_discounts qua RPC — trigger tự recalc grand_total
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation } from '@tanstack/react-query'
 import { supabase } from '@/api/supabase'
 import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
+import { useRefreshBookingData } from '@/shared/hooks/useRefreshBookingData'
 
 interface AddDiscountPayload {
   bookingId: string
@@ -10,15 +11,10 @@ interface AddDiscountPayload {
   description?: string
 }
 
-export function useDiscountActions(bookingId: string, groupId: string) {
-  const queryClient = useQueryClient()
+export function useDiscountActions() {
   const { message } = useAppFeedback()
-
-  const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ['booking-folio', bookingId] })
-    queryClient.invalidateQueries({ queryKey: ['booking-detail', groupId] })
-    queryClient.invalidateQueries({ queryKey: ['bookings'] })
-  }
+  // Tải lại folio + drawer + danh sách sau mỗi thao tác (B-03)
+  const invalidate = useRefreshBookingData()
 
   const addDiscount = useMutation({
     mutationFn: async (payload: AddDiscountPayload) => {
@@ -34,7 +30,7 @@ export function useDiscountActions(bookingId: string, groupId: string) {
         throw err instanceof Error ? err : new Error('Lỗi không xác định khi thêm giảm giá')
       }
     },
-    onSuccess: () => { message.success('Đã thêm giảm giá'); invalidate() },
+    onSuccess: () => { message.success('Đã thêm giảm giá'); void invalidate() },
     onError: (err: Error) => { message.error(`Lỗi thêm giảm giá: ${err.message}`) },
   })
 
@@ -49,7 +45,7 @@ export function useDiscountActions(bookingId: string, groupId: string) {
         throw err instanceof Error ? err : new Error('Lỗi không xác định khi xóa giảm giá')
       }
     },
-    onSuccess: () => { message.success('Đã xóa giảm giá'); invalidate() },
+    onSuccess: () => { message.success('Đã xóa giảm giá'); void invalidate() },
     onError: (err: Error) => { message.error(`Lỗi xóa giảm giá: ${err.message}`) },
   })
 

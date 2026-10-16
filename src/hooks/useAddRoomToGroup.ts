@@ -1,6 +1,7 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation } from '@tanstack/react-query'
 import { supabase } from '@/api/supabase'
 import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
+import { useRefreshBookingData } from '@/shared/hooks/useRefreshBookingData'
 
 export interface AddRoomPayload {
   group_id: string
@@ -13,7 +14,7 @@ export interface AddRoomPayload {
 }
 
 export function useAddRoomToGroup() {
-  const queryClient = useQueryClient()
+  const refreshBookingData = useRefreshBookingData()
   const { message } = useAppFeedback()
 
   return useMutation({
@@ -34,11 +35,10 @@ export function useAddRoomToGroup() {
 
       return data as { success: boolean; booking_id: string; group_id: string }
     },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['group', data.group_id] })
-      queryClient.invalidateQueries({ queryKey: ['bookings'] })
-      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+    onSuccess: () => {
+      // SỬA B-02: key ['group', id] không tồn tại → drawer/danh sách không cập nhật phòng mới
       message.success('Đã thêm phòng vào đặt phòng')
+      void refreshBookingData()
     },
     onError: (err: Error) => {
       const raw = err.message

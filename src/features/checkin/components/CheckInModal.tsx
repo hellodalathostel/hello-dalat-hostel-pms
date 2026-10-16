@@ -56,7 +56,9 @@ export function CheckInModal({ open, room, onClose, onSuccess }: Props) {
             document_type: values.document_type,
             document_number: values.document_number.trim(),
             date_of_birth: dateOfBirth,
-            gender: values.gender ?? '',
+            // SỬA B-04: không chọn giới tính → gửi undefined (DB nhận NULL). Trước đây gửi '' →
+            // vi phạm customers_gender_check (chỉ cho 'Nam' | 'Nữ' | NULL) → check-in luôn thất bại.
+            gender: values.gender || undefined,
             nationality: values.nationality.trim(),
             residency_type: undefined,
             province: undefined,

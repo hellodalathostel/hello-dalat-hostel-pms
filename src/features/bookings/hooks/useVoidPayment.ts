@@ -1,15 +1,16 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation } from '@tanstack/react-query'
 import { supabase } from '@/api/supabase'
 import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
 import { normalizeError } from '@/shared/utils/normalizeError'
+import { useRefreshBookingData } from '@/shared/hooks/useRefreshBookingData'
 
 interface VoidPaymentPayload {
   paymentId: string
   note?: string
 }
 
-export function useVoidPayment(bookingId: string, groupId: string) {
-  const queryClient = useQueryClient()
+export function useVoidPayment() {
+  const refreshBookingData = useRefreshBookingData()
   const { message } = useAppFeedback()
 
   return useMutation({
@@ -31,12 +32,7 @@ export function useVoidPayment(bookingId: string, groupId: string) {
       }
     },
     onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['booking-folio', bookingId] }),
-        queryClient.invalidateQueries({ queryKey: ['booking-detail', groupId] }),
-        queryClient.invalidateQueries({ queryKey: ['bookings'] }),
-        queryClient.invalidateQueries({ queryKey: ['groups'] }),
-      ])
+      await refreshBookingData()
       message.success('Đã void payment')
     },
     onError: (error: Error) => {

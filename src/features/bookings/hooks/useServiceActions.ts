@@ -1,8 +1,9 @@
 // FILE: src/features/bookings/hooks/useServiceActions.ts
 // Hook CRUD booking_services qua RPC — trigger tự recalc grand_total
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation } from '@tanstack/react-query'
 import { supabase } from '@/api/supabase'
 import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
+import { useRefreshBookingData } from '@/shared/hooks/useRefreshBookingData'
 
 interface AddServicePayload {
   bookingId: string
@@ -12,15 +13,10 @@ interface AddServicePayload {
   qty: number
 }
 
-export function useServiceActions(bookingId: string, groupId: string) {
-  const queryClient = useQueryClient()
+export function useServiceActions() {
   const { message } = useAppFeedback()
-
-  const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ['booking-folio', bookingId] })
-    queryClient.invalidateQueries({ queryKey: ['booking-detail', groupId] })
-    queryClient.invalidateQueries({ queryKey: ['bookings'] })
-  }
+  // Tải lại folio + drawer + danh sách sau mỗi thao tác (B-03)
+  const invalidate = useRefreshBookingData()
 
   const addService = useMutation({
     mutationFn: async (payload: AddServicePayload) => {
@@ -42,7 +38,7 @@ export function useServiceActions(bookingId: string, groupId: string) {
         throw err instanceof Error ? err : new Error('Lỗi không xác định khi thêm dịch vụ')
       }
     },
-    onSuccess: () => { message.success('Đã thêm dịch vụ'); invalidate() },
+    onSuccess: () => { message.success('Đã thêm dịch vụ'); void invalidate() },
     onError: (err: Error) => { message.error(`Lỗi thêm dịch vụ: ${err.message}`) },
   })
 
@@ -57,7 +53,7 @@ export function useServiceActions(bookingId: string, groupId: string) {
         throw err instanceof Error ? err : new Error('Lỗi không xác định khi xóa dịch vụ')
       }
     },
-    onSuccess: () => { message.success('Đã xóa dịch vụ'); invalidate() },
+    onSuccess: () => { message.success('Đã xóa dịch vụ'); void invalidate() },
     onError: (err: Error) => { message.error(`Lỗi xóa dịch vụ: ${err.message}`) },
   })
 

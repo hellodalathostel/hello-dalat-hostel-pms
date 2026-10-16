@@ -1,6 +1,7 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { supabase } from '@/api/supabase'
 import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
+import { useRefreshBookingData } from '@/shared/hooks/useRefreshBookingData'
 
 // Loại dịch vụ: own = doanh thu HKD, partner = đối tác (không tính S1a)
 export type ServiceType = 'own' | 'partner'
@@ -50,7 +51,7 @@ export function useServiceCatalog() {
 
 // Hook mutation thêm dịch vụ
 export function useAddService(bookingId: string) {
-  const queryClient = useQueryClient()
+  const refreshBookingData = useRefreshBookingData()
   const { message } = useAppFeedback()
 
   return useMutation({
@@ -70,8 +71,9 @@ export function useAddService(bookingId: string) {
     },
     onSuccess: (data) => {
       message.success(`Đã thêm: ${data?.service ?? 'dịch vụ'} ×${data?.qty ?? 0}`)
-      void queryClient.invalidateQueries({ queryKey: ['booking-folio', bookingId] })
-      void queryClient.invalidateQueries({ queryKey: ['booking-detail', bookingId] })
+      // SỬA B-03: trước đây invalidate ['booking-detail', bookingId] — sai key (drawer dùng groupId)
+      // nên tổng nhóm không cập nhật. Helper dùng prefix key nên bắt được mọi biến thể.
+      void refreshBookingData()
     },
     onError: (error: Error) => {
       const msg = error.message ?? ''
