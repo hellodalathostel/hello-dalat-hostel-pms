@@ -1,8 +1,9 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation } from '@tanstack/react-query'
 import type { Dayjs } from 'dayjs'
 import { supabase } from '@/api/supabase'
 import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
 import { normalizeError } from '@/shared/utils/normalizeError'
+import { useRefreshBookingData } from '@/shared/hooks/useRefreshBookingData'
 
 export interface UpdateBookingPayload {
   bookingId: string
@@ -28,18 +29,8 @@ type UpdateBookingRpcParams = {
   p_override_checkin?: boolean
 }
 
-async function invalidateOperationalQueries(queryClient: ReturnType<typeof useQueryClient>): Promise<void> {
-  await Promise.all([
-    queryClient.invalidateQueries({ queryKey: ['booking-detail'] }),
-    queryClient.invalidateQueries({ queryKey: ['room-calendar'] }),
-    queryClient.invalidateQueries({ queryKey: ['dashboard', 'today'] }),
-    queryClient.invalidateQueries({ queryKey: ['bookings'] }),
-    queryClient.invalidateQueries({ queryKey: ['groups'] }),
-  ])
-}
-
 export function useUpdateBooking() {
-  const queryClient = useQueryClient()
+  const refreshBookingData = useRefreshBookingData()
   const { notification } = useAppFeedback()
 
   return useMutation({
@@ -70,7 +61,8 @@ export function useUpdateBooking() {
       }
     },
     onSuccess: async () => {
-      await invalidateOperationalQueries(queryClient)
+      // Tải lại bảng danh sách + drawer + folio (B-02)
+      await refreshBookingData()
     },
     onError: (error) => {
       const normalizedError = normalizeError(error)
@@ -83,7 +75,7 @@ export function useUpdateBooking() {
 }
 
 export function useCancelBooking() {
-  const queryClient = useQueryClient()
+  const refreshBookingData = useRefreshBookingData()
   const { notification } = useAppFeedback()
 
   return useMutation({
@@ -105,7 +97,8 @@ export function useCancelBooking() {
       }
     },
     onSuccess: async () => {
-      await invalidateOperationalQueries(queryClient)
+      // Tải lại bảng danh sách + drawer + folio (B-02)
+      await refreshBookingData()
     },
     onError: (error) => {
       const normalizedError = normalizeError(error)

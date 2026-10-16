@@ -59,10 +59,10 @@ type FolioPaymentRow = {
 
 export default function BookingFolioEditModal({ open, onClose, bookingId, groupId }: Props) {
   const { data: folio, isLoading } = useBookingFolio(bookingId)
-  const { addDeposit } = useDepositActions(bookingId, groupId)
-  const { addService, deleteService } = useServiceActions(bookingId, groupId)
-  const { addDiscount, deleteDiscount } = useDiscountActions(bookingId, groupId)
-  const voidPaymentMutation = useVoidPayment(bookingId, groupId)
+  const { addDeposit } = useDepositActions()
+  const { addService, deleteService } = useServiceActions()
+  const { addDiscount, deleteDiscount } = useDiscountActions()
+  const voidPaymentMutation = useVoidPayment()
 
   const [depositForm] = Form.useForm()
   const [serviceForm] = Form.useForm()
