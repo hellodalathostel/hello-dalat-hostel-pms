@@ -51,10 +51,14 @@ serve(async (req) => {
     const TOTAL_ROOMS = activeRoomsCount ?? 8 // fallback an toàn nếu count null bất thường
 
     // ── 1. PAYMENTS trong ngày ──────────────────────────────────────────────
+    // Chỉ cộng khoản thu hợp lệ. void_payment_txn đánh dấu is_void = true cho dòng gốc (ngày thu)
+    // và bút toán đảo âm (ngày void) — không lọc thì ngày thu bị cộng thừa, ngày void bị trừ oan
+    // (ví dụ 15/10/2026: +600.000 dù đã void; 16/10/2026: 810.705 thay vì 1.410.705).
     const { data: payments, error: pmError } = await supabasePublic
       .from('payment_history')
       .select('amount, method, group_id')
       .eq('date', targetDate)
+      .eq('is_void', false)
     if (pmError) throw new Error('payment_history: ' + pmError.message)
 
     const totalRevenue = payments?.reduce((sum, p) => sum + (p.amount ?? 0), 0) ?? 0
