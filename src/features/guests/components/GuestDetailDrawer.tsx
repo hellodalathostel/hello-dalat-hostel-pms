@@ -2,6 +2,7 @@ import { Descriptions, Drawer, Empty, Skeleton, Table, Tag } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
 import { useGuestBookings, type GuestBooking, type GuestSummary } from '@/features/guests/hooks/useGuests'
+import { formatMoney } from '@/shared/utils/format'
 
 const STATUS_COLOR: Record<string, string> = {
   booked: 'blue',
@@ -23,9 +24,9 @@ interface Props {
   onClose: () => void
 }
 
+// Hiển thị tiền dạng 300.000đ — dùng hàm format chung (U-09)
 function formatVND(amount: number | null): string {
-  if (amount == null) return '—'
-  return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount)
+  return formatMoney(amount)
 }
 
 export function GuestDetailDrawer({ guest, open, onClose }: Props) {

@@ -12,6 +12,7 @@ import dayjs from 'dayjs'
 import { useCheckout } from '@/features/checkout/hooks/useCheckOut'
 import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
 import type { PaymentMethod } from '@/types/database'
+import { formatMoney } from '@/shared/utils/format'
 
 const { Text, Title } = Typography
 
@@ -45,8 +46,9 @@ const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
 
 const CARD_SURCHARGE_RATE = 0.04
 
+// Hiển thị tiền dạng 300.000đ — dùng hàm format chung (U-09)
 function formatVND(amount: number): string {
-  return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount)
+  return formatMoney(amount)
 }
 
 export function QuickCheckoutModal({ target, onClose }: CheckoutModalProps) {

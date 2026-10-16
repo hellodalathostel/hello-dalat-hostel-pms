@@ -106,7 +106,7 @@ export function EarlyLateModal({
 
   return (
     <Modal
-      title="Early Check-in / Late Check-out"
+      title="Nhận phòng sớm / Trả phòng muộn"
       open={open}
       onCancel={onClose}
       onOk={handleOk}
@@ -134,7 +134,7 @@ export function EarlyLateModal({
           type="error"
           showIcon
           style={{ marginBottom: 16 }}
-          message="Booking đã checked-out hoặc cancelled, không thể áp dụng early/late."
+          message="Booking đã checked-out hoặc cancelled, không thể áp dụng nhận sớm/trả muộn."
         />
       )}
 
@@ -142,12 +142,12 @@ export function EarlyLateModal({
         <Form.Item name="type" label="Loại" rules={[{ required: true }]}>
           <Radio.Group>
             <Radio value="early" disabled={earlyDisabled}>
-              Early Check-in
+              Nhận phòng sớm
               {booking.has_early_check_in && (
                 <>
                   <Text type="secondary"> (đã áp dụng) </Text>
                   <Popconfirm
-                    title="Hủy Early Check-in?"
+                    title="Hủy nhận phòng sớm?"
                     description="Sẽ xóa phí đã ghi và bỏ block phòng đêm liền kề (nếu có)."
                     okText="Hủy áp dụng"
                     cancelText="Đóng"
@@ -161,12 +161,12 @@ export function EarlyLateModal({
               )}
             </Radio>
             <Radio value="late" disabled={lateDisabled}>
-              Late Check-out
+              Trả phòng muộn
               {booking.has_late_check_out && (
                 <>
                   <Text type="secondary"> (đã áp dụng) </Text>
                   <Popconfirm
-                    title="Hủy Late Check-out?"
+                    title="Hủy trả phòng muộn?"
                     description="Sẽ xóa phí đã ghi và bỏ block phòng đêm liền kề (nếu có)."
                     okText="Hủy áp dụng"
                     cancelText="Đóng"

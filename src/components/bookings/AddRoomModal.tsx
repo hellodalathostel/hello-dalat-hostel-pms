@@ -10,13 +10,15 @@ import { supabase } from '@/api/supabase';
 import { useRooms } from '@/features/bookings/hooks/useRooms';
 import { useAddRoomToGroup } from '@/hooks/useAddRoomToGroup';
 import { useAppFeedback } from '@/shared/hooks/useAppFeedback';
+import { formatRoomLabel } from '@/shared/utils/format';
 
 const schema = z.object({
   room_id:         z.string().min(1, 'Chọn phòng'),
   check_in:        z.custom<Dayjs>(v => dayjs.isDayjs(v), 'Chọn ngày nhận'),
   check_out:       z.custom<Dayjs>(v => dayjs.isDayjs(v), 'Chọn ngày trả'),
   price_per_night: z.number().min(1, 'Nhập giá'),
-  guests_count:    z.number().min(1),
+  // U-04: cho phép null khi ô trống — không tự ép, hiện lỗi cạnh ô
+  guests_count:    z.number().nullable().refine(v => v != null && v >= 1, 'Số khách phải từ 1 trở lên'),
   note:            z.string().optional(),
 });
 
@@ -63,6 +65,16 @@ export function AddRoomModal({ open, groupId, defaultCheckIn, defaultCheckOut, o
   // eslint-disable-next-line react-hooks/incompatible-library -- RHF watch() không tương thích React Compiler, known issue
   const watchRoomId  = watch('room_id');
   const watchCheckIn = watch('check_in');
+  const watchGuests  = watch('guests_count');
+
+  // U-04: kiểm tra sức chứa phòng — giữ nguyên giá trị nhập, báo lỗi + khoá nút
+  const selectedCapacity = rooms.find(r => r.id === watchRoomId)?.capacity ?? null;
+  const guestsError =
+    watchGuests == null || watchGuests < 1
+      ? 'Số khách phải từ 1 trở lên'
+      : selectedCapacity && watchGuests > selectedCapacity
+        ? `Phòng này tối đa ${selectedCapacity} khách`
+        : null;
 
   useEffect(() => {
     if (!watchRoomId || !watchCheckIn) return;
@@ -77,6 +89,10 @@ export function AddRoomModal({ open, groupId, defaultCheckIn, defaultCheckOut, o
   }, [watchRoomId, watchCheckIn, setValue]);
 
   const onSubmit = (values: FormValues) => {
+    if (guestsError) {
+      message.error(guestsError);
+      return;
+    }
     addRoom(
       {
         group_id:        groupId,
@@ -84,7 +100,7 @@ export function AddRoomModal({ open, groupId, defaultCheckIn, defaultCheckOut, o
         check_in:        values.check_in.format('YYYY-MM-DD'),
         check_out:       values.check_out.format('YYYY-MM-DD'),
         price_per_night: values.price_per_night,
-        guests_count:    values.guests_count,
+        guests_count:    values.guests_count ?? undefined,
         note:            values.note,
       },
       {
@@ -105,6 +121,7 @@ export function AddRoomModal({ open, groupId, defaultCheckIn, defaultCheckOut, o
       okText="Thêm phòng"
       cancelText="Hủy"
       confirmLoading={isPending}
+      okButtonProps={{ disabled: Boolean(guestsError) }}
       destroyOnClose
     >
       <Spin spinning={roomsLoading}>
@@ -123,7 +140,7 @@ export function AddRoomModal({ open, groupId, defaultCheckIn, defaultCheckOut, o
                 <Select
                   {...field}
                   placeholder="Chọn phòng"
-                  options={rooms.map(r => ({ value: r.id, label: `${r.id} — ${r.name}` }))}
+                  options={rooms.map(r => ({ value: r.id, label: formatRoomLabel(r) }))}
                   showSearch
                   optionFilterProp="label"
                 />
@@ -206,12 +223,22 @@ export function AddRoomModal({ open, groupId, defaultCheckIn, defaultCheckOut, o
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item label="Số khách">
+              <Form.Item
+                label="Số khách"
+                validateStatus={guestsError ? 'error' : ''}
+                help={guestsError ?? undefined}
+              >
                 <Controller
                   name="guests_count"
                   control={control}
                   render={({ field }) => (
-                    <InputNumber {...field} style={{ width: '100%' }} min={1} max={20} />
+                    <InputNumber
+                      value={field.value}
+                      onChange={v => field.onChange(v ?? null)}
+                      onBlur={field.onBlur}
+                      style={{ width: '100%' }}
+                      precision={0}
+                    />
                   )}
                 />
               </Form.Item>

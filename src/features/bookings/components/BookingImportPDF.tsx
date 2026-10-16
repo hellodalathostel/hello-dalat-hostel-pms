@@ -6,6 +6,7 @@ import * as pdfjsLib from 'pdfjs-dist';
 import type { TextItem } from 'pdfjs-dist/types/src/display/api';
 import dayjs from 'dayjs';
 import customParseFormat from 'dayjs/plugin/customParseFormat';
+import { formatMoney } from '@/shared/utils/format';
 
 dayjs.extend(customParseFormat);
 
@@ -183,10 +184,8 @@ const parseBookingComPDF = (text: string): ParsedBookingData => {
 
 // ─── Format helpers ───────────────────────────────────────────────────────────
 
-const formatVND = (amount?: number) =>
-  amount !== undefined
-    ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount)
-    : '—';
+// Hiển thị tiền dạng 300.000đ — dùng hàm format chung (U-09)
+const formatVND = (amount?: number) => formatMoney(amount);
 
 const formatDate = (iso?: string) =>
   iso ? dayjs(iso).format('ddd DD/MM/YYYY') : <Tag color="error">Invalid Date</Tag>;

@@ -6,6 +6,7 @@ import { Button, DatePicker, Form, Input, Modal, Select } from 'antd'
 import type { BlockReason } from '@/hooks/useRoomBlocks'
 import { useCreateBlock } from '@/hooks/useRoomBlocks'
 import { useRooms } from '@/features/bookings/hooks/useRooms'
+import { formatRoomLabel } from '@/shared/utils/format'
 
 type DateRange = [Dayjs, Dayjs]
 
@@ -145,7 +146,10 @@ export function BlockRoomModal({
           rules={[{ required: true, message: 'Vui lòng chọn phòng' }]}
         >
           <Select
-            options={rooms.map((r) => ({ value: r.id, label: r.name }))}
+            // U-03: nhãn phòng thống nhất "301 — Standard Double — tối đa 2 khách"
+            options={rooms.map((r) => ({ value: r.id, label: formatRoomLabel(r) }))}
+            showSearch
+            optionFilterProp="label"
             loading={roomsLoading}
             placeholder="Chọn phòng cần khóa"
           />

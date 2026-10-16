@@ -7,6 +7,7 @@ import type { PaymentFormValues } from '@/lib/schemas'
 import { useRecordPayment } from '@/features/payment/hooks/usePayment'
 import type { DashboardRoom } from '@/types/dashboard'
 import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
+import { formatMoney, PAYMENT_METHOD_LABEL } from '@/shared/utils/format'
 
 interface PaymentModalProps {
   visible: boolean
@@ -14,12 +15,9 @@ interface PaymentModalProps {
   onCancel: () => void
 }
 
-const paymentMethodOptions: Array<{ label: string; value: PaymentFormValues['method'] }> = [
-  { label: 'Tiền mặt', value: 'cash' },
-  { label: 'Chuyển khoản', value: 'transfer' },
-  { label: 'Quẹt thẻ', value: 'card' },
-  { label: 'Khác', value: 'other' },
-]
+const paymentMethodOptions: Array<{ label: string; value: PaymentFormValues['method'] }> = (
+  ['cash', 'transfer', 'card', 'other'] as const
+).map((value) => ({ label: PAYMENT_METHOD_LABEL[value], value }))
 
 function getDefaultValues(room: DashboardRoom): PaymentFormValues {
   return {
@@ -49,6 +47,19 @@ export function PaymentModal({ visible, room, onCancel }: PaymentModalProps): JS
 
   // eslint-disable-next-line react-hooks/incompatible-library -- RHF watch() không tương thích React Compiler, known issue
   const selectedMethod = watch('method')
+  const watchedAmount = watch('amount')
+
+  // U-04: số còn nợ lấy từ view (group_grand_total - paid của groups) — không tự cộng từ bookings
+  const remaining = Math.max(room.group_balance_due ?? 0, 0)
+  // Không tự ép giá trị — chỉ báo lỗi cạnh ô và khoá nút
+  const amountError =
+    watchedAmount == null
+      ? 'Nhập số tiền'
+      : !(watchedAmount > 0)
+        ? 'Số tiền phải lớn hơn 0'
+        : watchedAmount > remaining
+          ? `Vượt số còn nợ ${formatMoney(remaining)}`
+          : null
 
   const handleClose = () => {
     reset(getDefaultValues(room))
@@ -103,6 +114,7 @@ export function PaymentModal({ visible, room, onCancel }: PaymentModalProps): JS
             type="primary"
             onClick={handleSubmit(onSubmit)}
             loading={recordPaymentMutation.isPending}
+            disabled={Boolean(amountError)}
           >
             Xác nhận thu tiền
           </Button>
@@ -117,13 +129,23 @@ export function PaymentModal({ visible, room, onCancel }: PaymentModalProps): JS
             <Form.Item
               label="Số tiền"
               required
-              validateStatus={fieldState.error ? 'error' : ''}
-              help={fieldState.error?.message}
+              validateStatus={amountError || fieldState.error ? 'error' : ''}
+              help={amountError ?? fieldState.error?.message}
+              extra={
+                <Button
+                  type="link"
+                  size="small"
+                  style={{ paddingInline: 0 }}
+                  disabled={remaining <= 0}
+                  onClick={() => field.onChange(remaining)}
+                >
+                  Thu đủ số còn lại ({formatMoney(remaining)})
+                </Button>
+              }
             >
               <InputNumber
                 value={field.value}
-                min={0}
-                onChange={(value) => field.onChange(value ?? 0)}
+                onChange={(value) => field.onChange(value ?? undefined)}
                 style={{ width: '100%' }}
                 formatter={(value) => {
                   if (value === undefined || value === null) {

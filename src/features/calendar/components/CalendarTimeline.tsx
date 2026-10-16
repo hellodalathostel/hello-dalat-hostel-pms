@@ -350,10 +350,10 @@ export function CalendarTimeline({ dates, rooms, onBookingClick }: CalendarTimel
                         <Tooltip
                           title={
                             event.has_early_check_in && event.has_late_check_out
-                              ? 'Early check-in & Late check-out'
+                              ? 'Nhận sớm & Trả muộn'
                               : event.has_early_check_in
-                                ? 'Early check-in'
-                                : 'Late check-out'
+                                ? 'Nhận sớm'
+                                : 'Trả muộn'
                           }
                         >
                           <ClockCircleOutlined

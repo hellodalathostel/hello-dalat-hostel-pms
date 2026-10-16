@@ -1,4 +1,4 @@
-// Hook xử lý nhập cọc — dùng record_payment_txn RPC
+// Hook ghi thanh toán (trước gọi là "cọc") — dùng record_payment_txn RPC
 import { useMutation } from '@tanstack/react-query'
 import { supabase } from '@/api/supabase'
 import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
@@ -32,11 +32,11 @@ export function useDepositActions() {
       return data
     },
     onSuccess: () => {
-      message.success('Đã ghi nhận cọc')
+      message.success('Đã ghi nhận thanh toán')
       void invalidate()
     },
     onError: (err: Error) => {
-      message.error(`Lỗi ghi cọc: ${err.message}`)
+      message.error(`Lỗi ghi thanh toán: ${err.message}`)
     },
   })
 

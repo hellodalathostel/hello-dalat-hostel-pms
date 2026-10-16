@@ -140,10 +140,10 @@ export function BookingRoomCard({
             <Typography.Text strong>
               Phòng {booking.room_name ?? booking.room_id}
               {booking.has_early_check_in && (
-                <Tag color="orange" style={{ marginLeft: 4, fontSize: 11 }}>🌅 Early</Tag>
+                <Tag color="orange" style={{ marginLeft: 4, fontSize: 11 }}>🌅 Nhận sớm</Tag>
               )}
               {booking.has_late_check_out && (
-                <Tag color="purple" style={{ marginLeft: 4, fontSize: 11 }}>🌙 Late</Tag>
+                <Tag color="purple" style={{ marginLeft: 4, fontSize: 11 }}>🌙 Trả muộn</Tag>
               )}
             </Typography.Text>
             {booking.guest_name && (
@@ -235,11 +235,11 @@ export function BookingRoomCard({
                 </Button>
               )}
 
-              {/* Early / Late */}
+              {/* Nhận sớm / Trả muộn */}
               {canEarlyLate && (
-                <Tooltip title="Mở modal Early/Late cho booking này">
+                <Tooltip title="Thêm nhận phòng sớm / trả phòng muộn cho booking này">
                   <Button size="small" icon={<ClockCircleOutlined />} onClick={() => onEarlyLate?.(booking.id)}>
-                    Early/Late
+                    Nhận sớm/Trả muộn
                   </Button>
                 </Tooltip>
               )}

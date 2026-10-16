@@ -3,9 +3,11 @@ import { DeleteOutlined, PlusOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import { useServices } from '@/features/bookings/hooks/useServices'
 import type { ServiceLineItem } from '@/features/bookings/types/booking'
+import { formatMoney } from '@/shared/utils/format'
 
 const { Text } = Typography
-const VND_FORMATTER = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' })
+// Hiển thị tiền dạng 300.000đ — dùng hàm format chung (U-09)
+const VND_FORMATTER = { format: (amount: number) => formatMoney(amount) }
 
 interface Props {
   bookingCount: number
