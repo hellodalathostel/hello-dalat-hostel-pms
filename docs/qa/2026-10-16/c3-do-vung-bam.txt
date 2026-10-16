@@ -1,0 +1,6 @@
+375 coarse=true nút bảng phòng: cao tối thiểu 44px; ⋮ 44x44,44x44,44x44,44x44 aria="Thao tác khác — phòng 103"; cỡ chữ {"id":"16px","guest":"16px","status":"15px","label":"13px","btn":"15px","head":"15px"}
+375 drawer: nút cao tối thiểu 44px (12 nút); Copy 44x44; toast="Đã sao chép mã HD261016301"; clipboard="HD261016301"
+768 coarse=true nút bảng phòng: cao tối thiểu 44px; ⋮ 44x44,44x44,44x44,44x44 aria="Thao tác khác — phòng 103"; cỡ chữ {"id":"16px","guest":"16px","status":"15px","label":"13px","btn":"15px","head":"15px"}
+768 drawer: nút cao tối thiểu 44px (12 nút); Copy 44x44; toast="Đã sao chép mã HD261016301"; clipboard="HD261016301"
+1366 coarse=false nút bảng phòng: cao tối thiểu 40px; ⋮ 40x40,40x40,40x40,40x40 aria="Thao tác khác — phòng 103"; cỡ chữ {"id":"16px","guest":"16px","status":"15px","label":"13px","btn":"15px","head":"15px"}
+1366 drawer: nút cao tối thiểu 40px (12 nút); Copy 40x40; toast="Đã sao chép mã HD261016301"; clipboard="HD261016301"

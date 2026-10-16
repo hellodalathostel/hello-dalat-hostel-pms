@@ -225,6 +225,8 @@ export default function BookingDetailDrawer({ groupId = null, bookingId = null, 
         width={isMobile ? '100%' : 680}
         open={open}
         onClose={onClose}
+        // C3: áp token cỡ chữ + vùng bấm cho toàn bộ drawer (xem index.css)
+        rootClassName="booking-detail-drawer"
         extra={
           data && effectiveGroupId ? (
             <Space size={8}>

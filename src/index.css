@@ -104,6 +104,67 @@ body {
   padding: 24px;
 }
 
+/* ---- C3: cỡ chữ + vùng bấm (giá trị lấy từ token trong tokens.css) ---- */
+
+/* Nút chỉ có icon (⋮, Sao chép…): vùng bấm vuông tối thiểu theo token */
+.icon-btn.ant-btn {
+  min-width: var(--control-height);
+  min-height: var(--control-height);
+}
+
+/* Drawer chi tiết booking: mọi nút (kể cả size small) cao theo token, chữ 15px */
+.booking-detail-drawer .ant-btn {
+  min-height: var(--control-height);
+  font-size: var(--font-size-body);
+}
+
+.booking-detail-drawer .ant-btn.ant-btn-icon-only {
+  min-width: var(--control-height);
+}
+
+.booking-detail-drawer .ant-drawer-close {
+  min-width: var(--touch-target);
+  min-height: var(--touch-target);
+}
+
+.booking-detail-drawer .ant-tag {
+  font-size: var(--font-size-secondary);
+}
+
+/* Màn hẹp: nhóm nút ở header drawer (Lịch sử, VI/EN, Tài liệu) xuống dòng riêng,
+   không che mất tiêu đề "Chi tiết Booking" */
+@media (max-width: 575px) {
+  .booking-detail-drawer .ant-drawer-header {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+
+  .booking-detail-drawer .ant-drawer-header-title {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  .booking-detail-drawer .ant-drawer-extra {
+    flex-basis: 100%;
+  }
+}
+
+/* Số phòng, tên khách: 16px đậm vừa */
+.booking-emphasis.ant-typography {
+  font-size: var(--font-size-emphasis);
+  font-weight: var(--font-weight-emphasis);
+}
+
+/* Menu ngang desktop: chữ 15px, mục cao theo token */
+.main-menu.ant-menu-horizontal,
+.main-menu-popup .ant-menu-item {
+  font-size: var(--font-size-body);
+}
+
+.main-menu-popup .ant-menu-item {
+  min-height: var(--control-height);
+}
+
 /* ---- C2: menu gom nhóm ---- */
 .main-new-booking {
   flex-shrink: 0;

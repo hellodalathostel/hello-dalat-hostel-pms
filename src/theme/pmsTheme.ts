@@ -56,18 +56,21 @@ export function getPmsTheme(mode: 'light' | 'dark' = 'light'): ThemeConfig {
       colorBgContainer: c.surface,
       colorText: c.ink,
       colorTextSecondary: c.inkDim,
+      // C3: AntD mặc định lấy 45% colorText cho mô tả → chỉ 4.1:1 trên nền tối; dùng inkDim (≥ 4.9:1)
+      colorTextDescription: c.inkDim,
       colorBorder: c.rule,
       colorBorderSecondary: c.rule,
       colorSuccess: c.go,
       colorWarning: c.hold,
       colorError: c.stop,
       fontFamily: "'IBM Plex Sans', -apple-system, sans-serif",
-      fontSize: 14,
+      fontSize: 15, // C3: = --font-size-body trong tokens.css
+      fontSizeSM: 13, // C3: chữ phụ tối thiểu 13px (Tag, Table small, Typography small…)
       borderRadius: 4,
       borderRadiusSM: 2,
       padding: 12,
       paddingSM: 8,
-      controlHeight: 36,
+      controlHeight: 40, // C3: = --control-height desktop; màn cảm ứng nâng lên 44px bằng CSS
     },
     components: {
       Table: {
