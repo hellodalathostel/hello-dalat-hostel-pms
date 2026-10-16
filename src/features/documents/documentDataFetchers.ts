@@ -84,10 +84,13 @@ export async function fetchDocumentData(
       .from('booking_discounts')
       .select('description, amount')
       .eq('booking_id', bookingId),
+    // Chỉ liệt kê khoản thu hợp lệ: void_payment_txn đánh dấu is_void = true cho CẢ dòng gốc
+    // lẫn bút toán đảo (âm). Tổng "Đã trả" và "Còn lại" vẫn lấy từ groups.paid nên không đổi.
     supabase
       .from('payment_history')
       .select('id, amount, method, date, note')
       .eq('group_id', groupId)
+      .eq('is_void', false)
       .order('date', { ascending: true }),
   ]);
 
