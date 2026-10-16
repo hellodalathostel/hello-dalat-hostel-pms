@@ -1,6 +1,5 @@
 import dayjs from 'dayjs'
 import {
-  Badge,
   Button,
   Flex,
   Modal,
@@ -107,20 +106,36 @@ export function BookingRoomCard({
   }
 
   return (
-    <Badge.Ribbon
-      text={STATUS_LABEL[booking.status] ?? booking.status}
-      color={STATUS_COLOR[booking.status] ?? 'default'}
+    <div
+      style={{
+        border: '1px solid var(--rule)',
+        borderRadius: 8,
+        padding: '12px 16px',
+        background: booking.status === 'cancelled' ? 'var(--surface-sunken)' : 'var(--surface)',
+        overflowX: 'hidden',
+      }}
     >
-      <div
-        style={{
-          border: '1px solid var(--rule)',
-          borderRadius: 8,
-          padding: '12px 16px',
-          background: booking.status === 'cancelled' ? 'var(--surface-sunken)' : 'var(--surface)',
-          overflowX: 'hidden',
-        }}
-      >
-        <Flex justify="space-between" align="flex-start" wrap>
+        {/* SỬA B-07: trước đây Badge.Ribbon (định vị tuyệt đối góc phải) đè lên nút Sửa.
+            Giờ tách hàng header: trái = badge trạng thái, phải = tổng tiền + nút Sửa. */}
+        <Flex justify="space-between" align="center" gap={8} wrap style={{ marginBottom: 8 }}>
+          <Tag color={STATUS_COLOR[booking.status] ?? 'default'} style={{ marginInlineEnd: 0 }}>
+            {STATUS_LABEL[booking.status] ?? booking.status}
+          </Tag>
+          <Flex gap={8} align="center">
+            <Typography.Text strong>{formatVND(booking.grand_total)}</Typography.Text>
+            {onEdit && !isReadOnly && (
+              <Button
+                size="small"
+                icon={<EditOutlined />}
+                onClick={onEdit}
+              >
+                Sửa
+              </Button>
+            )}
+          </Flex>
+        </Flex>
+
+        <div>
           <div>
             <Typography.Text strong>
               Phòng {booking.room_name ?? booking.room_id}
@@ -158,22 +173,7 @@ export function BookingRoomCard({
               </Typography.Text>
             </div>
           </div>
-
-          <Flex gap={8} align="center">
-            <div style={{ textAlign: 'right' }}>
-              <Typography.Text strong>{formatVND(booking.grand_total)}</Typography.Text>
-            </div>
-            {onEdit && !isReadOnly && (
-              <Button
-                size="small"
-                icon={<EditOutlined />}
-                onClick={onEdit}
-              >
-                Sửa
-              </Button>
-            )}
-          </Flex>
-        </Flex>
+        </div>
 
         {booking.services.length > 0 && (
           <div style={{ marginTop: 8 }}>
@@ -284,7 +284,6 @@ export function BookingRoomCard({
             </Tag>
           </div>
         )}
-      </div>
-    </Badge.Ribbon>
+    </div>
   )
 }
