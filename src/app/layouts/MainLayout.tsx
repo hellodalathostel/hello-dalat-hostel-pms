@@ -94,31 +94,37 @@ export function MainLayout(): JSX.Element {
 
   return (
     <Layout className="main-layout">
+      {/* C1: nền header phủ 100% viewport; nội dung header nằm trong khung max-width căn giữa */}
       <Header className="main-header">
-        <Space direction="vertical" size={2}>
-          <Typography.Text className="brand-kicker">Hello Dalat Hostel</Typography.Text>
-          <Typography.Title level={4} className="brand-title">
-            {isMobile ? 'PMS' : 'Hệ thống PMS / CRM'}
-          </Typography.Title>
-        </Space>
-        <Space size={16} align="center">
-          {!isMobile && (
-            <Menu
-              mode="horizontal"
-              items={menuItems}
-              selectedKeys={selectedKeys}
-              onClick={(event) => navigate(event.key)}
-              className="main-menu"
-            />
-          )}
-          <ThemeToggle />
-        </Space>
+        <div className="main-header-inner">
+          <Space direction="vertical" size={2} className="main-brand">
+            <Typography.Text className="brand-kicker">Hello Dalat Hostel</Typography.Text>
+            <Typography.Title level={4} className="brand-title">
+              {isMobile ? 'PMS' : 'Hệ thống PMS / CRM'}
+            </Typography.Title>
+          </Space>
+          {/* main-nav co giãn (min-width: 0) để Menu tự gom mục thừa vào "…" thay vì đẩy tràn trang */}
+          <div className="main-nav">
+            {!isMobile && (
+              <Menu
+                mode="horizontal"
+                items={menuItems}
+                selectedKeys={selectedKeys}
+                onClick={(event) => navigate(event.key)}
+                className="main-menu"
+              />
+            )}
+            <ThemeToggle />
+          </div>
+        </div>
       </Header>
       <Content
         className="main-content"
         style={isMobile ? { paddingBottom: 'calc(56px + env(safe-area-inset-bottom, 0px))' } : undefined}
       >
-        <Outlet />
+        <div className="main-content-inner">
+          <Outlet />
+        </div>
       </Content>
       <BottomNav />
     </Layout>

@@ -1,0 +1,158 @@
+[
+ {
+  "width": 375,
+  "inner": 375,
+  "scrollW": 375,
+  "header": {
+   "x": 0,
+   "w": 375,
+   "right": 375
+  },
+  "menu": {
+   "x": 20,
+   "w": 335,
+   "right": 355
+  },
+  "content": {
+   "x": 0,
+   "w": 375,
+   "right": 375
+  },
+  "inner2": {
+   "x": 16,
+   "w": 343,
+   "right": 359
+  },
+  "hScroll": false
+ },
+ {
+  "width": 414,
+  "inner": 414,
+  "scrollW": 414,
+  "header": {
+   "x": 0,
+   "w": 414,
+   "right": 414
+  },
+  "menu": {
+   "x": 20,
+   "w": 374,
+   "right": 394
+  },
+  "content": {
+   "x": 0,
+   "w": 414,
+   "right": 414
+  },
+  "inner2": {
+   "x": 16,
+   "w": 382,
+   "right": 398
+  },
+  "hScroll": false
+ },
+ {
+  "width": 768,
+  "inner": 768,
+  "scrollW": 768,
+  "header": {
+   "x": 0,
+   "w": 768,
+   "right": 768
+  },
+  "menu": {
+   "x": 20,
+   "w": 667,
+   "right": 687
+  },
+  "content": {
+   "x": 0,
+   "w": 768,
+   "right": 768
+  },
+  "inner2": {
+   "x": 16,
+   "w": 736,
+   "right": 752
+  },
+  "hScroll": false
+ },
+ {
+  "width": 980,
+  "inner": 980,
+  "scrollW": 980,
+  "header": {
+   "x": 0,
+   "w": 980,
+   "right": 980
+  },
+  "menu": {
+   "x": 20,
+   "w": 879,
+   "right": 899
+  },
+  "content": {
+   "x": 0,
+   "w": 980,
+   "right": 980
+  },
+  "inner2": {
+   "x": 16,
+   "w": 948,
+   "right": 964
+  },
+  "hScroll": false
+ },
+ {
+  "width": 1366,
+  "inner": 1366,
+  "scrollW": 1366,
+  "header": {
+   "x": 0,
+   "w": 1366,
+   "right": 1366
+  },
+  "menu": {
+   "x": 226,
+   "w": 1059,
+   "right": 1285
+  },
+  "content": {
+   "x": 0,
+   "w": 1366,
+   "right": 1366
+  },
+  "inner2": {
+   "x": 24,
+   "w": 1318,
+   "right": 1342
+  },
+  "hScroll": false
+ },
+ {
+  "width": 1920,
+  "inner": 1920,
+  "scrollW": 1920,
+  "header": {
+   "x": 0,
+   "w": 1920,
+   "right": 1920
+  },
+  "menu": {
+   "x": 446,
+   "w": 1173,
+   "right": 1619
+  },
+  "content": {
+   "x": 0,
+   "w": 1920,
+   "right": 1920
+  },
+  "inner2": {
+   "x": 240,
+   "w": 1440,
+   "right": 1680
+  },
+  "hScroll": false
+ }
+]
