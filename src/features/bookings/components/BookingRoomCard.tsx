@@ -1,9 +1,9 @@
 import dayjs from 'dayjs'
 import {
   Button,
+  Dropdown,
   Flex,
   Modal,
-  Popconfirm,
   Space,
   Tag,
   Tooltip,
@@ -18,6 +18,7 @@ import {
   FileExcelOutlined,
   LoginOutlined,
   LogoutOutlined,
+  MoreOutlined,
   PlusOutlined,
   StopOutlined,
 } from '@ant-design/icons'
@@ -41,6 +42,8 @@ import {
 export interface BookingRoomCardProps {
   booking: BookingDetailItem
   groupId: string
+  // C4: tên nhóm (groups.customer_name) để hiện ngữ cảnh "Nhóm … / Phòng …" ở khu thao tác
+  groupName?: string
   onCheckin?: (bookingId: string) => void
   onCheckinImport?: (bookingId: string) => void
   onCheckout?: (bookingId: string) => void
@@ -55,6 +58,7 @@ export interface BookingRoomCardProps {
 export function BookingRoomCard({
   booking,
   groupId,
+  groupName,
   onCheckin,
   onCheckinImport,
   onCheckout,
@@ -87,6 +91,34 @@ export function BookingRoomCard({
   const canCancel = ACTION_STATUSES.canCancel.includes(status)
   const isReadOnly = status === 'checked-out' || status === 'cancelled'
   const { mutate: voidBooking, isPending: isVoiding } = useVoidBooking()
+
+  // C4: Huỷ nằm trong menu "Thao tác khác"; màn xác nhận ghi rõ khách, phòng, ngày nhận/trả
+  const handleConfirmCancel = () => {
+    Modal.confirm({
+      title: 'Huỷ booking này?',
+      icon: <ExclamationCircleOutlined />,
+      content: (
+        <div>
+          <p style={{ marginBottom: 4 }}>
+            Khách: <strong>{booking.guest_name ?? groupName ?? 'Khách chưa xác định'}</strong>
+          </p>
+          <p style={{ marginBottom: 4 }}>
+            Phòng: <strong>{booking.room_id}</strong>
+            {booking.room_name ? ` — ${booking.room_name}` : ''}
+          </p>
+          <p style={{ marginBottom: 8 }}>
+            Nhận/trả: <strong>{dayjs(booking.check_in).format('DD/MM/YYYY')}</strong> →{' '}
+            <strong>{dayjs(booking.check_out).format('DD/MM/YYYY')}</strong> ({nights} đêm)
+          </p>
+          <p style={{ color: 'var(--signal-stop)', marginBottom: 0 }}>Thao tác này không thể hoàn tác.</p>
+        </div>
+      ),
+      okText: 'Huỷ booking',
+      okType: 'danger',
+      cancelText: 'Đóng',
+      onOk: () => onCancel?.(booking.id),
+    })
+  }
 
   const handleVoidBooking = () => {
     if (!groupId) {
@@ -233,12 +265,19 @@ export function BookingRoomCard({
         {/* Action buttons — hiển thị có điều kiện theo status */}
         {(status !== 'cancelled') && (
           <div style={{ marginTop: 12, borderTop: '1px solid var(--rule)', paddingTop: 12 }}>
+            {/* C4: ngữ cảnh rõ ràng trước khi bấm thao tác — tránh nhầm phòng trong nhóm nhiều phòng */}
+            <Typography.Text
+              type="secondary"
+              style={{ display: 'block', marginBottom: 8, fontSize: 'var(--font-size-secondary)' }}
+            >
+              {groupName ? `Nhóm ${groupName} / ` : ''}Phòng {booking.room_id}
+            </Typography.Text>
             <Space wrap size="small">
-              {/* Check-in */}
+              {/* Nhận phòng (C4: đổi nhãn "Check-in" cho đồng nhất với dashboard) */}
               {canCheckin && (
                 <>
                   <Button type="primary" size="small" icon={<LoginOutlined />} onClick={() => onCheckin?.(booking.id)}>
-                    Check-in
+                    Nhận phòng
                   </Button>
                   <Button size="small" icon={<FileExcelOutlined />} onClick={() => onCheckinImport?.(booking.id)}>
                     Nhập Excel
@@ -269,20 +308,36 @@ export function BookingRoomCard({
                 </Tooltip>
               )}
 
-              {/* Huỷ booking */}
+              {/* C4: Huỷ chuyển vào menu "Thao tác khác" để không bấm nhầm cạnh nút thường dùng */}
               {canCancel && (
-                <Popconfirm
-                  title="Huỷ booking này?"
-                  description="Thao tác này không thể hoàn tác."
-                  okText="Huỷ booking"
-                  cancelText="Đóng"
-                  okButtonProps={{ danger: true, loading: isCancelling }}
-                  onConfirm={() => onCancel?.(booking.id)}
+                <Dropdown
+                  trigger={['click']}
+                  menu={{
+                    items: [
+                      {
+                        key: 'cancel',
+                        danger: true,
+                        icon: <StopOutlined />,
+                        label: 'Huỷ booking',
+                        disabled: isCancelling,
+                      },
+                    ],
+                    onClick: ({ key }) => {
+                      if (key === 'cancel') {
+                        handleConfirmCancel()
+                      }
+                    },
+                  }}
                 >
-                  <Button size="small" danger icon={<StopOutlined />}>
-                    Huỷ
+                  <Button
+                    size="small"
+                    icon={<MoreOutlined />}
+                    loading={isCancelling}
+                    aria-label={`Thao tác khác — phòng ${booking.room_id}`}
+                  >
+                    Thao tác khác
                   </Button>
-                </Popconfirm>
+                </Dropdown>
               )}
 
               {/* Xoá booking checked-out — destructive action luôn đặt cuối cùng */}
