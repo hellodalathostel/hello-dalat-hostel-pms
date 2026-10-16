@@ -8,6 +8,7 @@ import { CheckInModal } from '@/features/checkin/components/CheckInModal'
 import { QuickCheckoutModal, type CheckoutTarget } from '@/features/checkout/components/QuickCheckoutModal'
 import { RoomBoard } from '@/features/dashboard/components/RoomBoard'
 import { BlockedRoomDrawer } from '@/features/dashboard/components/BlockedRoomDrawer'
+import { OverdueBookingsCard } from '@/features/dashboard/components/OverdueBookingsCard'
 import BookingDetailDrawer from '@/features/bookings/components/BookingDetailDrawer'
 import { PaymentModal } from '@/features/payment/components/PaymentModal'
 import { getRoomStatus, useDashboard } from '@/features/dashboard/hooks/useDashboard'
@@ -150,6 +151,8 @@ export default function Dashboard(): React.JSX.Element {
           Làm mới
         </Button>
       </Flex>
+
+      <OverdueBookingsCard onOpenBooking={setSelectedBookingId} />
 
       <Spin spinning={isLoading || isFetching}>
         <RoomBoard
