@@ -25,6 +25,7 @@ type GroupBookingRow = {
   source: string | null
   paid: number | null
   grand_total: number | null
+  is_deleted: boolean | null
   created_at: string
   bookings: {
     id: string
@@ -49,6 +50,7 @@ async function fetchBookingsList(): Promise<BookingsListItem[]> {
         source,
         paid,
         grand_total,
+        is_deleted,
         created_at,
         bookings (
           id,
@@ -61,14 +63,24 @@ async function fetchBookingsList(): Promise<BookingsListItem[]> {
           is_deleted
         )
       `)
+      .or('is_deleted.is.null,is_deleted.eq.false')
       .order('created_at', { ascending: false })
 
     if (error) {
       throw error
     }
 
-    return ((data ?? []) as GroupBookingRow[]).map((group) => {
-      const nonDeletedBookings = (group.bookings ?? []).filter((booking) => !booking.is_deleted)
+    const groups = ((data ?? []) as GroupBookingRow[])
+      .map((group) => ({
+        group,
+        nonDeletedBookings: (group.bookings ?? []).filter((booking) => !booking.is_deleted),
+      }))
+      // Ẩn group không còn booking nào (mọi booking đã xoá mềm) VÀ không còn tiền đã thu,
+      // ví dụ group TEST QA1510: trước đây hiện thành dòng trống phòng/ngày trong trang Đặt phòng.
+      // Group còn paid ≠ 0 vẫn hiện để không giấu tiền chưa xử lý (hoàn/chuyển).
+      .filter(({ group, nonDeletedBookings }) => nonDeletedBookings.length > 0 || (group.paid ?? 0) !== 0)
+
+    return groups.map(({ group, nonDeletedBookings }) => {
       const activeBookings = nonDeletedBookings.filter((booking) => booking.status !== 'cancelled')
       const firstBookingCode = activeBookings[0]?.code ?? nonDeletedBookings[0]?.code ?? null
       const grandTotal = group.grand_total ?? 0

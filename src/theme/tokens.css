@@ -38,10 +38,18 @@
   --font-ui: 'IBM Plex Sans', -apple-system, sans-serif;
   --font-mono: 'IBM Plex Mono', 'JetBrains Mono', monospace;
 
-  --text-xs: 11px;
+  --text-xs: 11px;            /* chỉ dùng cho khối lịch dày đặc — KHÔNG dùng cho chữ đọc thường */
   --text-sm: 13px;
-  --text-base: 14px;
+  --text-base: 15px;          /* = --font-size-body (C3: 14 → 15) */
   --text-lg: 16px;
+
+  /* ---- C3 (QA 16/10/2026): token chữ & vùng bấm — đổi ở đây, không sửa rải rác ---- */
+  --font-size-body: 15px;       /* chữ nội dung + nhãn nút */
+  --font-size-secondary: 13px;  /* chữ phụ — tối thiểu 13px (trước 11–12px) */
+  --font-size-emphasis: 16px;   /* số phòng, tên khách */
+  --font-weight-emphasis: 600;  /* đậm vừa */
+  --control-height: 40px;       /* nút thao tác thường dùng trên desktop */
+  --touch-target: 44px;         /* vùng bấm tối thiểu trên màn cảm ứng */
   --text-xl: 20px;
   --text-2xl: 28px;
 
@@ -73,7 +81,7 @@
   --surface-sunken: #232323;
   --ink: #F0F0EC;
   --ink-dim: #ABABA4;
-  --ink-faint: #7A7A73;
+  --ink-faint: #94948D;       /* C3: #7A7A73 chỉ đạt 3.6–4.4:1 trên nền tối → 5.2–6.3:1 */
   --rule: #3A3A36;
   --rule-strong: #4D4D47;
 
@@ -93,6 +101,13 @@
   --accent-soft: #2A2A2A;
 
   --shadow-overlay: 0 8px 24px rgba(0, 0, 0, 0.6);
+}
+
+/* Màn cảm ứng: nút thao tác cao 44px */
+@media (pointer: coarse) {
+  :root {
+    --control-height: 44px;
+  }
 }
 
 /* ---- Base reset for operator board feel ---- */

@@ -27,6 +27,7 @@ import {
   PlusOutlined,
   SendOutlined,
   UserOutlined,
+  WalletOutlined,
 } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/api/supabase'
@@ -42,6 +43,7 @@ import { CheckinImportModal } from '@/features/checkin/components/CheckinImportM
 import { CheckInModal } from '@/features/checkin/components/CheckInModal'
 import type { DashboardRoom } from '@/types/dashboard'
 import { CheckoutModal } from '@/features/checkout/components/CheckoutModal'
+import { PaymentModal } from '@/features/payment/components/PaymentModal'
 import { DocumentActionsMenu } from '@/features/documents/DocumentActionsMenu'
 import { DocumentHistoryDrawer } from '@/features/documents/DocumentHistoryDrawer'
 import { EarlyLateModal } from '@/features/bookings/components/EarlyLateModal'
@@ -111,6 +113,7 @@ export default function BookingDetailDrawer({ groupId = null, bookingId = null, 
   const [addServiceOpen, setAddServiceOpen] = useState(false)
   const [addServiceBookingId, setAddServiceBookingId] = useState<string | null>(null)
   const [addRoomOpen, setAddRoomOpen] = useState(false)
+  const [paymentOpen, setPaymentOpen] = useState(false)
   // Giá trị gợi ý: autofill = tổng price_per_night các booking active (KHÔNG hard-code 30%)
   const [depositAmount, setDepositAmount] = useState<number | null>(null)
   const sendDeposit = useSendDeposit()
@@ -187,7 +190,43 @@ export default function BookingDetailDrawer({ groupId = null, bookingId = null, 
     : null
 
   const totalGrandTotal = data?.grand_total ?? 0
+  // = groups.grand_total - groups.paid (useBookingDetail) — KHÔNG tự cộng lại từ bookings
   const balanceDue = data?.balance_due ?? 0
+
+  // C4: PaymentModal (form ghi nhận thanh toán đã chuẩn hoá ở Nhóm 4) nhận shape DashboardRoom.
+  // Chỉ dùng group_id, booking_id (bắt buộc khi trả thẻ để tính phụ phí 4%) và group_balance_due.
+  const firstActiveBooking = data?.bookings.find((b) => b.status !== 'cancelled') ?? null
+  const paymentRoom: DashboardRoom | null =
+    data && effectiveGroupId
+      ? {
+          room_id: firstActiveBooking?.room_id ?? '',
+          room_name: '',
+          room_type: '',
+          capacity: 0,
+          housekeeping_status: 'clean',
+          housekeeping_note: null,
+          booking_id: firstActiveBooking?.id ?? null,
+          check_in: firstActiveBooking?.check_in ?? null,
+          check_out: firstActiveBooking?.check_out ?? null,
+          status: firstActiveBooking?.status ?? null,
+          guest_name: data.customer_name,
+          guests_count: null,
+          customer_phone: data.customer_phone ?? null,
+          source: null,
+          paid: data.paid,
+          net_revenue: null,
+          price_per_night: null,
+          grand_total: totalGrandTotal,
+          balance_due: balanceDue,
+          group_id: effectiveGroupId,
+          group_grand_total: totalGrandTotal,
+          group_balance_due: balanceDue,
+          group_active_booking_count: null,
+          is_last_active_booking: false,
+          is_blocked: false,
+          block_reason: null,
+        }
+      : null
 
   const paymentColumns = [
     {
@@ -225,6 +264,8 @@ export default function BookingDetailDrawer({ groupId = null, bookingId = null, 
         width={isMobile ? '100%' : 680}
         open={open}
         onClose={onClose}
+        // C3: áp token cỡ chữ + vùng bấm cho toàn bộ drawer (xem index.css)
+        rootClassName="booking-detail-drawer"
         extra={
           data && effectiveGroupId ? (
             <Space size={8}>
@@ -291,7 +332,7 @@ export default function BookingDetailDrawer({ groupId = null, bookingId = null, 
             </Descriptions>
 
             {/* Tổng quan tài chính */}
-            <Row gutter={[16, 16]} align="middle">
+            <Row gutter={[16, 16]} align="top">
               <Col xs={24} md={8}>
                 <Statistic
                   title="Tổng hoá đơn"
@@ -312,9 +353,11 @@ export default function BookingDetailDrawer({ groupId = null, bookingId = null, 
                 md={8}
                 style={{
                   display: 'flex',
-                  alignItems: isMobile ? 'stretch' : 'center',
+                  // C4: số còn nợ ở trên, nút "Thu tiền" + "Sổ folio" xếp ngay bên dưới
+                  // (trước đây xếp ngang trong cột 1/3 → nút bị đẩy ra ngoài mép drawer)
+                  alignItems: 'stretch',
                   gap: 8,
-                  flexDirection: isMobile ? 'column' : 'row',
+                  flexDirection: 'column',
                 }}
               >
                 <Statistic
@@ -324,6 +367,17 @@ export default function BookingDetailDrawer({ groupId = null, bookingId = null, 
                   formatter={(v) => formatVND(v as number)}
                   style={{ flex: 1 }}
                 />
+                {/* C4: "Thu tiền" đặt ngay cạnh số còn nợ, mở thẳng form ghi nhận thanh toán */}
+                {balanceDue > 0 && paymentRoom && (
+                  <Button
+                    size="small"
+                    icon={<WalletOutlined />}
+                    block={isMobile}
+                    onClick={() => setPaymentOpen(true)}
+                  >
+                    Thu tiền
+                  </Button>
+                )}
                 {/* Nút mở modal folio */}
                 {data.bookings.length > 0 && (
                   <Button
@@ -370,6 +424,7 @@ export default function BookingDetailDrawer({ groupId = null, bookingId = null, 
                     key={booking.id}
                     booking={{ ...booking, services: [], discounts: [] }}
                     groupId={effectiveGroupId ?? ''}
+                    groupName={data.customer_name}
                     isCancelling={cancelBookingMutation.isPending}
                     onCheckin={(bookingIdToCheckin) => setManualCheckinBookingId(bookingIdToCheckin)}
                     onCheckinImport={() => setCheckinImportOpen(true)}
@@ -461,6 +516,11 @@ export default function BookingDetailDrawer({ groupId = null, bookingId = null, 
           </Space>
         )}
       </Drawer>
+
+      {/* C4: mount khi mở để form lấy đúng số còn nợ mới nhất làm giá trị mặc định */}
+      {paymentOpen && paymentRoom && (
+        <PaymentModal visible room={paymentRoom} onCancel={() => setPaymentOpen(false)} />
+      )}
 
       {/* Modal chọn phòng trước khi mở Sổ folio — chỉ hiện khi group >1 phòng */}
       <Modal

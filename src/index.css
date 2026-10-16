@@ -30,20 +30,54 @@ body {
   background: transparent;
 }
 
+/* Khung chiều rộng dùng chung cho header và nội dung (C1, QA 16/10/2026) */
+:root {
+  --layout-max-width: 1440px;
+}
+
+/* Chặn mọi phần tử con kéo giãn trang theo chiều ngang: bảng rộng phải tự cuộn trong khung của nó */
+.main-layout,
+.main-content,
+.main-content-inner {
+  min-width: 0;
+}
+
 .main-header {
   position: sticky;
   top: 0;
   z-index: 10;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+  width: 100%;
   height: auto;
   padding: 14px 20px;
   line-height: normal;
   background: var(--surface);
   backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--rule);
+}
+
+.main-header-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  max-width: var(--layout-max-width);
+  margin: 0 auto;
+  min-width: 0;
+}
+
+/* Khối tên không bao giờ bị bóp (trước đây bị menu ép còn ~20px → chữ dựng dọc, header cao ~700px) */
+.main-brand {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.main-nav {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 16px;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .brand-kicker {
@@ -60,7 +94,8 @@ body {
 }
 
 .main-menu {
-  min-width: 280px;
+  flex: 1 1 auto;
+  min-width: 0;
   border-bottom: 0;
   background: transparent;
 }
@@ -69,11 +104,143 @@ body {
   padding: 24px;
 }
 
+/* ---- C3: cỡ chữ + vùng bấm (giá trị lấy từ token trong tokens.css) ---- */
+
+/* Nút chỉ có icon (⋮, Sao chép…): vùng bấm vuông tối thiểu theo token */
+.icon-btn.ant-btn {
+  min-width: var(--control-height);
+  min-height: var(--control-height);
+}
+
+/* Drawer chi tiết booking: mọi nút (kể cả size small) cao theo token, chữ 15px */
+.booking-detail-drawer .ant-btn {
+  min-height: var(--control-height);
+  font-size: var(--font-size-body);
+}
+
+.booking-detail-drawer .ant-btn.ant-btn-icon-only {
+  min-width: var(--control-height);
+}
+
+.booking-detail-drawer .ant-drawer-close {
+  min-width: var(--touch-target);
+  min-height: var(--touch-target);
+}
+
+.booking-detail-drawer .ant-tag {
+  font-size: var(--font-size-secondary);
+}
+
+/* Màn hẹp: nhóm nút ở header drawer (Lịch sử, VI/EN, Tài liệu) xuống dòng riêng,
+   không che mất tiêu đề "Chi tiết Booking" */
+@media (max-width: 575px) {
+  .booking-detail-drawer .ant-drawer-header {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+
+  .booking-detail-drawer .ant-drawer-header-title {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  .booking-detail-drawer .ant-drawer-extra {
+    flex-basis: 100%;
+  }
+}
+
+/* Số phòng, tên khách: 16px đậm vừa */
+.booking-emphasis.ant-typography {
+  font-size: var(--font-size-emphasis);
+  font-weight: var(--font-weight-emphasis);
+}
+
+/* Menu ngang desktop: chữ 15px, mục cao theo token */
+.main-menu.ant-menu-horizontal,
+.main-menu-popup .ant-menu-item {
+  font-size: var(--font-size-body);
+}
+
+.main-menu-popup .ant-menu-item {
+  min-height: var(--control-height);
+}
+
+/* ---- C2: menu gom nhóm ---- */
+.main-new-booking {
+  flex-shrink: 0;
+}
+
+/* Nhóm chứa trang đang xem được đánh dấu cả khi dropdown đang đóng */
+.nav-group-label--active {
+  font-weight: 600;
+}
+
+.main-menu .ant-menu-submenu-selected > .ant-menu-submenu-title,
+.main-menu .ant-menu-submenu-selected > .ant-menu-submenu-title .nav-group-label {
+  color: var(--ink);
+}
+
+.main-nav-toggle {
+  flex-shrink: 0;
+  min-width: 44px;
+  min-height: 44px;
+}
+
+/* Ngăn kéo menu (mobile/tablet): mục chạm cao >= 44px */
+.main-nav-drawer .ant-drawer-body {
+  padding: 8px 0;
+}
+
+.main-nav-drawer-menu.ant-menu-inline {
+  border-inline-end: 0;
+}
+
+.main-nav-drawer-menu .ant-menu-item {
+  height: 48px;
+  line-height: 48px;
+  margin-block: 2px;
+}
+
+.main-nav-drawer-menu .ant-menu-item-group-title {
+  padding-top: 16px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 13px;
+  color: var(--ink-dim);
+}
+
+.main-nav-drawer-menu .nav-group-label--active {
+  color: var(--ink);
+}
+
+.main-nav-drawer .ant-drawer-close {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.main-content-inner {
+  width: 100%;
+  max-width: var(--layout-max-width);
+  margin: 0 auto;
+}
+
 .page-grid {
   max-width: 1160px;
   margin: 0 auto;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
+}
+
+/* Bảng AntD không khai báo scroll.x vẫn được cuộn ngang trong khung của nó, không đẩy tràn trang */
+.main-content .ant-table-content {
+  overflow-x: auto;
+}
+
+/* Phần tử grid mặc định min-width: auto → bảng có scroll.x kéo giãn cả trang.
+   Ép min-width: 0 để bảng rộng chỉ cuộn ngang trong khung của nó. */
+.page-grid > * {
+  min-width: 0;
 }
 
 .page-subtitle {
@@ -395,13 +562,7 @@ body {
 
 @media (max-width: 992px) {
   .main-header {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .main-menu {
-    width: 100%;
-    min-width: 0;
+    padding: 10px 16px;
   }
 
   .main-content {

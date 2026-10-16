@@ -23,7 +23,7 @@
 }
 
 .summaryLabel {
-  font-size: var(--text-xs);
+  font-size: var(--font-size-secondary);
   color: var(--ink-dim);
   margin-top: 2px;
 }
@@ -37,12 +37,13 @@
 /* ĐÃ SỬA: 5 track -> 6 track, thêm 110px cho cột Action (bug v1 đã fix). */
 .row {
   display: grid;
-  grid-template-columns: 56px 1fr 150px 150px 160px;
+  grid-template-columns: 56px 1fr 150px 150px 180px;
   align-items: center;
-  height: var(--row-height);
-  padding: 0 var(--space-4);
+  /* C3: nút cao --control-height (40/44px) → dòng tự giãn, tối thiểu 56px */
+  min-height: 56px;
+  padding: var(--space-2) var(--space-4);
   border-bottom: 2px solid var(--rule);
-  font-size: var(--text-base);
+  font-size: var(--font-size-body);
   gap: var(--space-2);
 }
 
@@ -52,8 +53,9 @@
 
 .head {
   height: auto;
+  min-height: 0;
   padding: var(--space-3) var(--space-4);
-  font-size: var(--text-sm);
+  font-size: var(--font-size-secondary);
   font-weight: 700;
   color: var(--ink);
   text-transform: uppercase;
@@ -63,7 +65,19 @@
 }
 
 .id {
-  font-weight: 600;
+  font-size: var(--font-size-emphasis);
+  font-weight: var(--font-weight-emphasis);
+}
+
+.guestName {
+  font-size: var(--font-size-emphasis);
+  font-weight: 500;
+}
+
+/* Chú thích phụ cạnh tên khách, ví dụ "(sắp đến)" */
+.guestHint {
+  font-size: var(--font-size-secondary);
+  color: var(--ink-dim);
 }
 
 .guest {
@@ -87,6 +101,8 @@
   justify-content: center;
   gap: var(--space-2);
   white-space: nowrap;
+  font-size: var(--font-size-body);
+  font-weight: 500;
 }
 
 .dotGo { color: var(--signal-go); }
@@ -107,17 +123,40 @@
 /* ĐÃ SỬA: debtBadge giờ là <button> thật (bấm mở PaymentModal), không còn là <span> tĩnh. */
 .debtBadge {
   color: var(--signal-stop);
-  font-size: var(--text-xs);
+  font-size: var(--font-size-secondary);
   cursor: pointer;
   border: none;
   background: none;
   padding: 0;
+  /* Vùng bấm tối thiểu dù chấm hiển thị nhỏ */
+  min-width: 32px;
+  min-height: 32px;
+}
+
+@media (pointer: coarse) {
+  .debtBadge {
+    min-width: var(--touch-target);
+    min-height: var(--touch-target);
+  }
 }
 
 .action {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: var(--space-2);
+}
+
+/* Nút thao tác: cao theo token (40px desktop, 44px cảm ứng), chữ 15px */
+.action :global(.ant-btn) {
+  min-height: var(--control-height);
+  font-size: var(--font-size-body);
+}
+
+/* Nút chỉ có icon (⋮): vùng bấm vuông theo token */
+.iconBtn:global(.ant-btn) {
+  min-width: var(--control-height);
+  width: var(--control-height);
 }
 
 @media (max-width: 640px) {
@@ -132,7 +171,6 @@
   }
   .status {
     justify-content: flex-end;
-    font-size: var(--text-sm);
   }
   .action {
     grid-column: 1 / -1;

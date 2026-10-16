@@ -77,7 +77,7 @@ export function BreakfastSection({ booking, groupId, readOnly = false }: Props) 
             />
           </Space>
 
-          <Text type="secondary" style={{ fontSize: 12 }}>
+          <Text type="secondary" style={{ fontSize: 'var(--font-size-secondary)' }}>
             Tổng: {qtyPerNight} suất × {nights} đêm = {totalServings} suất
           </Text>
         </Space>

@@ -42,13 +42,14 @@ function dedupeRooms(rooms: DashboardRoom[]): DashboardRoom[] {
 // Cột "Khách" — tuỳ trạng thái mà hiện tên khách, gợi ý sắp đến, hay lý do trống/dọn.
 function renderGuestCell(room: DashboardRoom, state: RoomBoardState): React.ReactNode {
   if (isOccupiedLikeState(state)) {
-    return room.guest_name ?? '—'
+    return <span className={styles.guestName}>{room.guest_name ?? '—'}</span>
   }
 
   if (state === 'vacant' && room.status === 'booked') {
     return (
       <span>
-        {room.guest_name ?? '—'} <span className={styles.guestEmpty}>(sắp đến)</span>
+        <span className={styles.guestName}>{room.guest_name ?? '—'}</span>{' '}
+        <span className={styles.guestHint}>(sắp đến)</span>
       </span>
     )
   }
@@ -161,6 +162,7 @@ export function RoomBoard({
                           type="button"
                           className={styles.debtBadge}
                           onClick={() => onPaymentClick(room)}
+                          aria-label={`Công nợ đoàn ${formatCurrency(room.group_balance_due)}đ — thu tiền phòng ${room.room_id}`}
                         >
                           ●
                         </button>
@@ -175,18 +177,17 @@ export function RoomBoard({
 
               <span className={styles.action}>
                 {state === 'vacant' && (
-                  <Button size="small" type="primary" onClick={() => onCheckinClick(room)}>
+                  <Button type="primary" onClick={() => onCheckinClick(room)}>
                     {room.booking_id ? 'Nhận phòng' : 'Đặt phòng'}
                   </Button>
                 )}
                 {isOccupiedLikeState(state) && (
-                  <Button size="small" onClick={() => onCheckoutClick(room)}>
+                  <Button onClick={() => onCheckoutClick(room)}>
                     Trả phòng
                   </Button>
                 )}
                 {state === 'cleaning' && (
                   <Button
-                    size="small"
                     loading={isMarkingThisRoom}
                     onClick={() => markClean.mutate({ roomId: room.room_id })}
                   >
@@ -195,21 +196,23 @@ export function RoomBoard({
                 )}
                 {state === 'out_of_order' && (
                   <Tooltip title="Phòng đang hỏng/khóa — chưa có nút đổi trạng thái trên Dashboard, cập nhật qua Telegram bot hoặc Notion">
-                    <Button size="small" disabled>
+                    <Button disabled>
                       Chi tiết
                     </Button>
                   </Tooltip>
                 )}
                 {state === 'blocked' && (
-                  <Button size="small" onClick={() => onDetailsClick(room)}>
+                  <Button onClick={() => onDetailsClick(room)}>
                     Chi tiết
                   </Button>
                 )}
                 {(state === 'vacant' || isOccupiedLikeState(state) || state === 'cleaning') && room.booking_id && (
                   <Button
-                    size="small"
                     icon={<MoreOutlined />}
                     onClick={() => onDetailsClick(room)}
+                    aria-label={`Thao tác khác — phòng ${room.room_id}`}
+                    title="Thao tác khác"
+                    className={styles.iconBtn}
                   />
                 )}
               </span>

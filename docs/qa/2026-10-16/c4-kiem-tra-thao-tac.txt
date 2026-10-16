@@ -1,0 +1,24 @@
+PASS 375 ngữ cảnh "Nhóm … / Phòng 301" 
+PASS 375 nút "Nhận phòng" (không còn "Check-in") 
+PASS 375 không còn nút "Huỷ" lộ ra 
+PASS 375 nút "Thu tiền" cạnh số còn nợ thu.y=578 conlai.y=503
+PASS 375 Thu tiền mở form thanh toán, số mặc định = grand_total - paid (508.090) amount=508,090 VND
+PASS 375 form có nút "Thu đủ số còn lại" 
+PASS 375 xác nhận huỷ ghi rõ khách/phòng/ngày "Huỷ booking này? |  | Khách: John Example |  | Phòng: 301 |  | Nhận/trả: 16/10/2026 → 18/10/2026 (2 đêm) |  | Thao tác này không thể hoàn tác. |  | Đóng | Huỷ booking"
+PASS 375 bấm Đóng không gọi RPC huỷ 
+PASS 768 ngữ cảnh "Nhóm … / Phòng 301" 
+PASS 768 nút "Nhận phòng" (không còn "Check-in") 
+PASS 768 không còn nút "Huỷ" lộ ra 
+PASS 768 nút "Thu tiền" cạnh số còn nợ thu.y=321 conlai.y=246
+PASS 768 Thu tiền mở form thanh toán, số mặc định = grand_total - paid (508.090) amount=508,090 VND
+PASS 768 form có nút "Thu đủ số còn lại" 
+PASS 768 xác nhận huỷ ghi rõ khách/phòng/ngày "Huỷ booking này? |  | Khách: John Example |  | Phòng: 301 |  | Nhận/trả: 16/10/2026 → 18/10/2026 (2 đêm) |  | Thao tác này không thể hoàn tác. |  | Đóng | Huỷ booking"
+PASS 768 bấm Đóng không gọi RPC huỷ 
+PASS 1366 ngữ cảnh "Nhóm … / Phòng 301" 
+PASS 1366 nút "Nhận phòng" (không còn "Check-in") 
+PASS 1366 không còn nút "Huỷ" lộ ra 
+PASS 1366 nút "Thu tiền" cạnh số còn nợ thu.y=321 conlai.y=246
+PASS 1366 Thu tiền mở form thanh toán, số mặc định = grand_total - paid (508.090) amount=508,090 VND
+PASS 1366 form có nút "Thu đủ số còn lại" 
+PASS 1366 xác nhận huỷ ghi rõ khách/phòng/ngày "Huỷ booking này? |  | Khách: John Example |  | Phòng: 301 |  | Nhận/trả: 16/10/2026 → 18/10/2026 (2 đêm) |  | Thao tác này không thể hoàn tác. |  | Đóng | Huỷ booking"
+PASS 1366 bấm Đóng không gọi RPC huỷ 

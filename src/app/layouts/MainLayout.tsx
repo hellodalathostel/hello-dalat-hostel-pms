@@ -1,124 +1,60 @@
-import {
-  AuditOutlined,
-  CalendarOutlined,
-  CheckSquareOutlined,
-  DollarOutlined,
-  FileExcelOutlined,
-  FormOutlined,
-  HomeOutlined,
-  InboxOutlined,
-  LinkOutlined,
-  RiseOutlined,
-  TeamOutlined,
-  UnorderedListOutlined,
-  UserAddOutlined,
-  WalletOutlined,
-} from '@ant-design/icons'
-import { Badge, Layout, Menu, Space, Typography } from 'antd'
-import { useMemo } from 'react'
+import { PlusOutlined } from '@ant-design/icons'
+import { Button, Layout, Space, Typography } from 'antd'
 import type { JSX } from 'react'
-import type { ItemType } from 'antd/es/menu/interface'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { usePendingRequestCount } from '@/features/booking-requests/hooks/useBookingRequests'
 import { BottomNav } from '@/features/layout/components/BottomNav'
+import { MainNav } from '@/features/layout/components/MainNav'
+import { NEW_BOOKING_LABEL, NEW_BOOKING_PATH } from '@/features/layout/navItems'
 import { useBreakpoint } from '@/shared/hooks/useBreakpoint'
 import { ThemeToggle } from '@/theme/ThemeToggle'
 
 const { Header, Content } = Layout
 
-function createMenuItems(pendingCount: number): ItemType[] {
-  return [
-    { key: '/', icon: <HomeOutlined />, label: 'Tổng quan' },
-    { key: '/new-booking', icon: <FormOutlined />, label: 'Tạo đặt phòng mới' },
-    { key: '/calendar', icon: <CalendarOutlined />, label: 'Lịch phòng' },
-    { key: '/bookings', icon: <UnorderedListOutlined />, label: 'Đặt phòng' },
-    {
-      key: '/booking-requests',
-      icon: <InboxOutlined />,
-      label: (
-        <Space size={8}>
-          <span>Đặt phòng trực tiếp</span>
-          {pendingCount > 0 ? <Badge count={pendingCount} color="red" /> : null}
-        </Space>
-      ),
-    },
-    { key: '/guests', icon: <TeamOutlined />, label: 'Khách' },
-    { key: '/housekeeping', icon: <CheckSquareOutlined />, label: 'Housekeeping' },
-    { key: '/so-quy', icon: <WalletOutlined />, label: 'Sổ quỹ' },
-    { key: '/finance', icon: <DollarOutlined />, label: 'Tài chính' },
-    { key: '/revenue', icon: <RiseOutlined />, label: 'Doanh thu' },
-    { key: '/dk14-report', icon: <FileExcelOutlined />, label: 'Báo cáo ĐK14' },
-    { key: '/s1a', icon: <AuditOutlined />, label: 'Sổ S1a — Doanh thu HKD' },
-    { key: '/checkin-import', icon: <UserAddOutlined />, label: 'Import Check-in (Excel)' },
-    { key: '/settings/rooms', icon: <HomeOutlined />, label: 'Quản lý phòng' },
-    { key: '/settings/ical', icon: <LinkOutlined />, label: 'iCal Feed' },
-  ]
-}
-
-function resolveSelectedKeys(pathname: string): string[] {
-  const prefixMap: [string, string][] = [
-    ['/new-booking', '/new-booking'],
-    ['/calendar', '/calendar'],
-    ['/bookings', '/bookings'],
-    ['/booking-requests', '/booking-requests'],
-    ['/guests', '/guests'],
-    ['/housekeeping', '/housekeeping'],
-    ['/finance', '/finance'],
-    ['/revenue', '/revenue'],
-    ['/orevenue', '/revenue'],
-    ['/dk14-report', '/dk14-report'],
-    ['/s1a', '/s1a'],
-    ['/checkin-import', '/checkin-import'],
-    ['/settings/rooms', '/settings/rooms'],
-    ['/settings', '/settings/ical'],
-    ['/dashboard', '/'],
-  ]
-
-  for (const [prefix, key] of prefixMap) {
-    if (pathname.startsWith(prefix)) {
-      return [key]
-    }
-  }
-
-  return ['/']
-}
-
 export function MainLayout(): JSX.Element {
   const navigate = useNavigate()
   const location = useLocation()
-  const { isMobile } = useBreakpoint()
+  // isDesktop = AntD lg (>= 992px): thanh menu ngang; dưới mức này dùng nút menu + ngăn kéo
+  const { isMobile, isDesktop } = useBreakpoint()
   const { data: pendingCount = 0 } = usePendingRequestCount()
-
-  const selectedKeys = useMemo(() => resolveSelectedKeys(location.pathname), [location.pathname])
-  const menuItems = useMemo(() => createMenuItems(pendingCount), [pendingCount])
+  const isOnNewBooking = location.pathname.startsWith(NEW_BOOKING_PATH)
 
   return (
     <Layout className="main-layout">
+      {/* C1: nền header phủ 100% viewport; nội dung header nằm trong khung max-width căn giữa */}
       <Header className="main-header">
-        <Space direction="vertical" size={2}>
-          <Typography.Text className="brand-kicker">Hello Dalat Hostel</Typography.Text>
-          <Typography.Title level={4} className="brand-title">
-            {isMobile ? 'PMS' : 'Hệ thống PMS / CRM'}
-          </Typography.Title>
-        </Space>
-        <Space size={16} align="center">
-          {!isMobile && (
-            <Menu
-              mode="horizontal"
-              items={menuItems}
-              selectedKeys={selectedKeys}
-              onClick={(event) => navigate(event.key)}
-              className="main-menu"
-            />
-          )}
-          <ThemeToggle />
-        </Space>
+        <div className="main-header-inner">
+          <Space direction="vertical" size={2} className="main-brand">
+            {!isMobile && <Typography.Text className="brand-kicker">Hello Dalat Hostel</Typography.Text>}
+            <Typography.Title level={4} className="brand-title">
+              {isMobile ? 'PMS' : 'Hệ thống PMS / CRM'}
+            </Typography.Title>
+          </Space>
+          {/* main-nav co giãn (min-width: 0) để không bao giờ đẩy tràn trang */}
+          <div className="main-nav">
+            {isDesktop && <MainNav isDesktop pendingCount={pendingCount} />}
+            {/* C2: nút chính luôn hiển thị, không nằm trong dropdown */}
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => navigate(NEW_BOOKING_PATH)}
+              aria-current={isOnNewBooking ? 'page' : undefined}
+              className="main-new-booking"
+            >
+              {NEW_BOOKING_LABEL}
+            </Button>
+            {!isMobile && <ThemeToggle />}
+            {!isDesktop && <MainNav isDesktop={false} pendingCount={pendingCount} />}
+          </div>
+        </div>
       </Header>
       <Content
         className="main-content"
         style={isMobile ? { paddingBottom: 'calc(56px + env(safe-area-inset-bottom, 0px))' } : undefined}
       >
-        <Outlet />
+        <div className="main-content-inner">
+          <Outlet />
+        </div>
       </Content>
       <BottomNav />
     </Layout>

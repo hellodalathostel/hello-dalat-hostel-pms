@@ -1,9 +1,9 @@
 import dayjs from 'dayjs'
 import {
   Button,
+  Dropdown,
   Flex,
   Modal,
-  Popconfirm,
   Space,
   Tag,
   Tooltip,
@@ -11,12 +11,14 @@ import {
 } from 'antd'
 import {
   ClockCircleOutlined,
+  CopyOutlined,
   DeleteOutlined,
   EditOutlined,
   ExclamationCircleOutlined,
   FileExcelOutlined,
   LoginOutlined,
   LogoutOutlined,
+  MoreOutlined,
   PlusOutlined,
   StopOutlined,
 } from '@ant-design/icons'
@@ -26,6 +28,7 @@ import type {
   BookingDiscountItem,
 } from '@/features/bookings/hooks/useBookingDetail'
 import { useVoidBooking } from '@/features/bookings/hooks/useVoidBooking'
+import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
 import { BreakfastSection } from './BreakfastSection'
 import {
   STATUS_COLOR,
@@ -39,6 +42,8 @@ import {
 export interface BookingRoomCardProps {
   booking: BookingDetailItem
   groupId: string
+  // C4: tên nhóm (groups.customer_name) để hiện ngữ cảnh "Nhóm … / Phòng …" ở khu thao tác
+  groupName?: string
   onCheckin?: (bookingId: string) => void
   onCheckinImport?: (bookingId: string) => void
   onCheckout?: (bookingId: string) => void
@@ -53,6 +58,7 @@ export interface BookingRoomCardProps {
 export function BookingRoomCard({
   booking,
   groupId,
+  groupName,
   onCheckin,
   onCheckinImport,
   onCheckout,
@@ -62,7 +68,19 @@ export function BookingRoomCard({
   onEdit,
   isCancelling = false,
 }: BookingRoomCardProps) {
+  const { message } = useAppFeedback()
+  const bookingCode = booking.code
   const nights = booking.nights ?? dayjs(booking.check_out).diff(dayjs(booking.check_in), 'day')
+
+  // C3: nút chỉ có icon phải có aria-label và phản hồi rõ ràng sau khi sao chép
+  const handleCopyCode = async (code: string): Promise<void> => {
+    try {
+      await navigator.clipboard.writeText(code)
+      message.success(`Đã sao chép mã ${code}`)
+    } catch {
+      message.error('Không sao chép được — hãy chọn mã và sao chép thủ công')
+    }
+  }
   const isPiiVisible = (PII_VISIBLE_STATUSES as readonly string[]).includes(booking.status)
   const primaryGuest = booking.booking_guests?.find((guest) => guest.is_primary)?.customers ?? null
   const status = booking.status as BookingStatus
@@ -73,6 +91,34 @@ export function BookingRoomCard({
   const canCancel = ACTION_STATUSES.canCancel.includes(status)
   const isReadOnly = status === 'checked-out' || status === 'cancelled'
   const { mutate: voidBooking, isPending: isVoiding } = useVoidBooking()
+
+  // C4: Huỷ nằm trong menu "Thao tác khác"; màn xác nhận ghi rõ khách, phòng, ngày nhận/trả
+  const handleConfirmCancel = () => {
+    Modal.confirm({
+      title: 'Huỷ booking này?',
+      icon: <ExclamationCircleOutlined />,
+      content: (
+        <div>
+          <p style={{ marginBottom: 4 }}>
+            Khách: <strong>{booking.guest_name ?? groupName ?? 'Khách chưa xác định'}</strong>
+          </p>
+          <p style={{ marginBottom: 4 }}>
+            Phòng: <strong>{booking.room_id}</strong>
+            {booking.room_name ? ` — ${booking.room_name}` : ''}
+          </p>
+          <p style={{ marginBottom: 8 }}>
+            Nhận/trả: <strong>{dayjs(booking.check_in).format('DD/MM/YYYY')}</strong> →{' '}
+            <strong>{dayjs(booking.check_out).format('DD/MM/YYYY')}</strong> ({nights} đêm)
+          </p>
+          <p style={{ color: 'var(--signal-stop)', marginBottom: 0 }}>Thao tác này không thể hoàn tác.</p>
+        </div>
+      ),
+      okText: 'Huỷ booking',
+      okType: 'danger',
+      cancelText: 'Đóng',
+      onOk: () => onCancel?.(booking.id),
+    })
+  }
 
   const handleVoidBooking = () => {
     if (!groupId) {
@@ -137,37 +183,48 @@ export function BookingRoomCard({
 
         <div>
           <div>
-            <Typography.Text strong>
+            <Typography.Text strong className="booking-emphasis">
               Phòng {booking.room_name ?? booking.room_id}
               {booking.has_early_check_in && (
-                <Tag color="orange" style={{ marginLeft: 4, fontSize: 11 }}>🌅 Nhận sớm</Tag>
+                <Tag color="orange" style={{ marginLeft: 4 }}>🌅 Nhận sớm</Tag>
               )}
               {booking.has_late_check_out && (
-                <Tag color="purple" style={{ marginLeft: 4, fontSize: 11 }}>🌙 Trả muộn</Tag>
+                <Tag color="purple" style={{ marginLeft: 4 }}>🌙 Trả muộn</Tag>
               )}
             </Typography.Text>
             {booking.guest_name && (
-              <Typography.Text type="secondary" style={{ marginLeft: 8 }}>
+              <Typography.Text className="booking-emphasis" style={{ marginLeft: 8 }}>
                 — {booking.guest_name}
               </Typography.Text>
             )}
-            {booking.code && (
-              <Tag color="geekblue" style={{ marginLeft: 8 }}>
-                {booking.code}
-              </Tag>
+            {bookingCode && (
+              <span style={{ marginLeft: 8, whiteSpace: 'nowrap' }}>
+                <Tag color="geekblue" style={{ marginInlineEnd: 0 }}>
+                  {bookingCode}
+                </Tag>
+                <Tooltip title="Sao chép mã booking">
+                  <Button
+                    type="text"
+                    icon={<CopyOutlined />}
+                    onClick={() => void handleCopyCode(bookingCode)}
+                    aria-label="Sao chép mã booking"
+                    className="icon-btn"
+                  />
+                </Tooltip>
+              </span>
             )}
             {primaryGuest && (
               <div style={{ marginTop: 4 }}>
-                <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block' }}>
+                <Typography.Text type="secondary" style={{ fontSize: 'var(--font-size-secondary)', display: 'block' }}>
                   Loại giấy tờ: {primaryGuest.document_type ?? '—'}
                 </Typography.Text>
-                <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block' }}>
+                <Typography.Text type="secondary" style={{ fontSize: 'var(--font-size-secondary)', display: 'block' }}>
                   Số giấy tờ: {isPiiVisible ? (primaryGuest.document_number ?? '—') : '—'}
                 </Typography.Text>
               </div>
             )}
             <div style={{ marginTop: 4 }}>
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              <Typography.Text type="secondary" style={{ fontSize: 'var(--font-size-secondary)' }}>
                 {dayjs(booking.check_in).format('DD/MM')} → {dayjs(booking.check_out).format('DD/MM/YYYY')}
                 {' '}({nights} đêm)
               </Typography.Text>
@@ -200,7 +257,7 @@ export function BookingRoomCard({
         )}
 
         {booking.note && (
-          <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 4 }}>
+          <Typography.Text type="secondary" style={{ fontSize: 'var(--font-size-secondary)', display: 'block', marginTop: 4 }}>
             📝 {booking.note}
           </Typography.Text>
         )}
@@ -208,12 +265,19 @@ export function BookingRoomCard({
         {/* Action buttons — hiển thị có điều kiện theo status */}
         {(status !== 'cancelled') && (
           <div style={{ marginTop: 12, borderTop: '1px solid var(--rule)', paddingTop: 12 }}>
+            {/* C4: ngữ cảnh rõ ràng trước khi bấm thao tác — tránh nhầm phòng trong nhóm nhiều phòng */}
+            <Typography.Text
+              type="secondary"
+              style={{ display: 'block', marginBottom: 8, fontSize: 'var(--font-size-secondary)' }}
+            >
+              {groupName ? `Nhóm ${groupName} / ` : ''}Phòng {booking.room_id}
+            </Typography.Text>
             <Space wrap size="small">
-              {/* Check-in */}
+              {/* Nhận phòng (C4: đổi nhãn "Check-in" cho đồng nhất với dashboard) */}
               {canCheckin && (
                 <>
                   <Button type="primary" size="small" icon={<LoginOutlined />} onClick={() => onCheckin?.(booking.id)}>
-                    Check-in
+                    Nhận phòng
                   </Button>
                   <Button size="small" icon={<FileExcelOutlined />} onClick={() => onCheckinImport?.(booking.id)}>
                     Nhập Excel
@@ -244,20 +308,36 @@ export function BookingRoomCard({
                 </Tooltip>
               )}
 
-              {/* Huỷ booking */}
+              {/* C4: Huỷ chuyển vào menu "Thao tác khác" để không bấm nhầm cạnh nút thường dùng */}
               {canCancel && (
-                <Popconfirm
-                  title="Huỷ booking này?"
-                  description="Thao tác này không thể hoàn tác."
-                  okText="Huỷ booking"
-                  cancelText="Đóng"
-                  okButtonProps={{ danger: true, loading: isCancelling }}
-                  onConfirm={() => onCancel?.(booking.id)}
+                <Dropdown
+                  trigger={['click']}
+                  menu={{
+                    items: [
+                      {
+                        key: 'cancel',
+                        danger: true,
+                        icon: <StopOutlined />,
+                        label: 'Huỷ booking',
+                        disabled: isCancelling,
+                      },
+                    ],
+                    onClick: ({ key }) => {
+                      if (key === 'cancel') {
+                        handleConfirmCancel()
+                      }
+                    },
+                  }}
                 >
-                  <Button size="small" danger icon={<StopOutlined />}>
-                    Huỷ
+                  <Button
+                    size="small"
+                    icon={<MoreOutlined />}
+                    loading={isCancelling}
+                    aria-label={`Thao tác khác — phòng ${booking.room_id}`}
+                  >
+                    Thao tác khác
                   </Button>
-                </Popconfirm>
+                </Dropdown>
               )}
 
               {/* Xoá booking checked-out — destructive action luôn đặt cuối cùng */}
