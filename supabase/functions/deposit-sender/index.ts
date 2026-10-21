@@ -52,11 +52,23 @@ function buildVietQrUrl(amount: number, addInfo: string): string {
     + `?amount=${Math.round(amount)}&addInfo=${info}&accountName=${BANK_NAME_ENC}`;
 }
 
-async function tgSendPhoto(body: Record<string, unknown>): Promise<void> {
+async function tgSendPhoto(photoUrl: string, caption: string): Promise<void> {
+  // Tự tải QR rồi upload multipart, không phụ thuộc Telegram fetch URL ngoài
+  const imgRes = await fetch(photoUrl);
+  if (!imgRes.ok) {
+    throw new Error(`VietQR lỗi ${imgRes.status}: ${(await imgRes.text()).slice(0, 200)}`);
+  }
+  const blob = await imgRes.blob();
+
+  const form = new FormData();
+  form.append("chat_id", CHAT_ID);
+  form.append("caption", caption);
+  form.append("parse_mode", "HTML");
+  form.append("photo", blob, "qr.png");
+
   const res = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendPhoto`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    body: form,
   });
   // Luôn check res.ok để không nuốt 400 (Nguyên tắc 8)
   if (!res.ok) throw new Error(`Telegram sendPhoto lỗi ${res.status}: ${await res.text()}`);
@@ -168,12 +180,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       `📝 Nội dung CK: <code>${escapeHtml(transferNote)}</code>`;
 
     // 1 sendPhoto + caption đầy đủ — nguyên tử
-    await tgSendPhoto({
-      chat_id: CHAT_ID,
-      photo: buildVietQrUrl(depositAmount, transferNote),
-      caption,
-      parse_mode: "HTML",
-    });
+    await tgSendPhoto(buildVietQrUrl(depositAmount, transferNote), caption);
 
     return jsonRes({ ok: true, ref_code: g.ref_code, deposit: depositAmount });
   } catch (e) {
