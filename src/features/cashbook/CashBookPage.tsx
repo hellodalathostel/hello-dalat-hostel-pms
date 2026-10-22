@@ -1,14 +1,14 @@
 import { useState } from 'react'
 import {
   Card, Statistic, Row, Col, Button, List, Tag, Empty, Spin,
-  Typography, Space, Result, DatePicker, Dropdown,
+  Typography, Space, Result, DatePicker, Dropdown, Alert,
 } from 'antd'
 import {
   PlusOutlined, LockOutlined, UnlockOutlined, ArrowUpOutlined, ArrowDownOutlined,
-  RobotOutlined, EditOutlined, MoreOutlined, DeleteOutlined,
+  RobotOutlined, EditOutlined, MoreOutlined, DeleteOutlined, ReloadOutlined,
 } from '@ant-design/icons'
 import dayjs, { type Dayjs } from 'dayjs'
-import { useCashBookDaily, useCashBookDetail } from './hooks/useCashBook'
+import { useCashBookDayRow, useCashBookDetail, useCashBookOpening } from './hooks/useCashBook'
 import { CashEntryModal } from './components/CashEntryModal'
 import { VoidEntryModal } from './components/VoidEntryModal'
 import { CloseShiftModal } from './components/CloseShiftModal'
@@ -17,6 +17,8 @@ import { getCashEntryLabel, isAutoEntry, formatVnd } from '@/constants/cashBook'
 import type { CashBookDetailRow } from '@/types/cashBook'
 
 const { Text, Title } = Typography
+
+const LOAD_ERROR_TITLE = 'Không tải được dữ liệu sổ quỹ'
 
 export default function CashBookPage() {
   const [selectedDate, setSelectedDate] = useState<Dayjs>(dayjs())
@@ -27,13 +29,27 @@ export default function CashBookPage() {
   const [reopenOpen, setReopenOpen] = useState(false)
 
   const dateStr = selectedDate.format('YYYY-MM-DD')
-  const { data: dailyRows, isLoading: loadingDaily } = useCashBookDaily(30)
-  const { data: details, isLoading: loadingDetail } = useCashBookDetail(dateStr)
+  // F02: trang thai khai so va tong hop ngay lay bang query rieng, khong tim trong 30 dong
+  const openingQuery = useCashBookOpening()
+  const dayQuery = useCashBookDayRow(dateStr)
+  const detailQuery = useCashBookDetail(dateStr)
 
-  const today = dailyRows?.find((r) => r.entry_date === dateStr)
-  const hasOpening = dailyRows?.some((r) => r.is_opening_entry) ?? false
+  const details = detailQuery.data
+  const dayResult = dayQuery.data
+  const today = dayResult?.row ?? null
   // QUAN TRONG: dung closed_at, KHONG dung discrepancy
   const isClosed = Boolean(today?.closed_at)
+  // Ton dau ngay = ton cuoi - thuan trong ngay (view khong co cot ton dau rieng)
+  const openingOfDay = today ? today.ton_luy_ke - today.thuan_trong_ngay : null
+
+  // F04: query loi (ke ca refetch loi khi van con du lieu cu) → hien khoi loi co dinh.
+  const failedQueries = [openingQuery, dayQuery, detailQuery].filter((q) => q.error)
+  const hasStaleData = failedQueries.some((q) => q.data !== undefined)
+  const retryFailed = () => {
+    failedQueries.forEach((q) => {
+      void q.refetch()
+    })
+  }
 
   const openAddModal = () => {
     setEditingEntry(null)
@@ -45,7 +61,7 @@ export default function CashBookPage() {
     setEntryModalOpen(true)
   }
 
-  if (loadingDaily) {
+  if (openingQuery.isLoading) {
     return (
       <div style={{ textAlign: 'center', padding: 48 }}>
         <Spin size="large" />
@@ -53,8 +69,25 @@ export default function CashBookPage() {
     )
   }
 
-  // Chua khai so quy
-  if (!hasOpening) {
+  // Loi va chua tung co du lieu khai so → khong the biet da khai hay chua, KHONG ket luan "chua khai".
+  // Loi tai lai nen ma con du lieu cu → van hien trang binh thuong kem Alert "Chua cap nhat".
+  if (openingQuery.isError && openingQuery.data === undefined) {
+    return (
+      <Result
+        status="error"
+        title={LOAD_ERROR_TITLE}
+        subTitle={openingQuery.error.message}
+        extra={
+          <Button type="primary" icon={<ReloadOutlined />} onClick={() => void openingQuery.refetch()}>
+            Thử lại
+          </Button>
+        }
+      />
+    )
+  }
+
+  // Chua khai so quy — CHI khi truy van thanh cong va khong co dong khai so
+  if (openingQuery.isSuccess && !openingQuery.data) {
     return (
       <Result
         status="info"
@@ -80,100 +113,137 @@ export default function CashBookPage() {
         />
       </Space>
 
+      {failedQueries.length > 0 && (
+        <Alert
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message={LOAD_ERROR_TITLE}
+          description={hasStaleData ? 'Chưa cập nhật — đang hiển thị dữ liệu cũ.' : undefined}
+          action={
+            <Button size="small" icon={<ReloadOutlined />} onClick={retryFailed}>
+              Thử lại
+            </Button>
+          }
+        />
+      )}
+
       {/* The tong quan */}
       <Card style={{ marginBottom: 16 }}>
-        <Statistic
-          title="Tồn quỹ"
-          value={today?.ton_luy_ke ?? 0}
-          formatter={(v) => formatVnd(Number(v))}
-          suffix="₫"
-          valueStyle={{ fontSize: 32, fontWeight: 600 }}
-        />
-
-        <Row gutter={16} style={{ marginTop: 16 }}>
-          <Col span={12}>
-            <Statistic
-              title="Thu"
-              value={today?.thu_trong_ngay ?? 0}
-              formatter={(v) => formatVnd(Number(v))}
-              suffix="₫"
-              prefix={<ArrowUpOutlined />}
-              valueStyle={{ color: '#3f8600', fontSize: 18 }}
-            />
-          </Col>
-          <Col span={12}>
-            <Statistic
-              title="Chi"
-              value={today?.chi_trong_ngay ?? 0}
-              formatter={(v) => formatVnd(Number(v))}
-              suffix="₫"
-              prefix={<ArrowDownOutlined />}
-              valueStyle={{ color: '#cf1322', fontSize: 18 }}
-            />
-          </Col>
-        </Row>
-
-        {isClosed && (
-          <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid #f0f0f0' }}>
-            <Space wrap>
-              <Tag color="default" icon={<LockOutlined />}>Đã chốt ca</Tag>
-              <Text type="secondary">
-                Đếm được {formatVnd(today?.counted_balance ?? 0)}₫
-              </Text>
-              {(today?.discrepancy ?? 0) !== 0 && (
-                <Tag color="error">
-                  {(today?.discrepancy ?? 0) > 0 ? 'Thừa ' : 'Thiếu '}
-                  {formatVnd(Math.abs(today?.discrepancy ?? 0))}₫
-                </Tag>
-              )}
-            </Space>
+        {dayQuery.isLoading ? (
+          <div style={{ textAlign: 'center', padding: 24 }}>
+            <Spin />
           </div>
+        ) : !dayResult ? (
+          <Text type="secondary">Không tải được số liệu ngày này.</Text>
+        ) : dayResult.kind === 'before-opening' ? (
+          <Text type="secondary">Ngày này trước mốc khai sổ quỹ, chưa có số liệu.</Text>
+        ) : (
+          <>
+            {dayResult.kind === 'carried' && (
+              <Tag style={{ marginBottom: 8 }}>Không phát sinh — tồn mang sang</Tag>
+            )}
+            <Statistic
+              title="Tồn quỹ"
+              value={today?.ton_luy_ke ?? 0}
+              formatter={(v) => formatVnd(Number(v))}
+              suffix="₫"
+              valueStyle={{ fontSize: 32, fontWeight: 600 }}
+            />
+            <Text type="secondary" style={{ fontSize: 13 }}>
+              Tồn đầu ngày: {formatVnd(openingOfDay ?? 0)}₫
+            </Text>
+
+            <Row gutter={16} style={{ marginTop: 16 }}>
+              <Col span={12}>
+                <Statistic
+                  title="Thu"
+                  value={today?.thu_trong_ngay ?? 0}
+                  formatter={(v) => formatVnd(Number(v))}
+                  suffix="₫"
+                  prefix={<ArrowUpOutlined />}
+                  valueStyle={{ color: '#3f8600', fontSize: 18 }}
+                />
+              </Col>
+              <Col span={12}>
+                <Statistic
+                  title="Chi"
+                  value={today?.chi_trong_ngay ?? 0}
+                  formatter={(v) => formatVnd(Number(v))}
+                  suffix="₫"
+                  prefix={<ArrowDownOutlined />}
+                  valueStyle={{ color: '#cf1322', fontSize: 18 }}
+                />
+              </Col>
+            </Row>
+
+            {isClosed && (
+              <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid #f0f0f0' }}>
+                <Space wrap>
+                  <Tag color="default" icon={<LockOutlined />}>Đã chốt ca</Tag>
+                  <Text type="secondary">
+                    Đếm được {formatVnd(today?.counted_balance ?? 0)}₫
+                  </Text>
+                  {(today?.discrepancy ?? 0) !== 0 && (
+                    <Tag color="error">
+                      {(today?.discrepancy ?? 0) > 0 ? 'Thừa ' : 'Thiếu '}
+                      {formatVnd(Math.abs(today?.discrepancy ?? 0))}₫
+                    </Tag>
+                  )}
+                </Space>
+              </div>
+            )}
+          </>
         )}
       </Card>
 
-      {/* Nut thao tac */}
-      <Space style={{ width: '100%', marginBottom: 16 }} size="middle">
-        {isClosed ? (
-          <Button
-            icon={<UnlockOutlined />}
-            size="large"
-            onClick={() => setReopenOpen(true)}
-            block
-          >
-            Mở lại ca
-          </Button>
-        ) : (
-          <>
+      {/* Nut thao tac — chi hien khi biet chac trang thai ca cua ngay */}
+      {today && (
+        <Space style={{ width: '100%', marginBottom: 16 }} size="middle">
+          {isClosed ? (
             <Button
-              type="primary"
-              icon={<PlusOutlined />}
+              icon={<UnlockOutlined />}
               size="large"
-              onClick={openAddModal}
+              onClick={() => setReopenOpen(true)}
               block
             >
-              Thêm giao dịch
+              Mở lại ca
             </Button>
-            <Button
-              icon={<LockOutlined />}
-              size="large"
-              onClick={() => setCloseOpen(true)}
-              block
-            >
-              Chốt ca
-            </Button>
-          </>
-        )}
-      </Space>
+          ) : (
+            <>
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                size="large"
+                onClick={openAddModal}
+                block
+              >
+                Thêm giao dịch
+              </Button>
+              <Button
+                icon={<LockOutlined />}
+                size="large"
+                onClick={() => setCloseOpen(true)}
+                block
+              >
+                Chốt ca
+              </Button>
+            </>
+          )}
+        </Space>
+      )}
 
       {/* Danh sach giao dich */}
       <Card
         title={`Giao dịch ngày ${selectedDate.format('DD/MM/YYYY')}`}
         styles={{ body: { padding: details?.length ? 0 : 24 } }}
       >
-        {loadingDetail ? (
+        {detailQuery.isLoading ? (
           <div style={{ textAlign: 'center', padding: 24 }}>
             <Spin />
           </div>
+        ) : detailQuery.isError ? (
+          <Text type="secondary">Không tải được danh sách giao dịch.</Text>
         ) : !details?.length ? (
           <Empty description="Chưa có giao dịch" image={Empty.PRESENTED_IMAGE_SIMPLE} />
         ) : (
