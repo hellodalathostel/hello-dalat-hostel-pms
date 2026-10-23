@@ -3,6 +3,8 @@ import { Card, Flex, Grid, Skeleton, Table, Tag, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
 import type { UnpaidGroup } from '../types'
+import type { QueryViewState } from '@/lib/queryViewState'
+import { QueryErrorState } from '@/components/QueryErrorState'
 
 const { Text } = Typography
 const { useBreakpoint } = Grid
@@ -13,8 +15,13 @@ function fmt(amount: number): string {
 
 interface Props {
   data: UnpaidGroup[]
-  loading?: boolean
+  state: QueryViewState
+  error?: unknown
+  onRetry: () => void
+  isRetrying?: boolean
 }
+
+const LOAD_ERROR_TITLE = 'Không tải được danh sách công nợ'
 
 // ── Desktop: Table ──────────────────────────────────────────────
 const columns: ColumnsType<UnpaidGroup> = [
@@ -130,7 +137,7 @@ function UnpaidCardList({ data }: { data: UnpaidGroup[] }) {
 }
 
 // ── Exported component ──────────────────────────────────────────
-export function UnpaidTable({ data, loading }: Props) {
+export function UnpaidTable({ data, state, error, onRetry, isRetrying }: Props) {
   const screens = useBreakpoint()
   const isMobile = !screens.md
   const totalDebt = data.reduce((sum, r) => sum + r.debt, 0)
@@ -143,7 +150,7 @@ export function UnpaidTable({ data, loading }: Props) {
       </span>
     ) : null
 
-  if (loading) {
+  if (state === 'loading') {
     return (
       <Card title={cardTitle}>
         <Skeleton active paragraph={{ rows: 4 }} />
@@ -151,8 +158,20 @@ export function UnpaidTable({ data, loading }: Props) {
     )
   }
 
+  // F04: lỗi và chưa có dữ liệu → KHÔNG hiện "Không có khoản nợ nào", không hiện số nhóm/tổng nợ
+  if (state === 'error') {
+    return (
+      <Card title="Chưa thanh toán">
+        <QueryErrorState title={LOAD_ERROR_TITLE} error={error} onRetry={onRetry} isRetrying={isRetrying} />
+      </Card>
+    )
+  }
+
   return (
     <Card title={cardTitle} extra={cardExtra}>
+      {state === 'stale-error' && (
+        <QueryErrorState variant="banner" title={LOAD_ERROR_TITLE} onRetry={onRetry} isRetrying={isRetrying} />
+      )}
       <Text type="secondary" style={{ display: 'block', fontSize: 12, marginBottom: 12 }}>
         Toàn kỳ — mọi nhóm có booking đã check-out còn nợ, không theo tháng đang chọn.
       </Text>
@@ -163,7 +182,6 @@ export function UnpaidTable({ data, loading }: Props) {
           columns={columns}
           dataSource={data}
           rowKey="id"
-          loading={loading}
           pagination={{ pageSize: 20, showSizeChanger: false }}
           size="middle"
           locale={{ emptyText: '🎉 Không có khoản nợ nào' }}

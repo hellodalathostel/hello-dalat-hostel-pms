@@ -5,13 +5,23 @@ import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
 import { GuestDetailDrawer } from '@/features/guests/components/GuestDetailDrawer'
 import { useGuests, type GuestSummary } from '@/features/guests/hooks/useGuests'
+import { getQueryViewState } from '@/lib/queryViewState'
+import { QueryErrorState } from '@/components/QueryErrorState'
 
 const { Title } = Typography
 
 export default function GuestsPage() {
   const [search, setSearch] = useState('')
   const [selectedGuest, setSelectedGuest] = useState<GuestSummary | null>(null)
-  const { data: guests, isLoading } = useGuests(search)
+  const guestsQuery = useGuests(search)
+  const guests = guestsQuery.data
+  // F04: lỗi tải KHÔNG được hiện như danh sách rỗng
+  const viewState = getQueryViewState({
+    isLoading: guestsQuery.isLoading,
+    isError: guestsQuery.isError,
+    data: guests,
+  })
+  const retryGuests = () => void guestsQuery.refetch()
 
   const columns: ColumnsType<GuestSummary> = [
     {
@@ -91,7 +101,7 @@ export default function GuestsPage() {
         }}
       >
         <Title level={4} style={{ margin: 0, whiteSpace: 'nowrap' }}>
-          Khách ({guests?.length ?? 0})
+          {viewState === 'error' ? 'Khách' : `Khách (${guests?.length ?? 0})`}
         </Title>
         <Input
           placeholder="Tìm theo tên, CCCD, SĐT..."
@@ -103,15 +113,34 @@ export default function GuestsPage() {
         />
       </div>
 
-      <Table
-        columns={columns}
-        dataSource={guests ?? []}
-        rowKey="id"
-        loading={isLoading}
-        size="small"
-        scroll={{ x: true }}
-        pagination={{ pageSize: 20, showSizeChanger: false }}
-      />
+      {viewState === 'stale-error' && (
+        <QueryErrorState
+          variant="banner"
+          title="Không tải được danh sách khách"
+          onRetry={retryGuests}
+          isRetrying={guestsQuery.isFetching}
+        />
+      )}
+
+      {/* Tìm kiếm không ra kết quả = 'empty' (empty mặc định của Table), khác với 'error' */}
+      {viewState === 'error' ? (
+        <QueryErrorState
+          title="Không tải được danh sách khách"
+          error={guestsQuery.error}
+          onRetry={retryGuests}
+          isRetrying={guestsQuery.isFetching}
+        />
+      ) : (
+        <Table
+          columns={columns}
+          dataSource={guests ?? []}
+          rowKey="id"
+          loading={viewState === 'loading'}
+          size="small"
+          scroll={{ x: true }}
+          pagination={{ pageSize: 20, showSizeChanger: false }}
+        />
+      )}
 
       <GuestDetailDrawer
         guest={selectedGuest}
