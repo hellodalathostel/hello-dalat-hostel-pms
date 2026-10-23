@@ -9,6 +9,8 @@ import { useCheckoutBooking } from '@/features/checkout/hooks/useCheckoutBooking
 import { useRooms } from '@/features/bookings/hooks/useRooms'
 import { useOverdueBookings, type OverdueBooking } from '@/features/dashboard/hooks/useOverdueBookings'
 import { useBreakpoint } from '@/shared/hooks/useBreakpoint'
+import { getQueryViewState } from '@/lib/queryViewState'
+import { QueryErrorState } from '@/components/QueryErrorState'
 
 const vndFormatter = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' })
 
@@ -29,7 +31,15 @@ interface OverdueBookingsCardProps {
 
 export function OverdueBookingsCard({ onOpenBooking }: OverdueBookingsCardProps): React.JSX.Element | null {
   const { isMobile } = useBreakpoint()
-  const { data: rows = [] } = useOverdueBookings()
+  const overdueQuery = useOverdueBookings()
+  const rows = overdueQuery.data ?? []
+  // F04b: lỗi tải KHÔNG được coi như "không có booking quá hạn" — tránh bỏ sót khách quá hạn
+  const viewState = getQueryViewState({
+    isLoading: overdueQuery.isLoading,
+    isError: overdueQuery.isError,
+    data: overdueQuery.data,
+  })
+  const retryOverdue = () => void overdueQuery.refetch()
   const { data: rooms = [] } = useRooms(false)
   const checkoutBooking = useCheckoutBooking()
   const [confirmRow, setConfirmRow] = useState<OverdueBooking | null>(null)
@@ -65,8 +75,24 @@ export function OverdueBookingsCard({ onOpenBooking }: OverdueBookingsCardProps)
     }
   }
 
-  if (rows.length === 0) {
+  // loading / empty: giữ như cũ — card ẩn
+  if (viewState === 'loading' || viewState === 'empty') {
     return null
+  }
+
+  // Lỗi và chưa có dữ liệu: khối lỗi gọn, tiêu đề không kèm số đếm (không hiện 0)
+  if (viewState === 'error') {
+    return (
+      <Card title="Quá hạn cần xử lý" size="small">
+        <QueryErrorState
+          compact
+          title="Không tải được booking quá hạn"
+          error={overdueQuery.error}
+          onRetry={retryOverdue}
+          isRetrying={overdueQuery.isFetching}
+        />
+      </Card>
+    )
   }
 
   const columns: ColumnsType<OverdueBooking> = [
@@ -141,6 +167,14 @@ export function OverdueBookingsCard({ onOpenBooking }: OverdueBookingsCardProps)
 
   return (
     <Card title={`Quá hạn cần xử lý (${rows.length})`} size="small">
+      {viewState === 'stale-error' && (
+        <QueryErrorState
+          variant="banner"
+          title="Không tải được booking quá hạn"
+          onRetry={retryOverdue}
+          isRetrying={overdueQuery.isFetching}
+        />
+      )}
       <Table<OverdueBooking>
         rowKey="bookingId"
         columns={columns}
