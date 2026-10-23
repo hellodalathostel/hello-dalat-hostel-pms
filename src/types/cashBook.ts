@@ -53,6 +53,22 @@ export interface CashBookDailyRow {
   is_opening_entry: boolean
 }
 
+/** Moc khai so quy (bang cash_shifts, is_opening_entry = true) */
+export interface CashOpeningRow {
+  shift_date: string
+  opening_balance: number
+}
+
+/**
+ * Tong hop cua mot ngay cu the:
+ * - actual: dong that trong cash_book_daily (ngay co giao dich)
+ * - carried: ngay khong phat sinh, ton mang sang tu ngay truoc (thu/chi = 0)
+ * - before-opening: ngay truoc moc khai so, khong co so lieu
+ */
+export type CashBookDayResult =
+  | { kind: 'actual' | 'carried'; row: CashBookDailyRow }
+  | { kind: 'before-opening'; row: null }
+
 export interface AddCashEntryResult {
   id: string
   entry_date: string

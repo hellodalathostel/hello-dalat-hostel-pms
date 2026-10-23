@@ -1,6 +1,7 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation } from '@tanstack/react-query'
 import { supabase } from '@/api/supabase'
 import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
+import { useRefreshBookingData } from '@/shared/hooks/useRefreshBookingData'
 import { normalizeError } from '@/shared/utils/normalizeError'
 import type { NewBookingFormValues } from '@/lib/schemas'
 import type { DepositInput, DiscountLineItem, ServiceLineItem } from '@/features/bookings/types/booking'
@@ -34,6 +35,13 @@ interface CreateBookingRpcPayload {
     description: string
     booking_index: number
   }> | null
+  // F01: cọc ghi trong CÙNG transaction với tạo booking (RPC gọi record_payment_txn bên trong).
+  // null = không cọc. Lỗi ở bước cọc rollback toàn bộ, không còn booking mồ côi.
+  p_deposit: {
+    amount: number
+    method: DepositInput['method']
+    note: string
+  } | null
 }
 
 interface CreateBookingMutationInput {
@@ -48,11 +56,6 @@ interface CreateBookingRpcResult {
   error?: string
   group_id?: string
   booking_ids?: string[]
-}
-
-interface RecordPaymentRpcResult {
-  success: boolean
-  error?: string
 }
 
 async function createBookingMutationFn(input: CreateBookingMutationInput): Promise<CreateBookingRpcResult> {
@@ -113,6 +116,14 @@ async function createBookingMutationFn(input: CreateBookingMutationInput): Promi
               booking_index: discount.booking_index,
             }))
           : null,
+      p_deposit:
+        deposit && deposit.amount > 0
+          ? {
+              amount: deposit.amount,
+              method: deposit.method,
+              note: deposit.note ?? '',
+            }
+          : null,
     }
 
     const { data, error } = await supabase.rpc('create_group_booking_txn', payload)
@@ -127,34 +138,6 @@ async function createBookingMutationFn(input: CreateBookingMutationInput): Promi
       throw new Error(result?.error ?? 'create_group_booking_txn thất bại')
     }
 
-    if (deposit && deposit.amount > 0) {
-      if (!result.group_id) {
-        throw new Error('Thiếu group_id từ create_group_booking_txn')
-      }
-
-      const firstBookingId = result.booking_ids?.[0] ?? null
-      if (deposit.method === 'card' && !firstBookingId) {
-        throw new Error('Thiếu booking_id đầu tiên để ghi nhận thanh toán thẻ')
-      }
-
-      const { data: paymentData, error: paymentError } = await supabase.rpc('record_payment_txn', {
-        p_group_id: result.group_id,
-        p_amount: deposit.amount,
-        p_method: deposit.method,
-        p_note: deposit.note ?? '',
-        p_first_booking_id: deposit.method === 'card' ? firstBookingId : null,
-      })
-
-      if (paymentError) {
-        throw paymentError
-      }
-
-      const paymentResult = paymentData as RecordPaymentRpcResult | null
-      if (!paymentResult?.success) {
-        throw new Error(paymentResult?.error ?? 'record_payment_txn thất bại')
-      }
-    }
-
     return result
   } catch (error) {
     throw normalizeError(error)
@@ -164,25 +147,23 @@ async function createBookingMutationFn(input: CreateBookingMutationInput): Promi
 // Hook mutation tạo group + booking mới thông qua RPC transaction ở database.
 export function useCreateBooking() {
   const { notification } = useAppFeedback()
-  const queryClient = useQueryClient()
+  const refreshBookingData = useRefreshBookingData()
   const sendDeposit = useSendDeposit()
 
   return useMutation({
     mutationKey: ['create-group-booking-rpc'],
     mutationFn: createBookingMutationFn,
     onSuccess: async (result, variables) => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['room-calendar'] }),
-        queryClient.invalidateQueries({ queryKey: ['bookings'] }),
-        queryClient.invalidateQueries({ queryKey: ['groups'] }),
-        queryClient.invalidateQueries({ queryKey: ['dashboard', 'today'] }),
-      ])
+      // F05: helper chung đã gồm ['bookings-list'] nên danh sách booking thấy ngay booking mới;
+      // helper tự báo toast nếu lưu xong nhưng tải lại thất bại.
+      await refreshBookingData()
 
       // Auto gửi cọc — chỉ khi form KHÔNG ghi cọc sẵn. Backend vẫn skip nếu paid>0.
       if (result.group_id && !(variables.deposit && variables.deposit.amount > 0)) {
         sendDeposit.mutate({ groupId: result.group_id, auto: true })
       }
     },
+    // Cọc nằm chung transaction nên lỗi ở đây nghĩa là KHÔNG có gì được lưu → thông báo chính xác.
     onError: (error) => {
       const normalizedError = normalizeError(error)
       notification.error({
