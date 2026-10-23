@@ -16,6 +16,8 @@ interface QueryErrorStateProps {
   variant?: 'block' | 'banner'
   // Chỉ dùng cho banner: ghi đè mô tả mặc định; null = không có mô tả
   description?: ReactNode | null
+  // Chỉ dùng cho block: thu gọn chiều cao khi nằm trong card nhỏ (vd lưới Dashboard)
+  compact?: boolean
 }
 
 // Khối lỗi tải dữ liệu dùng chung (F04) — tách từ Sổ quỹ.
@@ -26,6 +28,7 @@ export function QueryErrorState({
   isRetrying = false,
   variant = 'block',
   description,
+  compact = false,
 }: QueryErrorStateProps) {
   const retryButton = (
     <Button
@@ -59,7 +62,13 @@ export function QueryErrorState({
 
   return (
     <div role="alert">
-      <Result status="error" title={title} subTitle={errorMessage} extra={retryButton} />
+      <Result
+        status="error"
+        title={title}
+        subTitle={errorMessage}
+        extra={retryButton}
+        style={compact ? { padding: '8px 0' } : undefined}
+      />
     </div>
   )
 }
