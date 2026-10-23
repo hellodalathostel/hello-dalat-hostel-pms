@@ -13,6 +13,7 @@ import {
   type RoomBoardState,
 } from '@/features/dashboard/utils/roomBoardState'
 import { useMarkRoomClean } from '@/features/housekeeping/hooks/useMarkRoomClean'
+import { formatMoney } from '@/shared/utils/format'
 import styles from './RoomBoard.module.css'
 
 interface RoomBoardProps {
@@ -28,7 +29,8 @@ function formatCurrency(value: number | null | undefined): string {
   return new Intl.NumberFormat('vi-VN').format(value)
 }
 
-// Màu số đếm theo nhóm — dùng token signal, đều đạt ≥ 4.5:1 trên --surface (cả light/dark).
+// Màu số đếm theo nhóm — token signal trên --surface. Riêng --signal-checkout (giữ màu cũ của
+// "Trả hôm nay") chỉ 4.09:1 ở light mode; số 20px/600 nên vẫn đạt ngưỡng chữ lớn 3:1.
 const GROUP_COLOR: Record<RoomBoardGroup, string> = {
   awaiting_arrival: 'var(--ink)',
   no_booking: 'var(--signal-go)',
@@ -36,6 +38,16 @@ const GROUP_COLOR: Record<RoomBoardGroup, string> = {
   checkout_today: 'var(--signal-checkout)',
   needs_cleaning: 'var(--signal-hold)',
   unavailable: 'var(--signal-stop)',
+}
+
+// F08: nhãn nợ hiển thị bằng chữ (không cần hover). Số tiền = group_balance_due từ view
+// (groups.grand_total − groups.paid) — số dư CẤP ĐOÀN, không tự tính từ booking.
+// Đoàn còn >1 booking active → ghi rõ "Nợ đoàn" để không ai cộng các dòng phòng lại thành tổng nợ.
+function getDebtLabel(room: DashboardRoom): string | null {
+  const balance = room.group_balance_due ?? 0
+  if (balance <= 0) return null
+  const isMultiRoomGroup = (room.group_active_booking_count ?? 0) > 1
+  return `${isMultiRoomGroup ? 'Nợ đoàn' : 'Nợ'} ${formatMoney(balance)}`
 }
 
 // Cột "Khách" — tuỳ trạng thái mà hiện tên khách, gợi ý sắp đến, hay lý do trống/dọn.
@@ -108,6 +120,7 @@ export function RoomBoard({
         {boardRooms.map((room) => {
           const state = getRoomBoardState(room)
           const isMarkingThisRoom = markClean.isPending && markClean.variables?.roomId === room.room_id
+          const debtLabel = getDebtLabel(room)
 
           // Tô màu cả dòng theo trạng thái — phòng chưa có khách ở giữ nguyên, không thêm class
           const rowStateClass =
@@ -136,18 +149,16 @@ export function RoomBoard({
                     {state === 'checkout_today' && (
                       <span className={styles.dotCheckout}>● TRẢ HÔM NAY</span>
                     )}
-                    {/* ĐÃ SỬA: debt badge giờ là <button> bấm được, mở PaymentModal đúng phòng. */}
-                    {/* #2 SỬA: dùng group_balance_due (group-level, đúng khi đoàn nhiều phòng)
-                        thay vì balance_due (legacy, trộn booking-level với group-level). */}
-                    {(room.group_balance_due ?? 0) > 0 && (
-                      <Tooltip title={`Công nợ đoàn ${formatCurrency(room.group_balance_due)}đ — bấm để thanh toán`}>
+                    {/* F08: nhãn nợ bằng chữ, bấm mở PaymentModal; tooltip chỉ là phần bổ sung. */}
+                    {debtLabel && (
+                      <Tooltip title="Số dư cấp đoàn — bấm để thu tiền">
                         <button
                           type="button"
                           className={styles.debtBadge}
                           onClick={() => onPaymentClick(room)}
-                          aria-label={`Công nợ đoàn ${formatCurrency(room.group_balance_due)}đ — thu tiền phòng ${room.room_id}`}
+                          aria-label={`${debtLabel} — thu tiền phòng ${room.room_id}`}
                         >
-                          ●
+                          {debtLabel}
                         </button>
                       </Tooltip>
                     )}

@@ -55,6 +55,9 @@ import { formatVND } from './bookingDetailShared'
 import { formatDate, formatPaymentMethod } from '@/shared/utils/format'
 import { BookingRoomCard } from './BookingRoomCard'
 
+// F08: nút thao tác cạnh "Còn lại" cao theo token (40px desktop, 44px màn cảm ứng)
+const ACTION_BUTTON_STYLE: React.CSSProperties = { minHeight: 'var(--control-height)' }
+
 interface Props {
   groupId?: string | null
   bookingId?: string | null
@@ -228,6 +231,9 @@ export default function BookingDetailDrawer({ groupId = null, bookingId = null, 
         }
       : null
 
+  // F08: còn nợ cấp đoàn (balanceDue lấy từ DB) và có đủ dữ liệu mở form thu tiền
+  const canCollectPayment = balanceDue > 0 && paymentRoom != null
+
   const paymentColumns = [
     {
       title: 'Ngày',
@@ -367,11 +373,13 @@ export default function BookingDetailDrawer({ groupId = null, bookingId = null, 
                   formatter={(v) => formatVND(v as number)}
                   style={{ flex: 1 }}
                 />
-                {/* C4: "Thu tiền" đặt ngay cạnh số còn nợ, mở thẳng form ghi nhận thanh toán */}
-                {balanceDue > 0 && paymentRoom && (
+                {/* C4: "Thu tiền" đặt ngay cạnh số còn nợ, mở thẳng form ghi nhận thanh toán.
+                    F08: đoàn còn nợ → "Thu tiền" là nút primary, "Sổ folio" lùi về nút thường. */}
+                {canCollectPayment && (
                   <Button
-                    size="small"
+                    type="primary"
                     icon={<WalletOutlined />}
+                    style={ACTION_BUTTON_STYLE}
                     block={isMobile}
                     onClick={() => setPaymentOpen(true)}
                   >
@@ -381,9 +389,9 @@ export default function BookingDetailDrawer({ groupId = null, bookingId = null, 
                 {/* Nút mở modal folio */}
                 {data.bookings.length > 0 && (
                   <Button
-                    size="small"
-                    type="primary"
+                    type={canCollectPayment ? 'default' : 'primary'}
                     icon={<EditOutlined />}
+                    style={ACTION_BUTTON_STYLE}
                     block={isMobile}
                     onClick={() => {
                       if (data.bookings.length === 1) {

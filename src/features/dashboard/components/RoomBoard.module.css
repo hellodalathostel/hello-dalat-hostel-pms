@@ -40,7 +40,8 @@
 /* ĐÃ SỬA: 5 track -> 6 track, thêm 110px cho cột Action (bug v1 đã fix). */
 .row {
   display: grid;
-  grid-template-columns: 56px 1fr 150px 150px 180px;
+  /* F03: cột Trạng thái 150 → 180px cho nhãn "○ CHƯA CÓ BOOKING" */
+  grid-template-columns: 56px 1fr 150px 180px 180px;
   align-items: center;
   /* C3: nút cao --control-height (40/44px) → dòng tự giãn, tối thiểu 56px */
   min-height: 56px;
@@ -100,6 +101,7 @@
 
 .status {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
@@ -124,22 +126,33 @@
   background: var(--signal-checkout-bg);
 }
 
-/* ĐÃ SỬA: debtBadge giờ là <button> thật (bấm mở PaymentModal), không còn là <span> tĩnh. */
+/* F08: nhãn nợ bằng chữ ("Nợ đoàn 350.000đ") — chữ --signal-stop trên nền --signal-stop-bg
+   (light 5.87:1, dark 6.65:1). Là <button> thật, bấm mở PaymentModal. */
 .debtBadge {
+  display: inline-flex;
+  align-items: center;
   color: var(--signal-stop);
+  background: var(--signal-stop-bg);
+  font-family: inherit;
   font-size: var(--font-size-secondary);
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: normal;
+  text-align: left;
   cursor: pointer;
-  border: none;
-  background: none;
-  padding: 0;
-  /* Vùng bấm tối thiểu dù chấm hiển thị nhỏ */
-  min-width: 32px;
+  border: 1px solid var(--signal-stop);
+  border-radius: var(--radius-md);
+  padding: 2px 8px;
   min-height: 32px;
+}
+
+.debtBadge:focus-visible {
+  outline: 2px solid var(--signal-stop);
+  outline-offset: 2px;
 }
 
 @media (pointer: coarse) {
   .debtBadge {
-    min-width: var(--touch-target);
     min-height: var(--touch-target);
   }
 }
@@ -168,7 +181,8 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
   .row {
-    grid-template-columns: 48px 1fr 110px;
+    /* F08: cột trạng thái 136px đủ chứa "Nợ đoàn 1.350.000đ" ở 375px */
+    grid-template-columns: 48px minmax(0, 1fr) 136px;
     height: auto;
     padding: var(--space-2) var(--space-3);
     row-gap: 4px;
