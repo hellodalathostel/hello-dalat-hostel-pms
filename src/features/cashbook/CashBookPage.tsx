@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import {
   Card, Statistic, Row, Col, Button, List, Tag, Empty, Spin,
-  Typography, Space, Result, DatePicker, Dropdown, Alert,
+  Typography, Space, Result, DatePicker, Dropdown,
 } from 'antd'
 import {
   PlusOutlined, LockOutlined, UnlockOutlined, ArrowUpOutlined, ArrowDownOutlined,
-  RobotOutlined, EditOutlined, MoreOutlined, DeleteOutlined, ReloadOutlined,
+  RobotOutlined, EditOutlined, MoreOutlined, DeleteOutlined,
 } from '@ant-design/icons'
 import dayjs, { type Dayjs } from 'dayjs'
 import { useCashBookDayRow, useCashBookDetail, useCashBookOpening } from './hooks/useCashBook'
@@ -13,6 +13,7 @@ import { CashEntryModal } from './components/CashEntryModal'
 import { VoidEntryModal } from './components/VoidEntryModal'
 import { CloseShiftModal } from './components/CloseShiftModal'
 import { ReopenShiftModal } from './components/ReopenShiftModal'
+import { QueryErrorState } from '@/components/QueryErrorState'
 import { getCashEntryLabel, isAutoEntry, formatVnd } from '@/constants/cashBook'
 import type { CashBookDetailRow } from '@/types/cashBook'
 
@@ -73,15 +74,11 @@ export default function CashBookPage() {
   // Loi tai lai nen ma con du lieu cu → van hien trang binh thuong kem Alert "Chua cap nhat".
   if (openingQuery.isError && openingQuery.data === undefined) {
     return (
-      <Result
-        status="error"
+      <QueryErrorState
         title={LOAD_ERROR_TITLE}
-        subTitle={openingQuery.error.message}
-        extra={
-          <Button type="primary" icon={<ReloadOutlined />} onClick={() => void openingQuery.refetch()}>
-            Thử lại
-          </Button>
-        }
+        error={openingQuery.error}
+        onRetry={() => void openingQuery.refetch()}
+        isRetrying={openingQuery.isFetching}
       />
     )
   }
@@ -114,17 +111,12 @@ export default function CashBookPage() {
       </Space>
 
       {failedQueries.length > 0 && (
-        <Alert
-          type="error"
-          showIcon
-          style={{ marginBottom: 16 }}
-          message={LOAD_ERROR_TITLE}
-          description={hasStaleData ? 'Chưa cập nhật — đang hiển thị dữ liệu cũ.' : undefined}
-          action={
-            <Button size="small" icon={<ReloadOutlined />} onClick={retryFailed}>
-              Thử lại
-            </Button>
-          }
+        <QueryErrorState
+          variant="banner"
+          title={LOAD_ERROR_TITLE}
+          description={hasStaleData ? 'Chưa cập nhật — đang hiển thị dữ liệu cũ.' : null}
+          onRetry={retryFailed}
+          isRetrying={failedQueries.some((q) => q.isFetching)}
         />
       )}
 
