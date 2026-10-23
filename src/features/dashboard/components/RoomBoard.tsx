@@ -2,7 +2,16 @@
 import { Button, Tooltip } from 'antd'
 import { MoreOutlined } from '@ant-design/icons'
 import type { DashboardRoom } from '@/types/dashboard'
-import { getRoomBoardState, isOccupiedLikeState, type RoomBoardState } from '@/features/dashboard/utils/roomBoardState'
+import {
+  ROOM_BOARD_GROUP_LABEL,
+  ROOM_BOARD_GROUP_ORDER,
+  countRoomBoardGroups,
+  dedupeRooms,
+  getRoomBoardState,
+  isOccupiedLikeState,
+  type RoomBoardGroup,
+  type RoomBoardState,
+} from '@/features/dashboard/utils/roomBoardState'
 import { useMarkRoomClean } from '@/features/housekeeping/hooks/useMarkRoomClean'
 import styles from './RoomBoard.module.css'
 
@@ -19,24 +28,14 @@ function formatCurrency(value: number | null | undefined): string {
   return new Intl.NumberFormat('vi-VN').format(value)
 }
 
-// View dashboard_today có thể trả nhiều dòng/phòng (vừa checked-in vừa có booking 'booked'
-// sắp tới trùng ngày). Gộp về 1 dòng/phòng — ưu tiên checked-in > còn lại.
-function dedupeRooms(rooms: DashboardRoom[]): DashboardRoom[] {
-  const byRoom = new Map<string, DashboardRoom>()
-
-  for (const room of rooms) {
-    const existing = byRoom.get(room.room_id)
-    if (!existing) {
-      byRoom.set(room.room_id, room)
-      continue
-    }
-    // Ưu tiên dòng checked-in; nếu existing chưa phải checked-in mà room là checked-in thì thay.
-    if (existing.status !== 'checked-in' && room.status === 'checked-in') {
-      byRoom.set(room.room_id, room)
-    }
-  }
-
-  return Array.from(byRoom.values())
+// Màu số đếm theo nhóm — dùng token signal, đều đạt ≥ 4.5:1 trên --surface (cả light/dark).
+const GROUP_COLOR: Record<RoomBoardGroup, string> = {
+  awaiting_arrival: 'var(--ink)',
+  no_booking: 'var(--signal-go)',
+  occupied: 'var(--signal-occupied)',
+  checkout_today: 'var(--signal-checkout)',
+  needs_cleaning: 'var(--signal-hold)',
+  unavailable: 'var(--signal-stop)',
 }
 
 // Cột "Khách" — tuỳ trạng thái mà hiện tên khách, gợi ý sắp đến, hay lý do trống/dọn.
@@ -80,41 +79,20 @@ export function RoomBoard({
   const markClean = useMarkRoomClean()
   const boardRooms = dedupeRooms(rooms)
 
-  const counts = boardRooms.reduce(
-    (acc, room) => {
-      acc[getRoomBoardState(room)] += 1
-      return acc
-    },
-    { blocked: 0, occupied: 0, checkout_today: 0, cleaning: 0, out_of_order: 0, vacant: 0 } as Record<RoomBoardState, number>,
-  )
+  // F03: đếm qua hàm thuần (đã test) — mỗi phòng đúng một nhóm, không còn "Trống".
+  const counts = countRoomBoardGroups(rooms)
 
   return (
     <div>
       <div className={styles.summary}>
-        <div className={styles.summaryCell}>
-          <span className={styles.summaryNum} style={{ color: 'var(--signal-go)' }}>
-            {counts.vacant}
-          </span>
-          <span className={styles.summaryLabel}>Trống</span>
-        </div>
-        <div className={styles.summaryCell}>
-          <span className={styles.summaryNum} style={{ color: 'var(--signal-occupied)' }}>
-            {counts.occupied}
-          </span>
-          <span className={styles.summaryLabel}>Đang ở</span>
-        </div>
-        <div className={styles.summaryCell}>
-          <span className={styles.summaryNum} style={{ color: 'var(--signal-checkout)' }}>
-            {counts.checkout_today}
-          </span>
-          <span className={styles.summaryLabel}>Trả hôm nay</span>
-        </div>
-        <div className={styles.summaryCell}>
-          <span className={styles.summaryNum} style={{ color: 'var(--signal-hold)' }}>
-            {counts.cleaning + counts.out_of_order}
-          </span>
-          <span className={styles.summaryLabel}>Đang dọn</span>
-        </div>
+        {ROOM_BOARD_GROUP_ORDER.map((group) => (
+          <div key={group} className={styles.summaryCell}>
+            <span className={styles.summaryNum} style={{ color: GROUP_COLOR[group] }}>
+              {counts[group]}
+            </span>
+            <span className={styles.summaryLabel}>{ROOM_BOARD_GROUP_LABEL[group]}</span>
+          </div>
+        ))}
       </div>
 
       <div className={styles.board}>
@@ -131,7 +109,7 @@ export function RoomBoard({
           const state = getRoomBoardState(room)
           const isMarkingThisRoom = markClean.isPending && markClean.variables?.roomId === room.room_id
 
-          // Tô màu cả dòng theo trạng thái — "trống" giữ nguyên, không thêm class
+          // Tô màu cả dòng theo trạng thái — phòng chưa có khách ở giữ nguyên, không thêm class
           const rowStateClass =
             state === 'occupied'
               ? styles.rowOccupied
@@ -146,7 +124,12 @@ export function RoomBoard({
               <span className={styles.price}>{formatCurrency(room.price_per_night)}</span>
 
               <span className={styles.status}>
-                {state === 'vacant' && <span className={styles.dotGo}>○ TRỐNG</span>}
+                {state === 'vacant' && room.status === 'booked' && (
+                  <span className={styles.dotAwaiting}>○ CHỜ NHẬN</span>
+                )}
+                {state === 'vacant' && room.status !== 'booked' && (
+                  <span className={styles.dotGo}>○ CHƯA CÓ BOOKING</span>
+                )}
                 {isOccupiedLikeState(state) && (
                   <>
                     {state === 'occupied' && <span className={styles.dotOcc}>● ĐANG Ở</span>}
