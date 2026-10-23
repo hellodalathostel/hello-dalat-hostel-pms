@@ -40,7 +40,7 @@
 /* ĐÃ SỬA: 5 track -> 6 track, thêm 110px cho cột Action (bug v1 đã fix). */
 .row {
   display: grid;
-  /* F03: cột Trạng thái 150 → 180px cho nhãn "○ CHƯA CÓ BOOKING" */
+  /* F03: cột Trạng thái 150 → 180px cho nhãn "○ CHƯA CÓ KHÁCH" */
   grid-template-columns: 56px 1fr 150px 180px 180px;
   align-items: center;
   /* C3: nút cao --control-height (40/44px) → dòng tự giãn, tối thiểu 56px */
@@ -192,7 +192,7 @@
   }
   .status {
     justify-content: flex-end;
-    /* Nhãn dài ("○ CHƯA CÓ BOOKING") được xuống dòng thay vì tràn cột */
+    /* Nhãn dài ("○ CHƯA CÓ KHÁCH") được xuống dòng thay vì tràn cột */
     white-space: normal;
     text-align: right;
   }

@@ -69,7 +69,7 @@ describe('getRoomBoardGroup', () => {
     const groups = Object.fromEntries(fixtures.map((room) => [room.room_id, getRoomBoardGroup(room)]))
     expect(groups).toEqual({
       '101': 'awaiting_arrival',
-      '102': 'no_booking',
+      '102': 'no_guest_today',
       '103': 'needs_cleaning',
       '104': 'needs_cleaning',
       '105': 'unavailable',
@@ -82,6 +82,11 @@ describe('getRoomBoardGroup', () => {
   it('phòng dirty có booking booked vẫn tính "Cần dọn", không tính "Chờ nhận"', () => {
     const room = makeRoom({ booking_id: 'b9', status: 'booked', check_in: today, check_out: tomorrow, housekeeping_status: 'dirty' })
     expect(getRoomBoardGroup(room)).toBe('needs_cleaning')
+  })
+
+  it('nhãn nhóm phòng sạch không có khách là "Chưa có khách hôm nay"', () => {
+    expect(ROOM_BOARD_GROUP_LABEL.no_guest_today).toBe('Chưa có khách hôm nay')
+    expect(ROOM_BOARD_GROUP_LABEL.awaiting_arrival).toBe('Chờ nhận')
   })
 
   it('không đổi state dùng cho nút hành động', () => {
@@ -103,7 +108,7 @@ describe('countRoomBoardGroups', () => {
     const counts = countRoomBoardGroups(fixtures)
     expect(counts).toEqual({
       awaiting_arrival: 1,
-      no_booking: 1,
+      no_guest_today: 1,
       occupied: 1,
       checkout_today: 1,
       needs_cleaning: 2,
@@ -125,9 +130,9 @@ describe('countRoomBoardGroups', () => {
     expect(Object.values(counts).reduce((sum, n) => sum + n, 0)).toBe(2)
   })
 
-  it('không còn nhãn "Trống" hay "Còn bán"', () => {
+  it('không còn nhãn "Trống", "Còn bán", "Chưa có booking"', () => {
     for (const label of Object.values(ROOM_BOARD_GROUP_LABEL)) {
-      expect(label).not.toMatch(/Trống|Còn bán/i)
+      expect(label).not.toMatch(/Trống|Còn bán|Chưa có booking/i)
     }
   })
 })

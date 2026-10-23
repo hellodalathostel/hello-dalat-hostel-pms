@@ -33,7 +33,7 @@ function formatCurrency(value: number | null | undefined): string {
 // "Trả hôm nay") chỉ 4.09:1 ở light mode; số 20px/600 nên vẫn đạt ngưỡng chữ lớn 3:1.
 const GROUP_COLOR: Record<RoomBoardGroup, string> = {
   awaiting_arrival: 'var(--ink)',
-  no_booking: 'var(--signal-go)',
+  no_guest_today: 'var(--signal-go)',
   occupied: 'var(--signal-occupied)',
   checkout_today: 'var(--signal-checkout)',
   needs_cleaning: 'var(--signal-hold)',
@@ -141,7 +141,7 @@ export function RoomBoard({
                   <span className={styles.dotAwaiting}>○ CHỜ NHẬN</span>
                 )}
                 {state === 'vacant' && room.status !== 'booked' && (
-                  <span className={styles.dotGo}>○ CHƯA CÓ BOOKING</span>
+                  <span className={styles.dotGo}>○ CHƯA CÓ KHÁCH</span>
                 )}
                 {isOccupiedLikeState(state) && (
                   <>

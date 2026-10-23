@@ -53,7 +53,10 @@ export function isOccupiedLikeState(state: RoomBoardState): boolean {
  * Nhóm cho chỉ số đếm đầu Room Board (F03) — mỗi phòng thuộc đúng MỘT nhóm:
  * - 'awaiting_arrival': phòng sạch, có booking 'booked' trong view dashboard_today
  *                       (check_in <= hôm nay <= check_out — gồm cả khách đến trễ chưa nhận)
- * - 'no_booking':       phòng sạch, không có booking đang chờ
+ * - 'no_guest_today':   phòng sạch, không có khách hôm nay. Room Board chỉ biết booking giao
+ *                       với hôm nay (view dashboard_today: check_in <= hôm nay <= check_out), nên
+ *                       nhóm này nghĩa là "không có khách hôm nay", KHÔNG có nghĩa phòng không có
+ *                       đặt trước cho các ngày sau.
  * - 'occupied' / 'checkout_today': giữ nguyên nghĩa cũ
  * - 'needs_cleaning':   housekeeping dirty hoặc cleaning (KHÔNG gồm out_of_order)
  * - 'unavailable':      out_of_order hoặc đang bị block (room_blocks / OTA block)
@@ -62,7 +65,7 @@ export function isOccupiedLikeState(state: RoomBoardState): boolean {
  */
 export type RoomBoardGroup =
   | 'awaiting_arrival'
-  | 'no_booking'
+  | 'no_guest_today'
   | 'occupied'
   | 'checkout_today'
   | 'needs_cleaning'
@@ -70,7 +73,7 @@ export type RoomBoardGroup =
 
 export const ROOM_BOARD_GROUP_ORDER: readonly RoomBoardGroup[] = [
   'awaiting_arrival',
-  'no_booking',
+  'no_guest_today',
   'occupied',
   'checkout_today',
   'needs_cleaning',
@@ -79,7 +82,7 @@ export const ROOM_BOARD_GROUP_ORDER: readonly RoomBoardGroup[] = [
 
 export const ROOM_BOARD_GROUP_LABEL: Record<RoomBoardGroup, string> = {
   awaiting_arrival: 'Chờ nhận',
-  no_booking: 'Chưa có booking',
+  no_guest_today: 'Chưa có khách hôm nay',
   occupied: 'Đang ở',
   checkout_today: 'Trả hôm nay',
   needs_cleaning: 'Cần dọn / Đang dọn',
@@ -100,8 +103,9 @@ export function getRoomBoardGroup(room: DashboardRoom): RoomBoardGroup {
     case 'checkout_today':
       return 'checkout_today'
     case 'vacant':
-      // View chỉ trả booking 'booked' | 'checked-in'; checked-in đã rơi vào nhánh trên
-      return room.status === 'booked' ? 'awaiting_arrival' : 'no_booking'
+      // View chỉ trả booking 'booked' | 'checked-in' giao với hôm nay; checked-in đã rơi vào nhánh
+      // trên. Booking ngày mai trở đi không có trong view → vẫn là 'no_guest_today'.
+      return room.status === 'booked' ? 'awaiting_arrival' : 'no_guest_today'
   }
 }
 
@@ -129,7 +133,7 @@ export function dedupeRooms(rooms: DashboardRoom[]): DashboardRoom[] {
 export function countRoomBoardGroups(rooms: DashboardRoom[]): Record<RoomBoardGroup, number> {
   const counts: Record<RoomBoardGroup, number> = {
     awaiting_arrival: 0,
-    no_booking: 0,
+    no_guest_today: 0,
     occupied: 0,
     checkout_today: 0,
     needs_cleaning: 0,
