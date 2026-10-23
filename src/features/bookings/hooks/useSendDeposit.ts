@@ -3,6 +3,7 @@ import { useMutation } from '@tanstack/react-query'
 import { supabase } from '@/api/supabase'
 import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
 import { normalizeError } from '@/shared/utils/normalizeError'
+import { getFunctionErrorMessage } from '@/shared/utils/getFunctionErrorMessage'
 
 interface SendDepositParams {
   groupId: string
@@ -15,12 +16,16 @@ export function useSendDeposit() {
 
   return useMutation({
     mutationFn: async ({ groupId, depositAmount, auto }: SendDepositParams) => {
-      const { data, error } = await supabase.functions.invoke('deposit-sender', {
-        body: { group_id: groupId, deposit_amount: depositAmount, auto: auto ?? false },
-      })
-      if (error) throw error
-      if (!data?.ok && !data?.skipped) throw new Error(data?.error ?? 'Gửi cọc thất bại')
-      return data
+      try {
+        const { data, error } = await supabase.functions.invoke('deposit-sender', {
+          body: { group_id: groupId, deposit_amount: depositAmount, auto: auto ?? false },
+        })
+        if (error) throw error
+        if (!data?.ok && !data?.skipped) throw new Error(data?.error ?? 'Gửi cọc thất bại')
+        return data
+      } catch (err) {
+        throw new Error(await getFunctionErrorMessage(err, 'Lỗi không xác định khi gửi cọc'), { cause: err })
+      }
     },
     onSuccess: (data) => {
       if (data?.skipped) return // auto bị skip — im lặng, không toast
