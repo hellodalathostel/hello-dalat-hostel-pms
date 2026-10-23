@@ -19,6 +19,8 @@ import {
   type BookingRequest,
   type BookingRequestStatus,
 } from '@/features/booking-requests/hooks/useBookingRequests'
+import { getQueryViewState } from '@/lib/queryViewState'
+import { QueryErrorState } from '@/components/QueryErrorState'
 
 const { Text } = Typography
 
@@ -35,7 +37,15 @@ const STATUS_LABEL: Record<BookingRequestStatus, string> = {
 }
 
 export default function BookingRequestsPage() {
-  const { data: requests = [], isLoading } = useBookingRequests()
+  const requestsQuery = useBookingRequests()
+  const requests = requestsQuery.data ?? []
+  // F04: lỗi tải KHÔNG được hiện như "không có yêu cầu" — tránh bỏ sót yêu cầu mới
+  const viewState = getQueryViewState({
+    isLoading: requestsQuery.isLoading,
+    isError: requestsQuery.isError,
+    data: requestsQuery.data,
+  })
+  const retryRequests = () => void requestsQuery.refetch()
   const rejectMutation = useRejectRequest()
   const convertMutation = useConvertRequest()
 
@@ -202,13 +212,31 @@ export default function BookingRequestsPage() {
         Yêu cầu đặt phòng trực tiếp
       </Typography.Title>
 
-      <Table<BookingRequest>
-        rowKey="id"
-        loading={isLoading}
-        dataSource={requests}
-        columns={columns}
-        pagination={{ pageSize: 10, showSizeChanger: false }}
-      />
+      {viewState === 'stale-error' && (
+        <QueryErrorState
+          variant="banner"
+          title="Không tải được danh sách yêu cầu đặt phòng"
+          onRetry={retryRequests}
+          isRetrying={requestsQuery.isFetching}
+        />
+      )}
+
+      {viewState === 'error' ? (
+        <QueryErrorState
+          title="Không tải được danh sách yêu cầu đặt phòng"
+          error={requestsQuery.error}
+          onRetry={retryRequests}
+          isRetrying={requestsQuery.isFetching}
+        />
+      ) : (
+        <Table<BookingRequest>
+          rowKey="id"
+          loading={viewState === 'loading'}
+          dataSource={requests}
+          columns={columns}
+          pagination={{ pageSize: 10, showSizeChanger: false }}
+        />
+      )}
 
       <Modal
         title="Từ chối yêu cầu"

@@ -19,6 +19,8 @@ import { useBookingsList } from '@/features/bookings/hooks/useBookingsList'
 import type { BookingsListItem } from '@/features/bookings/hooks/useBookingsList'
 import BookingDetailDrawer from '@/features/bookings/components/BookingDetailDrawer'
 import { formatMoney } from '@/shared/utils/format'
+import { getQueryViewState } from '@/lib/queryViewState'
+import { QueryErrorState } from '@/components/QueryErrorState'
 
 const STATUS_COLOR: Record<string, string> = {
   booked: 'blue',
@@ -48,7 +50,15 @@ function formatVND(amount: number): string {
 
 export function BookingsPage(): JSX.Element {
   const navigate = useNavigate()
-  const { data = [], isLoading } = useBookingsList()
+  const bookingsQuery = useBookingsList()
+  const data = useMemo(() => bookingsQuery.data ?? [], [bookingsQuery.data])
+  // F04: lỗi tải KHÔNG được hiện như danh sách rỗng
+  const viewState = getQueryViewState({
+    isLoading: bookingsQuery.isLoading,
+    isError: bookingsQuery.isError,
+    data: bookingsQuery.data,
+  })
+  const retryBookings = () => void bookingsQuery.refetch()
 
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string | null>(null)
@@ -174,47 +184,68 @@ export function BookingsPage(): JSX.Element {
         </Button>
       </Flex>
 
-      <Space wrap style={{ marginTop: 16, marginBottom: 8 }}>
-        <Input
-          placeholder="Tìm tên khách, SĐT, phòng..."
-          prefix={<SearchOutlined />}
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          allowClear
-          style={{ width: 280 }}
+      {viewState === 'error' ? (
+        <QueryErrorState
+          title="Không tải được danh sách đặt phòng"
+          error={bookingsQuery.error}
+          onRetry={retryBookings}
+          isRetrying={bookingsQuery.isFetching}
         />
-        <Select
-          placeholder="Lọc trạng thái"
-          allowClear
-          value={statusFilter ?? undefined}
-          onChange={(value) => setStatusFilter(value ?? null)}
-          style={{ width: 160 }}
-          options={[
-            { value: 'booked', label: 'Đã đặt' },
-            { value: 'checked-in', label: 'Đang ở' },
-            { value: 'checked-out', label: 'Đã trả phòng' },
-            { value: 'cancelled', label: 'Đã huỷ' },
-          ]}
-        />
-        <Badge count={filtered.length} showZero color="blue" style={{ marginLeft: 8 }} />
-      </Space>
+      ) : (
+        <>
+          {viewState === 'stale-error' && (
+            <QueryErrorState
+              variant="banner"
+              title="Không tải được danh sách đặt phòng"
+              onRetry={retryBookings}
+              isRetrying={bookingsQuery.isFetching}
+            />
+          )}
 
-      <Table
-        columns={columns}
-        dataSource={filtered}
-        rowKey="group_id"
-        loading={isLoading}
-        size="small"
-        pagination={{ pageSize: 20, showSizeChanger: false }}
-        onRow={(record) => ({
-          onClick: () => {
-            setSelectedGroupId(record.group_id)
-            setDrawerOpen(true)
-          },
-          style: { cursor: 'pointer' },
-        })}
-        scroll={{ x: 930 }}
-      />
+          <Space wrap style={{ marginTop: 16, marginBottom: 8 }}>
+            <Input
+              placeholder="Tìm tên khách, SĐT, phòng..."
+              prefix={<SearchOutlined />}
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              allowClear
+              style={{ width: 280 }}
+            />
+            <Select
+              placeholder="Lọc trạng thái"
+              allowClear
+              value={statusFilter ?? undefined}
+              onChange={(value) => setStatusFilter(value ?? null)}
+              style={{ width: 160 }}
+              options={[
+                { value: 'booked', label: 'Đã đặt' },
+                { value: 'checked-in', label: 'Đang ở' },
+                { value: 'checked-out', label: 'Đã trả phòng' },
+                { value: 'cancelled', label: 'Đã huỷ' },
+              ]}
+            />
+            <Badge count={filtered.length} showZero color="blue" style={{ marginLeft: 8 }} />
+          </Space>
+
+          {/* 'empty' và "không có kết quả cho bộ lọc" đều dùng empty mặc định của Table */}
+          <Table
+            columns={columns}
+            dataSource={filtered}
+            rowKey="group_id"
+            loading={viewState === 'loading'}
+            size="small"
+            pagination={{ pageSize: 20, showSizeChanger: false }}
+            onRow={(record) => ({
+              onClick: () => {
+                setSelectedGroupId(record.group_id)
+                setDrawerOpen(true)
+              },
+              style: { cursor: 'pointer' },
+            })}
+            scroll={{ x: 930 }}
+          />
+        </>
+      )}
 
       <BookingDetailDrawer
         groupId={selectedGroupId}

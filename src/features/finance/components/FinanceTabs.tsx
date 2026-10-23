@@ -1,20 +1,31 @@
 import { Col, Row, Tabs } from 'antd'
 import type { TabsProps } from 'antd'
+import type { UseQueryResult } from '@tanstack/react-query'
 import dayjs from 'dayjs'
 import { RevenueKPICards } from './RevenueKPICards'
 import { WeeklyBarChart } from './WeeklyBarChart'
 import { SourceBreakdown } from './SourceBreakdown'
 import { UnpaidTable } from './UnpaidTable'
 import type { MonthlyRevenueSummary, UnpaidGroup } from '../types'
+import { getQueryViewState } from '@/lib/queryViewState'
 
 interface Props {
   summary: MonthlyRevenueSummary
-  unpaid: UnpaidGroup[]
-  unpaidLoading: boolean
+  unpaidQuery: UseQueryResult<UnpaidGroup[], Error>
   month: dayjs.Dayjs
 }
 
-export function FinanceTabs({ summary, unpaid, unpaidLoading, month }: Props) {
+export function FinanceTabs({ summary, unpaidQuery, month }: Props) {
+  // F04: lỗi tải công nợ KHÔNG được hiện như "không có công nợ"
+  const unpaidState = getQueryViewState({
+    isLoading: unpaidQuery.isLoading,
+    isError: unpaidQuery.isError,
+    data: unpaidQuery.data,
+  })
+  const unpaid = unpaidQuery.data ?? []
+  // Chỉ đếm badge khi số liệu chắc chắn (tải thành công); lỗi → ẩn badge
+  const unpaidBadgeCount = unpaidState === 'ready' ? unpaid.length : 0
+
   const items: TabsProps['items'] = [
     {
       key: 'overview',
@@ -40,7 +51,7 @@ export function FinanceTabs({ summary, unpaid, unpaidLoading, month }: Props) {
       label: (
         <span>
           Chưa thanh toán
-          {unpaid.length > 0 && (
+          {unpaidBadgeCount > 0 && (
             <span
               style={{
                 marginLeft: 6,
@@ -51,12 +62,20 @@ export function FinanceTabs({ summary, unpaid, unpaidLoading, month }: Props) {
                 fontSize: 12,
               }}
             >
-              {unpaid.length}
+              {unpaidBadgeCount}
             </span>
           )}
         </span>
       ),
-      children: <UnpaidTable data={unpaid} loading={unpaidLoading} />,
+      children: (
+        <UnpaidTable
+          data={unpaid}
+          state={unpaidState}
+          error={unpaidQuery.error}
+          onRetry={() => void unpaidQuery.refetch()}
+          isRetrying={unpaidQuery.isFetching}
+        />
+      ),
     },
   ]
 

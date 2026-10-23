@@ -16,7 +16,9 @@ export function MainLayout(): JSX.Element {
   const location = useLocation()
   // isDesktop = AntD lg (>= 992px): thanh menu ngang; dưới mức này dùng nút menu + ngăn kéo
   const { isMobile, isDesktop } = useBreakpoint()
-  const { data: pendingCount = 0 } = usePendingRequestCount()
+  const pendingQuery = usePendingRequestCount()
+  // F04: lỗi tải số yêu cầu chờ → ẩn badge (0) thay vì hiện số cũ có thể sai
+  const pendingCount = pendingQuery.isError ? 0 : pendingQuery.data ?? 0
   const isOnNewBooking = location.pathname.startsWith(NEW_BOOKING_PATH)
 
   return (

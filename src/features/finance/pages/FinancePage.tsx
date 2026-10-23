@@ -25,7 +25,7 @@ export default function FinancePage() {
     error: summaryError,
   } = useMonthlyRevenue(month)
 
-  const { data: unpaid = [], isLoading: unpaidLoading } = useUnpaidBookings()
+  const unpaidQuery = useUnpaidBookings()
 
   function handleMonthChange(value: Dayjs | null) {
     if (value) setMonth(value.startOf('month'))
@@ -89,8 +89,7 @@ export default function FinancePage() {
       ) : summary ? (
         <FinanceTabs
           summary={summary}
-          unpaid={unpaid}
-          unpaidLoading={unpaidLoading}
+          unpaidQuery={unpaidQuery}
           month={month}
         />
       ) : null}
