@@ -4,6 +4,7 @@
 // Tách từ documentTemplates.ts (M4 — file splitting, không đổi logic).
 
 import dayjs from 'dayjs';
+import { escapeHtml } from '../utils/escapeHtml';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -392,7 +393,7 @@ export const qrBlockHtml = (
     </div>
     <div class="qr-row">
       <span class="qr-key">${lang === 'en' ? 'Reference' : 'Nội dung CK'}</span>
-      <span class="qr-val" style="color:#0a3d1a;font-weight:600">${addInfo}</span>
+      <span class="qr-val" style="color:#0a3d1a;font-weight:600">${escapeHtml(addInfo)}</span>
     </div>
     ${deadline ? `
     <div class="qr-row">
