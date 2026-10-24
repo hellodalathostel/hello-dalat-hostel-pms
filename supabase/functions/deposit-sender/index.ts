@@ -5,6 +5,7 @@
 // Default cọc = tổng 1 đêm đầu group (decision 2026-06-12). Nhập tay override.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.105.0";
+import QRCode from "npm:qrcode@1.5.4";
 
 // ── Secrets: fail-closed toàn bộ, KHÔNG fallback (nhất là bank account) ──
 function requireEnv(name: string): string {
@@ -20,7 +21,7 @@ const TELEGRAM_TOKEN = requireEnv("TELEGRAM_BOT_TOKEN");
 const CHAT_ID = requireEnv("TELEGRAM_CHAT_ID");
 const BANK_BIN = requireEnv("HOSTEL_BANK_BIN");
 const BANK_ACCOUNT = requireEnv("HOSTEL_BANK_ACCOUNT");
-const BANK_NAME_ENC = encodeURIComponent(requireEnv("HOSTEL_BANK_NAME"));
+const BANK_NAME = requireEnv("HOSTEL_BANK_NAME");
 
 const AUTO_ALLOWED_SOURCES = ["Facebook", "Gọi điện/Zalo", "Khách quen"];
 
@@ -46,17 +47,50 @@ function fmtVND(n: number): string {
   return new Intl.NumberFormat("vi-VN").format(Math.round(n)) + "đ";
 }
 
-function buildVietQrUrl(amount: number, addInfo: string): string {
-  const info = encodeURIComponent(addInfo);
-  return `https://img.vietqr.io/image/${BANK_BIN}-${BANK_ACCOUNT}-compact2.png`
-    + `?amount=${Math.round(amount)}&addInfo=${info}&accountName=${BANK_NAME_ENC}`;
+// ── VietQR tự sinh (chuẩn NAPAS/EMVCo) ──
+// img.vietqr.io trả SVG (QR vẽ bằng path) thay vì PNG → Telegram IMAGE_PROCESS_FAILED.
+// Tự dựng payload + render PNG, không phụ thuộc dịch vụ ngoài.
+function tlv(id: string, value: string): string {
+  return id + String(value.length).padStart(2, "0") + value;
 }
 
-async function tgSendPhoto(body: Record<string, unknown>): Promise<void> {
+// CRC-16/CCITT-FALSE (poly 0x1021, init 0xFFFF) theo EMVCo
+function crc16(s: string): string {
+  let crc = 0xffff;
+  for (let i = 0; i < s.length; i++) {
+    crc ^= s.charCodeAt(i) << 8;
+    for (let j = 0; j < 8; j++) {
+      crc = crc & 0x8000 ? ((crc << 1) ^ 0x1021) & 0xffff : (crc << 1) & 0xffff;
+    }
+  }
+  return crc.toString(16).toUpperCase().padStart(4, "0");
+}
+
+function buildVietQrPayload(amount: number, addInfo: string): string {
+  const merchant = tlv("00", "A000000727")
+    + tlv("01", tlv("00", BANK_BIN) + tlv("01", BANK_ACCOUNT))
+    + tlv("02", "QRIBFTTA");
+  const body = tlv("00", "01")
+    + tlv("01", "12")
+    + tlv("38", merchant)
+    + tlv("53", "704")
+    + tlv("54", String(Math.round(amount)))
+    + tlv("58", "VN")
+    + tlv("62", tlv("08", addInfo))
+    + "6304";
+  return body + crc16(body);
+}
+
+async function tgSendPhoto(png: Uint8Array<ArrayBuffer>, caption: string): Promise<void> {
+  const form = new FormData();
+  form.append("chat_id", CHAT_ID);
+  form.append("caption", caption);
+  form.append("parse_mode", "HTML");
+  form.append("photo", new Blob([png], { type: "image/png" }), "qr.png");
+
   const res = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendPhoto`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    body: form,
   });
   // Luôn check res.ok để không nuốt 400 (Nguyên tắc 8)
   if (!res.ok) throw new Error(`Telegram sendPhoto lỗi ${res.status}: ${await res.text()}`);
@@ -164,16 +198,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
       `${roomLines}\n\n` +
       `💰 Tổng: ${escapeHtml(fmtVND(g.grand_total))}\n` +
       `🔸 Cọc: <b>${escapeHtml(fmtVND(depositAmount))}</b>\n\n` +
-      `🏦 Vietcombank — ${BANK_ACCOUNT}\n` +
+      `🏦 Vietcombank — ${BANK_ACCOUNT} — ${escapeHtml(BANK_NAME)}\n` +
       `📝 Nội dung CK: <code>${escapeHtml(transferNote)}</code>`;
 
     // 1 sendPhoto + caption đầy đủ — nguyên tử
-    await tgSendPhoto({
-      chat_id: CHAT_ID,
-      photo: buildVietQrUrl(depositAmount, transferNote),
-      caption,
-      parse_mode: "HTML",
-    });
+    const qrPng = new Uint8Array(await QRCode.toBuffer(buildVietQrPayload(depositAmount, transferNote), {
+      type: "png", errorCorrectionLevel: "M", margin: 4, width: 600,
+    }));
+    await tgSendPhoto(qrPng, caption);
 
     return jsonRes({ ok: true, ref_code: g.ref_code, deposit: depositAmount });
   } catch (e) {
