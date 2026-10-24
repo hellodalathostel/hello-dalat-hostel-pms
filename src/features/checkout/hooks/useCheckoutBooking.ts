@@ -14,6 +14,12 @@ import { supabase } from '@/api/supabase'
 import type { PaymentMethod } from '@/types/database'
 import { normalizeError } from '@/shared/utils/normalizeError'
 import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
+import {
+  PAYMENT_REPLAYED_MESSAGE,
+  isReplayed,
+  isRequestIdReused,
+  usePaymentRequestIdStore,
+} from '@/features/payment/utils/paymentRequestId'
 
 export interface RecordPaymentParams {
   groupId: string
@@ -53,6 +59,8 @@ type RecordPaymentResult = {
   success: boolean
   surcharge_amount: number
   card_fee_applied: boolean
+  /** record_payment_idempotent_txn: true nếu request_id đã ghi trước đó (không ghi trùng) */
+  replayed?: boolean
 }
 
 type CheckoutResult = {
@@ -66,16 +74,22 @@ type CheckoutResult = {
 }
 
 // Giữ nguyên cho use-case thu cọc/thu tiền KHÔNG kèm checkout (không đổi so với v1).
+// Dùng record_payment_idempotent_txn — cùng ý định thu giữ p_request_id qua các lần retry.
 export function useRecordPayment() {
   const queryClient = useQueryClient()
   const { message } = useAppFeedback()
+  const requestIds = usePaymentRequestIdStore()
 
   return useMutation({
     mutationFn: async (params: RecordPaymentParams): Promise<RecordPaymentResult> => {
+      // RPC nhận integer — làm tròn trước để khoá ý định thu đúng số DB nhận
+      const amount = Math.round(params.amount)
+      const requestId = requestIds.get({ groupId: params.groupId, amount, method: params.method })
       try {
-        const { data, error } = await supabase.rpc('record_payment_txn', {
+        const { data, error } = await supabase.rpc('record_payment_idempotent_txn', {
+          p_request_id: requestId,
           p_group_id: params.groupId,
-          p_amount: params.amount,
+          p_amount: amount,
           p_method: params.method,
           p_note: params.note ?? null,
           p_first_booking_id: params.firstBookingId ?? null,
@@ -85,12 +99,15 @@ export function useRecordPayment() {
           throw error
         }
 
+        requestIds.consume(requestId)
         return (data ?? { success: false, surcharge_amount: 0, card_fee_applied: false }) as RecordPaymentResult
       } catch (error) {
+        if (isRequestIdReused(error)) requestIds.consume(requestId)
         throw normalizeError(error)
       }
     },
-    onSuccess: async (_result, vars) => {
+    onSuccess: async (result, vars) => {
+      if (isReplayed(result)) message.info(PAYMENT_REPLAYED_MESSAGE)
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['group', vars.groupId] }),
         queryClient.invalidateQueries({ queryKey: ['groups'] }),

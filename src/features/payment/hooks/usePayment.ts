@@ -13,6 +13,12 @@ import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
 import { normalizeError } from '@/shared/utils/normalizeError'
 import { useRefreshBookingData } from '@/shared/hooks/useRefreshBookingData'
 import type { PaymentFormValues } from '@/lib/schemas'
+import {
+  PAYMENT_REPLAYED_MESSAGE,
+  isReplayed,
+  isRequestIdReused,
+  usePaymentRequestIdStore,
+} from '../utils/paymentRequestId'
 
 interface RecordPaymentPayload extends PaymentFormValues {
   groupId: string
@@ -50,19 +56,25 @@ function translatePaymentError(error: unknown): string | null {
 }
 
 // Ghi nhận thanh toán thông qua RPC transaction tại database.
+// Dùng record_payment_idempotent_txn: cùng ý định thu (group + số tiền + phương thức) giữ
+// nguyên p_request_id qua các lần retry → DB không ghi trùng (xem paymentRequestId.ts).
 export function useRecordPayment() {
   const queryClient = useQueryClient()
   const { message } = useAppFeedback()
   const refreshBookingData = useRefreshBookingData()
+  const requestIds = usePaymentRequestIdStore()
 
   return useMutation({
     mutationKey: ['record-payment'],
     mutationFn: async (payload: RecordPaymentPayload) => {
+      // Làm tròn tránh float gây lỗi Postgres integer
+      const amount = Math.round(payload.amount)
+      const requestId = requestIds.get({ groupId: payload.groupId, amount, method: payload.method })
       try {
-        const { data, error } = await supabase.rpc('record_payment_txn', {
+        const { data, error } = await supabase.rpc('record_payment_idempotent_txn', {
+          p_request_id: requestId,
           p_group_id: payload.groupId,
-          // Làm tròn tránh float gây lỗi Postgres integer
-          p_amount: Math.round(payload.amount),
+          p_amount: amount,
           p_method: payload.method,
           p_note: payload.note ?? null,
           // Truyền null khi không có — RPC chỉ bắt buộc khi method = 'card'
@@ -73,13 +85,21 @@ export function useRecordPayment() {
           throw error
         }
 
+        // Thu xong (kể cả replayed) → lần thu sau là khoản mới, cần id mới
+        requestIds.consume(requestId)
         return data
       } catch (error) {
+        if (isRequestIdReused(error)) requestIds.consume(requestId)
         throw normalizeError(error)
       }
     },
-    onSuccess: async () => {
-      message.success('Ghi nhận thanh toán thành công')
+    onSuccess: async (data) => {
+      // replayed = true: khoản này đã ghi ở lần gửi trước (vd. mất mạng sau khi DB commit)
+      if (isReplayed(data)) {
+        message.info(PAYMENT_REPLAYED_MESSAGE)
+      } else {
+        message.success('Ghi nhận thanh toán thành công')
+      }
       // Tải lại danh sách + drawer + folio + dashboard (B-02)
       await refreshBookingData()
     },
