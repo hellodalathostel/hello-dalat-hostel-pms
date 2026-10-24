@@ -4,6 +4,7 @@
 // Tách từ documentTemplates.ts (M4 — file splitting, không đổi logic).
 
 import dayjs from 'dayjs';
+import { escapeHtml } from '../utils/escapeHtml';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -76,10 +77,11 @@ export interface DocumentData {
   pricePerNight: number;
   roomSubtotal: number;
   surcharge: number;        // phụ thu thẻ — do trigger tính, frontend đọc từ DB
-  grandTotal: number;
+  grandTotal: number;       // booking.grand_total — tổng của riêng booking này
+  groupGrandTotal: number;  // groups.grand_total — cùng cấp với paid, dùng tính "còn lại"
   services: BookingServiceItem[];
   discounts: BookingDiscountItem[];
-  paid: number;
+  paid: number;             // groups.paid — cấp group
   payments: PaymentItem[];
   generatedAt: string;
   lang?: 'vi' | 'en';      // ngôn ngữ template, mặc định 'vi'
@@ -139,7 +141,12 @@ export const nightsLabel_EN = (d: DocumentData) =>
 export const servicesTotal = (services: BookingServiceItem[]) =>
   services.reduce((sum, s) => sum + s.price * s.qty, 0);
 
-export const remaining = (d: DocumentData) => d.grandTotal - d.paid;
+// Cả hai vế cùng cấp group: groups.grand_total − groups.paid.
+// (booking.grand_total − groups.paid sai với đoàn nhiều phòng.)
+export const remaining = (d: DocumentData) => d.groupGrandTotal - d.paid;
+
+/** Đoàn nhiều phòng → tổng group khác tổng booking; cần hiện thêm dòng tổng cả đoàn. */
+export const hasGroupTotal = (d: DocumentData) => d.groupGrandTotal !== d.grandTotal;
 
 export const removeDiacritics = (str: string) =>
   str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D');
@@ -392,7 +399,7 @@ export const qrBlockHtml = (
     </div>
     <div class="qr-row">
       <span class="qr-key">${lang === 'en' ? 'Reference' : 'Nội dung CK'}</span>
-      <span class="qr-val" style="color:#0a3d1a;font-weight:600">${addInfo}</span>
+      <span class="qr-val" style="color:#0a3d1a;font-weight:600">${escapeHtml(addInfo)}</span>
     </div>
     ${deadline ? `
     <div class="qr-row">

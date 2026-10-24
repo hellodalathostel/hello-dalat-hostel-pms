@@ -5,6 +5,7 @@
 
 import dayjs from 'dayjs';
 import type { DocumentData } from './shared';
+import { escapeHtml } from '../utils/escapeHtml';
 import {
   HOSTEL_NAME,
   HOSTEL_ADDR_VI,
@@ -24,6 +25,7 @@ import {
   nightsLabel_EN,
   servicesTotal,
   remaining,
+  hasGroupTotal,
   removeDiacritics,
   BASE_STYLE,
   htmlHeader,
@@ -52,7 +54,7 @@ export function renderBookingConfirmation(d: DocumentData): { html: string; zalo
     <div class="inv-doc-title">${isEN ? 'Booking Confirmation' : 'Xác nhận đặt phòng'}</div>
     <div class="inv-doc-meta">
       <div>${fmtDateTime(d.generatedAt)}</div>
-      ${d.otaBookingNumber ? `<div>${isEN ? 'OTA Ref' : 'Mã OTA'}: ${d.otaBookingNumber}</div>` : ''}
+      ${d.otaBookingNumber ? `<div>${isEN ? 'OTA Ref' : 'Mã OTA'}: ${escapeHtml(d.otaBookingNumber)}</div>` : ''}
     </div>
   </div>
 
@@ -62,11 +64,11 @@ export function renderBookingConfirmation(d: DocumentData): { html: string; zalo
       <div class="info-grid">
         <div class="info-cell">
           <div class="info-key">${isEN ? 'Guest Name' : 'Họ tên'}</div>
-          <div class="info-val">${d.guestName}</div>
+          <div class="info-val">${escapeHtml(d.guestName)}</div>
         </div>
         <div class="info-cell">
           <div class="info-key">${isEN ? 'Phone / WhatsApp' : 'Số điện thoại'}</div>
-          <div class="info-val">${d.guestPhone || '—'}</div>
+          <div class="info-val">${escapeHtml(d.guestPhone) || '—'}</div>
         </div>
       </div>
     </div>
@@ -76,7 +78,7 @@ export function renderBookingConfirmation(d: DocumentData): { html: string; zalo
       <div class="info-grid">
         <div class="info-cell">
           <div class="info-key">${isEN ? 'Room' : 'Phòng'}</div>
-          <div class="info-val">${d.roomName} <span class="info-val muted">(${d.roomType})</span></div>
+          <div class="info-val">${escapeHtml(d.roomName)} <span class="info-val muted">(${escapeHtml(d.roomType)})</span></div>
         </div>
         <div class="info-cell">
           <div class="info-key">${isEN ? 'Guests' : 'Số khách'}</div>
@@ -100,7 +102,7 @@ export function renderBookingConfirmation(d: DocumentData): { html: string; zalo
         </div>
         <div class="info-cell full">
           <div class="info-key">${isEN ? 'Booking source' : 'Nguồn đặt phòng'}</div>
-          <div class="info-val muted">${d.source}${d.otaBookingNumber ? ` · ${d.otaBookingNumber}` : ''}</div>
+          <div class="info-val muted">${escapeHtml(d.source)}${d.otaBookingNumber ? ` · ${escapeHtml(d.otaBookingNumber)}` : ''}</div>
         </div>
       </div>
     </div>
@@ -117,7 +119,7 @@ export function renderBookingConfirmation(d: DocumentData): { html: string; zalo
         </tr></thead>
         <tbody>
           ${d.services.map(s => `
-          <tr><td>${s.name}</td>
+          <tr><td>${escapeHtml(s.name)}</td>
           <td class="tr">${fmt(s.price)}</td>
           <td class="tc">${s.qty}</td>
           <td class="tr">${fmt(s.price * s.qty)}</td></tr>`).join('')}
@@ -138,12 +140,17 @@ export function renderBookingConfirmation(d: DocumentData): { html: string; zalo
           ${d.services.length > 0 ? `<tr><td>${isEN ? 'Additional services' : 'Dịch vụ'}</td><td class="tr">${fmt(servicesTotal(d.services))}</td></tr>` : ''}
           ${surchargeRow(d.surcharge, lang)}
           ${d.discounts.map(disc => `
-          <tr><td style="color:#0a4d1a;font-weight:500">${isEN ? 'Discount' : 'Giảm giá'}${disc.description ? `: ${disc.description}` : ''}</td>
+          <tr><td style="color:#0a4d1a;font-weight:500">${isEN ? 'Discount' : 'Giảm giá'}${disc.description ? `: ${escapeHtml(disc.description)}` : ''}</td>
               <td class="tr" style="color:#0a4d1a">−${fmt(disc.amount)}</td></tr>`).join('')}
           <tr class="total-row">
             <td><strong>${isEN ? 'Total' : 'TỔNG CỘNG'}</strong></td>
             <td class="tr"><strong>${fmt(d.grandTotal)}</strong></td>
           </tr>
+          ${hasGroupTotal(d) ? `
+          <tr>
+            <td>${isEN ? 'Group total (all rooms)' : 'Tổng cả đoàn (tất cả phòng)'}</td>
+            <td class="tr">${fmt(d.groupGrandTotal)}</td>
+          </tr>` : ''}
           ${hasDeposit ? `
           <tr class="paid-row">
             <td>${isEN ? 'Deposit paid' : 'Đã đặt cọc'}</td>
@@ -191,7 +198,7 @@ Here's your booking summary:
 🌙 Nights: ${d.nights}
 👥 Guests: ${d.guestsCount}
 💰 Total: ${fmtVND_EN(d.grandTotal)}
-${d.surcharge > 0 ? `💳 Card surcharge (4%): ${fmtVND_EN(d.surcharge)} included` : ''}
+${hasGroupTotal(d) ? `👥 Group total (all rooms): ${fmtVND_EN(d.groupGrandTotal)}\n` : ''}${d.surcharge > 0 ? `💳 Card surcharge (4%): ${fmtVND_EN(d.surcharge)} included` : ''}
 ${hasDeposit ? `✅ Deposit paid: ${fmtVND_EN(d.paid)} — Balance due: ${fmtVND_EN(bal)}` : ''}
 ${d.otaBookingNumber ? `📋 Booking ref: ${d.otaBookingNumber}` : ''}
 
@@ -219,7 +226,7 @@ Xin chào ${d.guestName},
 🌙 Số đêm: ${d.nights}
 👥 Số khách: ${d.guestsCount}
 💰 Tổng tiền: ${fmtVND(d.grandTotal)}
-${d.surcharge > 0 ? `💳 Phụ thu thẻ (4%): ${fmtVND(d.surcharge)} đã tính vào tổng` : ''}
+${hasGroupTotal(d) ? `👥 Tổng cả đoàn: ${fmtVND(d.groupGrandTotal)}\n` : ''}${d.surcharge > 0 ? `💳 Phụ thu thẻ (4%): ${fmtVND(d.surcharge)} đã tính vào tổng` : ''}
 ${hasDeposit ? `✅ Đã cọc: ${fmtVND(d.paid)} — Còn lại: ${fmtVND(bal)}` : ''}
 ${d.otaBookingNumber ? `📋 Mã booking: ${d.otaBookingNumber}` : ''}
 
@@ -280,11 +287,11 @@ export function renderDepositRequest(
       <div class="info-grid">
         <div class="info-cell">
           <div class="info-key">${isEN ? 'Guest' : 'Khách'}</div>
-          <div class="info-val">${d.guestName}</div>
+          <div class="info-val">${escapeHtml(d.guestName)}</div>
         </div>
         <div class="info-cell">
           <div class="info-key">${isEN ? 'Room' : 'Phòng'}</div>
-          <div class="info-val">${d.roomName} <span class="info-val muted">(${d.roomType})</span></div>
+          <div class="info-val">${escapeHtml(d.roomName)} <span class="info-val muted">(${escapeHtml(d.roomType)})</span></div>
         </div>
         <div class="info-cell">
           <div class="info-key">${isEN ? 'Stay' : 'Thời gian'}</div>
@@ -403,11 +410,11 @@ export function renderDepositConfirmation(d: DocumentData): { html: string; zalo
       <div class="info-grid">
         <div class="info-cell">
           <div class="info-key">${isEN ? 'Guest' : 'Khách'}</div>
-          <div class="info-val">${d.guestName}</div>
+          <div class="info-val">${escapeHtml(d.guestName)}</div>
         </div>
         <div class="info-cell">
           <div class="info-key">${isEN ? 'Room' : 'Phòng'}</div>
-          <div class="info-val">${d.roomName} <span class="info-val muted">(${d.roomType})</span></div>
+          <div class="info-val">${escapeHtml(d.roomName)} <span class="info-val muted">(${escapeHtml(d.roomType)})</span></div>
         </div>
         <div class="info-cell full">
           <div class="info-key">${isEN ? 'Stay' : 'Thời gian'}</div>
@@ -430,9 +437,9 @@ export function renderDepositConfirmation(d: DocumentData): { html: string; zalo
             ? d.payments.map(p => `
               <tr>
                 <td>${fmtDate(p.date)}</td>
-                <td>${methodLabel(p.method)}</td>
+                <td>${escapeHtml(methodLabel(p.method))}</td>
                 <td class="tr">${fmt(p.amount)}</td>
-                <td>${p.note ?? '—'}</td>
+                <td>${escapeHtml(p.note ?? '—')}</td>
               </tr>`).join('')
             : `<tr><td colspan="4" style="text-align:center;color:#888;padding:12px">${isEN ? 'No payments recorded.' : 'Chưa có khoản cọc nào.'}</td></tr>`
           }
@@ -442,8 +449,10 @@ export function renderDepositConfirmation(d: DocumentData): { html: string; zalo
             <td></td>
           </tr>
           <tr>
-            <td colspan="2" style="color:#5a4a30">${isEN ? 'Total charge' : 'Tổng hóa đơn'}</td>
-            <td class="tr" style="color:#1a1a1a">${fmt(d.grandTotal)}</td>
+            <td colspan="2" style="color:#5a4a30">${hasGroupTotal(d)
+              ? (isEN ? 'Group total (all rooms)' : 'Tổng hóa đơn cả đoàn')
+              : (isEN ? 'Total charge' : 'Tổng hóa đơn')}</td>
+            <td class="tr" style="color:#1a1a1a">${fmt(d.groupGrandTotal)}</td>
             <td></td>
           </tr>
           <tr class="due-row">
@@ -482,7 +491,7 @@ We've received your deposit:
 🛏 Room: ${d.roomName}
 📅 ${nightsLabel_EN(d)}
 💵 Total: ${fmtVND_EN(d.grandTotal)}
-${bal > 0 ? `⏳ Balance due at check-in: ${fmtVND_EN(bal)}` : '🎉 Fully paid!'}
+${hasGroupTotal(d) ? `👥 Group total (all rooms): ${fmtVND_EN(d.groupGrandTotal)}\n` : ''}${bal > 0 ? `⏳ Balance due at check-in: ${fmtVND_EN(bal)}` : '🎉 Fully paid!'}
 
 ✅ Your room is confirmed!
 
@@ -502,7 +511,7 @@ Chúng tôi đã nhận khoản đặt cọc:
 🛏 Phòng: ${d.roomName}
 📅 ${nightsLabel_VI(d)}
 💵 Tổng tiền: ${fmtVND(d.grandTotal)}
-${bal > 0 ? `⏳ Còn lại khi check-in: ${fmtVND(bal)}` : '🎉 Đã thanh toán đủ!'}
+${hasGroupTotal(d) ? `👥 Tổng cả đoàn: ${fmtVND(d.groupGrandTotal)}\n` : ''}${bal > 0 ? `⏳ Còn lại khi check-in: ${fmtVND(bal)}` : '🎉 Đã thanh toán đủ!'}
 
 ✅ Phòng của bạn đã được giữ chắc chắn!
 
@@ -551,15 +560,15 @@ export function renderInvoice(d: DocumentData): { html: string; zaloText: string
       <div class="info-grid">
         <div class="info-cell">
           <div class="info-key">${isEN ? 'Guest Name' : 'Họ tên'}</div>
-          <div class="info-val">${d.guestName}</div>
+          <div class="info-val">${escapeHtml(d.guestName)}</div>
         </div>
         <div class="info-cell">
           <div class="info-key">${isEN ? 'Phone' : 'Số điện thoại'}</div>
-          <div class="info-val">${d.guestPhone || '—'}</div>
+          <div class="info-val">${escapeHtml(d.guestPhone) || '—'}</div>
         </div>
         <div class="info-cell">
           <div class="info-key">${isEN ? 'Room' : 'Phòng'}</div>
-          <div class="info-val">${d.roomName}</div>
+          <div class="info-val">${escapeHtml(d.roomName)}</div>
         </div>
         <div class="info-cell">
           <div class="info-key">${isEN ? 'Status' : 'Trạng thái'}</div>
@@ -583,7 +592,7 @@ export function renderInvoice(d: DocumentData): { html: string; zaloText: string
         <tbody>
           <tr class="group-label-row"><td colspan="4">${isEN ? 'Room' : 'Phòng'}</td></tr>
           <tr>
-            <td>${d.roomName} <span style="color:#6a5a40">(${d.roomType})</span>
+            <td>${escapeHtml(d.roomName)} <span style="color:#6a5a40">(${escapeHtml(d.roomType)})</span>
               <br><small style="color:#8a7a60">${nightsLabel}</small>
             </td>
             <td class="tr">${fmt(d.pricePerNight)}</td>
@@ -593,7 +602,7 @@ export function renderInvoice(d: DocumentData): { html: string; zaloText: string
           ${d.services.length > 0 ? `<tr class="group-label-row"><td colspan="4">${isEN ? 'Additional Services' : 'Dịch vụ phát sinh'}</td></tr>` : ''}
           ${d.services.map(s => `
           <tr>
-            <td>${s.name}</td>
+            <td>${escapeHtml(s.name)}</td>
             <td class="tr">${fmt(s.price)}</td>
             <td class="tc">${s.qty}</td>
             <td class="tr">${fmt(s.price * s.qty)}</td>
@@ -601,7 +610,7 @@ export function renderInvoice(d: DocumentData): { html: string; zaloText: string
           ${surchargeRow4Col(d.surcharge, lang)}
           ${d.discounts.map(disc => `
           <tr>
-            <td style="color:#0a4d1a;font-weight:500">${isEN ? 'Discount' : 'Giảm giá'}: ${disc.description ?? '—'}</td>
+            <td style="color:#0a4d1a;font-weight:500">${isEN ? 'Discount' : 'Giảm giá'}: ${escapeHtml(disc.description ?? '—')}</td>
             <td class="tr">—</td><td class="tc">—</td>
             <td class="tr" style="color:#0a4d1a">−${fmt(disc.amount)}</td>
           </tr>`).join('')}
@@ -609,6 +618,11 @@ export function renderInvoice(d: DocumentData): { html: string; zaloText: string
             <td colspan="3"><strong>${isEN ? 'Total' : 'TỔNG CỘNG'}</strong></td>
             <td class="tr"><strong>${fmt(d.grandTotal)}</strong></td>
           </tr>
+          ${hasGroupTotal(d) ? `
+          <tr>
+            <td colspan="3" class="tr">${isEN ? 'Group total (all rooms)' : 'Tổng cả đoàn (tất cả phòng)'}</td>
+            <td class="tr">${fmt(d.groupGrandTotal)}</td>
+          </tr>` : ''}
           ${d.paid > 0 ? (
             d.payments.length > 1
               // Nhiều lần thanh toán → break down từng dòng
@@ -616,8 +630,8 @@ export function renderInvoice(d: DocumentData): { html: string; zaloText: string
           <tr class="paid-row">
             <td colspan="2" class="tr" style="font-size:11px;color:#4a6a8a">
               ${isEN ? 'Payment' : 'Đã TT'} ${i + 1}/${d.payments.length}
-              · ${isEN ? PAYMENT_METHOD_LABEL_EN[p.method] ?? p.method : PAYMENT_METHOD_LABEL[p.method] ?? p.method}
-              ${p.note ? `· ${p.note}` : ''}
+              · ${escapeHtml(isEN ? PAYMENT_METHOD_LABEL_EN[p.method] ?? p.method : PAYMENT_METHOD_LABEL[p.method] ?? p.method)}
+              ${p.note ? `· ${escapeHtml(p.note)}` : ''}
             </td>
             <td class="tc" style="font-size:11px;color:#4a6a8a">${isEN ? fmtDate_EN(p.date) : fmtDate_VI(p.date)}</td>
             <td class="tr">−${fmt(p.amount)}</td>
@@ -672,7 +686,7 @@ ${d.surcharge > 0 ? `• Card surcharge (4%): ${fmtVND_EN(d.surcharge)}` : ''}
 ${d.discounts.map(disc => `• Discount (${disc.description ?? '—'}): −${fmtVND_EN(disc.amount)}`).join('\n')}
 
 💰 TOTAL: ${fmtVND_EN(d.grandTotal)}
-${d.paid > 0 ? `✅ Paid: ${fmtVND_EN(d.paid)}` : ''}
+${hasGroupTotal(d) ? `👥 Group total (all rooms): ${fmtVND_EN(d.groupGrandTotal)}\n` : ''}${d.paid > 0 ? `✅ Paid: ${fmtVND_EN(d.paid)}` : ''}
 ${bal > 0 ? `⏳ Balance due: *${fmtVND_EN(bal)}*` : '🎉 Fully settled'}
 
 Thank you for staying at Hello Dalat! 🌿`
@@ -689,7 +703,7 @@ ${d.surcharge > 0 ? `• Phụ thu thẻ (4%): ${fmtVND(d.surcharge)}` : ''}
 ${d.discounts.map(disc => `• Giảm (${disc.description ?? '—'}): −${fmtVND(disc.amount)}`).join('\n')}
 
 💰 TỔNG: ${fmtVND(d.grandTotal)}
-${d.paid > 0 ? `✅ Đã trả: ${fmtVND(d.paid)}` : ''}
+${hasGroupTotal(d) ? `👥 Tổng cả đoàn: ${fmtVND(d.groupGrandTotal)}\n` : ''}${d.paid > 0 ? `✅ Đã trả: ${fmtVND(d.paid)}` : ''}
 ${bal > 0 ? `⏳ Còn lại: *${fmtVND(bal)}*` : '🎉 Đã thanh toán đủ'}
 
 Cảm ơn bạn đã ở lại Hello Dalat! 🌿`;
@@ -751,11 +765,11 @@ export function renderArrivalNotice(d: DocumentData): { html: string; zaloText: 
       <div class="info-grid">
         <div class="info-cell">
           <div class="info-key">${isEN ? 'Guest' : 'Khách'}</div>
-          <div class="info-val">${d.guestName}</div>
+          <div class="info-val">${escapeHtml(d.guestName)}</div>
         </div>
         <div class="info-cell">
           <div class="info-key">${isEN ? 'Room' : 'Phòng'}</div>
-          <div class="info-val">${d.roomName}</div>
+          <div class="info-val">${escapeHtml(d.roomName)}</div>
         </div>
         <div class="info-cell">
           <div class="info-key">Check-in</div>
@@ -835,7 +849,7 @@ export function renderArrivalNotice(d: DocumentData): { html: string; zaloText: 
         <tbody>
           ${d.services.map(s => `
           <tr>
-            <td>${s.name}</td>
+            <td>${escapeHtml(s.name)}</td>
             <td class="tc">${s.qty}</td>
             <td class="tr">${fmt(s.price)}</td>
           </tr>`).join('')}

@@ -36,6 +36,8 @@ vi.mock('@/api/supabase', () => ({
 }))
 
 const { fetchDocumentData } = await import('./documentDataFetchers')
+const { remaining } = await import('./templates/shared')
+const { renderInvoice } = await import('./templates/singleBookingTemplates')
 
 const GROUP_ID = 'g-1'
 const BOOKING_ID = 'b-1'
@@ -71,6 +73,7 @@ beforeEach(() => {
       customer_phone: '0900000000',
       source: 'Walk-in',
       ota_booking_number: null,
+      grand_total: 600000,
       paid: 200000,
       deposit_method: null,
     },
@@ -109,5 +112,34 @@ describe('fetchDocumentData — payment đã void', () => {
     const data = await fetchDocumentData(BOOKING_ID, GROUP_ID)
     expect(data.payments).toEqual([])
     expect(data.paid).toBe(0)
+  })
+})
+
+describe('fetchDocumentData — còn lại tính cùng cấp group', () => {
+  it('đoàn nhiều phòng: còn lại = groups.grand_total − groups.paid, không lấy booking.grand_total', async () => {
+    // Booking này 600.000, cả đoàn 1.000.000 (net_revenue 830.000 không liên quan), đã trả 900.000
+    db.groups[0].grand_total = 1000000
+    db.groups[0].paid = 900000
+    const data = await fetchDocumentData(BOOKING_ID, GROUP_ID)
+    expect(data.grandTotal).toBe(600000)
+    expect(data.groupGrandTotal).toBe(1000000)
+    expect(remaining(data)).toBe(100000)
+
+    const { html } = renderInvoice(data)
+    expect(html).toContain('Tổng cả đoàn')
+    expect(html).toMatch(/CÒN LẠI<\/strong><\/td>\s*<td class="tr"><strong>100\.000 ₫/)
+  })
+
+  it('đoàn trả đủ grand_total → còn lại 0', async () => {
+    db.groups[0].grand_total = 1000000
+    db.groups[0].paid = 1000000
+    const data = await fetchDocumentData(BOOKING_ID, GROUP_ID)
+    expect(remaining(data)).toBe(0)
+  })
+
+  it('1 phòng: groupGrandTotal = grandTotal → không hiện dòng tổng cả đoàn', async () => {
+    const data = await fetchDocumentData(BOOKING_ID, GROUP_ID)
+    expect(data.groupGrandTotal).toBe(600000)
+    expect(renderInvoice(data).html).not.toContain('Tổng cả đoàn')
   })
 })

@@ -16,6 +16,15 @@ function mapKnownRpcMessage(message: string): string {
     return 'Số tiền vượt quá số dư còn lại của booking.'
   }
 
+  // record_payment_idempotent_txn
+  if (message.startsWith('REQUEST_ID_REUSED')) {
+    return 'Mã yêu cầu thu tiền đã được dùng cho một khoản thu khác. Vui lòng đóng cửa sổ, làm mới rồi thu lại.'
+  }
+
+  if (message.startsWith('MISSING_REQUEST_ID')) {
+    return 'Thiếu mã yêu cầu thu tiền. Vui lòng tải lại trang rồi thử lại.'
+  }
+
   if (message.includes('invalid input value for enum payment_method')) {
     return 'Phương thức thanh toán không hợp lệ.'
   }

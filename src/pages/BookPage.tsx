@@ -74,6 +74,12 @@ function isSubmitSuccessResult(data: unknown): data is SubmitSuccessResult {
   )
 }
 
+// has_conflict = true: phòng có thể đã kín → KHÔNG hiện QR / số tài khoản / hướng dẫn cọc,
+// tránh khách chuyển tiền cho yêu cầu có thể bị từ chối. false → giữ nguyên luồng xin cọc.
+function shouldShowDepositInstructions(result: SubmitSuccessResult): boolean {
+  return !result.has_conflict
+}
+
 export default function BookPage() {
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<SubmitSuccessResult | null>(null)
@@ -137,41 +143,44 @@ export default function BookPage() {
             Yêu cầu đặt phòng đã gửi
           </Title>
 
-          {result.has_conflict && (
+          {shouldShowDepositInstructions(result) ? (
+            <>
+              <Paragraph>
+                Để giữ phòng, vui lòng chuyển khoản đặt cọc và ghi đúng nội dung bên dưới. Chúng tôi
+                sẽ xác nhận qua điện thoại sau khi nhận thanh toán.
+              </Paragraph>
+
+              {result.deposit > 0 && (
+                <Paragraph>
+                  <Text strong>Số tiền cọc (1 đêm): </Text>
+                  <Text>{result.deposit.toLocaleString('vi-VN')}đ</Text>
+                </Paragraph>
+              )}
+
+              <Card style={styles.qrCard}>
+                <img src={result.vietqr.url} alt="VietQR thanh toán" style={styles.qrImage} />
+                <div style={styles.bankInfo}>
+                  <Text strong>{result.vietqr.bank}</Text>
+                  <br />
+                  <Text>{result.vietqr.account}</Text>
+                  <br />
+                  <Text>{result.vietqr.account_name}</Text>
+                  <br />
+                  <Text strong>Nội dung CK:</Text>
+                  <br />
+                  <Text strong>{result.vietqr.note}</Text>
+                </div>
+              </Card>
+            </>
+          ) : (
             <Alert
               type="warning"
               showIcon
-              message="Phòng có thể đã kín trong khoảng ngày này. Chúng tôi sẽ gọi xác nhận sớm nhất."
+              message="Phòng có thể đã kín trong khoảng ngày bạn chọn"
+              description="Yêu cầu của bạn đã được ghi nhận. Chúng tôi sẽ kiểm tra phòng trống và liên hệ lại qua số điện thoại bạn đã để lại trong thời gian sớm nhất. Vui lòng chưa chuyển cọc — chỉ chuyển khi chúng tôi xác nhận còn phòng."
               style={{ marginBottom: 16 }}
             />
           )}
-
-          <Paragraph>
-            Để giữ phòng, vui lòng chuyển khoản đặt cọc và ghi đúng nội dung bên dưới. Chúng tôi
-            sẽ xác nhận qua điện thoại sau khi nhận thanh toán.
-          </Paragraph>
-
-          {result.deposit > 0 && (
-            <Paragraph>
-              <Text strong>Số tiền cọc (1 đêm): </Text>
-              <Text>{result.deposit.toLocaleString('vi-VN')}đ</Text>
-            </Paragraph>
-          )}
-
-          <Card style={styles.qrCard}>
-            <img src={result.vietqr.url} alt="VietQR thanh toán" style={styles.qrImage} />
-            <div style={styles.bankInfo}>
-              <Text strong>{result.vietqr.bank}</Text>
-              <br />
-              <Text>{result.vietqr.account}</Text>
-              <br />
-              <Text>{result.vietqr.account_name}</Text>
-              <br />
-              <Text strong>Nội dung CK:</Text>
-              <br />
-              <Text strong>{result.vietqr.note}</Text>
-            </div>
-          </Card>
 
           <Divider />
 

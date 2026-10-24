@@ -25,6 +25,7 @@ export interface UnpaidGroup {
   id: string
   customer_name: string
   source: string | null
+  grand_total: number
   net_revenue: number
   paid: number
   debt: number

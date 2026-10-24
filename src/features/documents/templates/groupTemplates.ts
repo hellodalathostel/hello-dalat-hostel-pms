@@ -11,6 +11,7 @@
 
 import dayjs from 'dayjs';
 import type { GroupDocumentData, BookingServiceItem, BookingDiscountItem } from './shared';
+import { escapeHtml } from '../utils/escapeHtml';
 import {
   VQR_ACCOUNT_DISPLAY,
   VQR_OWNER,
@@ -50,7 +51,7 @@ export function renderGroupInvoice(data: GroupDocumentData, lang: 'vi' | 'en' = 
   const roomBlocks = data.bookings.map((b, i) => {
     const svcRows = b.services.map(s => `
           <tr>
-            <td>${s.name}</td>
+            <td>${escapeHtml(s.name)}</td>
             <td class="tr">${fmt(s.price)}</td>
             <td class="tc">${s.qty}</td>
             <td class="tr">${fmt(s.price * s.qty)}</td>
@@ -58,15 +59,15 @@ export function renderGroupInvoice(data: GroupDocumentData, lang: 'vi' | 'en' = 
 
     const discRows = b.discounts.map(disc => `
           <tr>
-            <td style="color:#0a4d1a;font-weight:500">${isEN ? 'Discount' : 'Giảm giá'}: ${disc.description ?? '—'}</td>
+            <td style="color:#0a4d1a;font-weight:500">${isEN ? 'Discount' : 'Giảm giá'}: ${escapeHtml(disc.description ?? '—')}</td>
             <td class="tr">—</td><td class="tc">—</td>
             <td class="tr" style="color:#0a4d1a">−${fmt(disc.amount)}</td>
           </tr>`).join('');
 
     return `
-          <tr class="group-label-row"><td colspan="4">${isEN ? `Room ${i + 1}` : `Phòng ${i + 1}`}: ${b.roomName}</td></tr>
+          <tr class="group-label-row"><td colspan="4">${isEN ? `Room ${i + 1}` : `Phòng ${i + 1}`}: ${escapeHtml(b.roomName)}</td></tr>
           <tr>
-            <td>${b.roomName} <span style="color:#6a5a40">(${b.roomType})</span>
+            <td>${escapeHtml(b.roomName)} <span style="color:#6a5a40">(${escapeHtml(b.roomType)})</span>
               <br><small style="color:#8a7a60">${b.nights} ${isEN ? 'nights' : 'đêm'} (${fmtDate(b.checkIn)} → ${fmtDate(b.checkOut)})</small>
             </td>
             <td class="tr">${fmt(b.pricePerNight)}</td>
@@ -101,11 +102,11 @@ export function renderGroupInvoice(data: GroupDocumentData, lang: 'vi' | 'en' = 
       <div class="info-grid">
         <div class="info-cell">
           <div class="info-key">${isEN ? 'Group / Guest Name' : 'Tên đoàn / khách'}</div>
-          <div class="info-val">${data.guestName || '—'}</div>
+          <div class="info-val">${escapeHtml(data.guestName) || '—'}</div>
         </div>
         <div class="info-cell">
           <div class="info-key">${isEN ? 'Phone' : 'Số điện thoại'}</div>
-          <div class="info-val">${data.guestPhone || '—'}</div>
+          <div class="info-val">${escapeHtml(data.guestPhone) || '—'}</div>
         </div>
         <div class="info-cell">
           <div class="info-key">${isEN ? 'Rooms' : 'Số phòng'}</div>
@@ -237,7 +238,7 @@ export function renderGroupConfirmation(data: GroupDocumentData, lang: 'vi' | 'e
 
   const bookingRows = data.bookings.map(b => `
     <tr>
-      <td><strong>${b.roomName}</strong></td>
+      <td><strong>${escapeHtml(b.roomName)}</strong></td>
       <td class="tc">${fmtDate(b.checkIn)}</td>
       <td class="tc">${fmtDate(b.checkOut)}</td>
       <td class="tc">${b.nights}</td>
@@ -247,7 +248,7 @@ export function renderGroupConfirmation(data: GroupDocumentData, lang: 'vi' | 'e
     ${b.surcharge > 0 ? `
     <tr class="surcharge-row">
       <td colspan="5" style="padding-left:24px;font-size:11.5px;color:#7a4500;">
-        ${isEn ? 'Card fee' : 'Phụ thu thẻ'} — ${b.roomName}
+        ${isEn ? 'Card fee' : 'Phụ thu thẻ'} — ${escapeHtml(b.roomName)}
       </td>
       <td class="tr">${fmtMoney(b.surcharge)}</td>
     </tr>` : ''}
@@ -268,7 +269,7 @@ export function renderGroupConfirmation(data: GroupDocumentData, lang: 'vi' | 'e
         <tbody>
           ${allServices.map(s => `
           <tr>
-            <td>${s.name}</td>
+            <td>${escapeHtml(s.name)}</td>
             <td class="tc">${s.qty}</td>
             <td class="tr">${fmtMoney(s.price)}</td>
             <td class="tr">${fmtMoney(s.price * s.qty)}</td>
@@ -284,7 +285,7 @@ export function renderGroupConfirmation(data: GroupDocumentData, lang: 'vi' | 'e
         <tbody>
           ${allDiscounts.map(d => `
           <tr>
-            <td>${d.description ?? (isEn ? 'Discount' : 'Giảm giá')}</td>
+            <td>${escapeHtml(d.description ?? (isEn ? 'Discount' : 'Giảm giá'))}</td>
             <td class="tr" style="color:#8b0000;">− ${fmtMoney(d.amount)}</td>
           </tr>`).join('')}
         </tbody>
@@ -331,7 +332,7 @@ export function renderGroupConfirmation(data: GroupDocumentData, lang: 'vi' | 'e
           <div class="qr-row"><span class="qr-key">${isEn ? 'Bank' : 'Ngân hàng'}</span><span class="qr-val">Vietcombank (VCB)</span></div>
           <div class="qr-row"><span class="qr-key">${isEn ? 'Account' : 'Số tài khoản'}</span><span class="qr-val">${VQR_ACCOUNT_DISPLAY}</span></div>
           <div class="qr-row"><span class="qr-key">${isEn ? 'Account Name' : 'Chủ TK'}</span><span class="qr-val">${VQR_OWNER}</span></div>
-          <div class="qr-row"><span class="qr-key">${isEn ? 'Reference' : 'Nội dung CK'}</span><span class="qr-val" style="color:#0a3d1a;font-weight:600">${addInfoGroup}</span></div>
+          <div class="qr-row"><span class="qr-key">${isEn ? 'Reference' : 'Nội dung CK'}</span><span class="qr-val" style="color:#0a3d1a;font-weight:600">${escapeHtml(addInfoGroup)}</span></div>
           <div class="qr-note">${t.bankNote}</div>
         </div>
       </div>
@@ -342,7 +343,7 @@ export function renderGroupConfirmation(data: GroupDocumentData, lang: 'vi' | 'e
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>${t.title} — ${data.guestName}</title>
+  <title>${t.title} — ${escapeHtml(data.guestName)}</title>
   ${BASE_STYLE}
 </head>
 <body>
@@ -360,11 +361,11 @@ export function renderGroupConfirmation(data: GroupDocumentData, lang: 'vi' | 'e
       <div class="info-grid">
         <div class="info-cell">
           <div class="info-key">${t.guestLabel}</div>
-          <div class="info-val">${data.guestName}</div>
+          <div class="info-val">${escapeHtml(data.guestName)}</div>
         </div>
         <div class="info-cell">
           <div class="info-key">${t.phoneLabel}</div>
-          <div class="info-val">${data.guestPhone || '—'}</div>
+          <div class="info-val">${escapeHtml(data.guestPhone) || '—'}</div>
         </div>
         <div class="info-cell">
           <div class="info-key">${t.stayLabel}</div>
@@ -372,7 +373,7 @@ export function renderGroupConfirmation(data: GroupDocumentData, lang: 'vi' | 'e
         </div>
         <div class="info-cell">
           <div class="info-key">${t.sourceLabel}</div>
-          <div class="info-val muted">${data.source}${data.otaBookingNumber ? ` · ${data.otaBookingNumber}` : ''}</div>
+          <div class="info-val muted">${escapeHtml(data.source)}${data.otaBookingNumber ? ` · ${escapeHtml(data.otaBookingNumber)}` : ''}</div>
         </div>
       </div>
     </div>
