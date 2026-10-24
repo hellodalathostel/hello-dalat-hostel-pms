@@ -76,8 +76,6 @@ function useDragScroll() {
       startTime: performance.now(),
       scrollLeft: element.scrollLeft,
     }
-
-    element.setPointerCapture(event.pointerId)
   }, [])
 
   const onPointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
@@ -103,6 +101,13 @@ function useDragScroll() {
       dragState.current.moved = true
       setIsDragging(true)
       element.classList.add('calendar-table-wrapper--dragging')
+      // Chỉ capture khi đã thật sự kéo — capture ngay từ pointerdown khiến
+      // click chuột bị retarget về wrapper, .cal-block / ô trống không nhận onClick.
+      try {
+        element.setPointerCapture(event.pointerId)
+      } catch {
+        // pointer có thể đã kết thúc trước khi kịp capture
+      }
     }
 
     if (dragState.current.moved) {
@@ -117,7 +122,11 @@ function useDragScroll() {
     element?.classList.remove('calendar-table-wrapper--dragging')
 
     if (element?.hasPointerCapture(event.pointerId)) {
-      element.releasePointerCapture(event.pointerId)
+      try {
+        element.releasePointerCapture(event.pointerId)
+      } catch {
+        // pointer có thể đã bị release
+      }
     }
 
     requestAnimationFrame(() => setIsDragging(false))

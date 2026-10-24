@@ -30,7 +30,7 @@ function formatDate(date: string | null): string {
 export default function RoomCalendar(): React.JSX.Element {
   const [manager, contextHolder] = Modal.useModal()
   const queryClient = useQueryClient()
-  const { notification } = useAppFeedback()
+  const { message, notification } = useAppFeedback()
   const deleteBlockMutation = useDeleteBlock()
   const [range, setRange] = useState<DateRangeValue>(defaultRange)
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null)
@@ -46,6 +46,12 @@ export default function RoomCalendar(): React.JSX.Element {
   const { data, isLoading, isFetching, error } = useRoomCalendar({ startDate, endDate, rooms })
 
   const handleBookingClick = (event: CalendarEvent) => {
+    // Block OTA (ota_calendar_feed) chỉ đồng bộ từ iCal — không mở block / không tạo block mới
+    if (event.entry_type === 'ota_block') {
+      message.info('Block từ OTA, được đồng bộ tự động từ iCal')
+      return
+    }
+
     if (event.entry_type === 'block' && event.block_id) {
       manager.confirm({
         title: `Mi block phong ${event.room_id}?`,
