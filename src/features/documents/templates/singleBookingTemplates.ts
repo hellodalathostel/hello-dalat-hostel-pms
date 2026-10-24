@@ -25,6 +25,7 @@ import {
   nightsLabel_EN,
   servicesTotal,
   remaining,
+  hasGroupTotal,
   removeDiacritics,
   BASE_STYLE,
   htmlHeader,
@@ -145,6 +146,11 @@ export function renderBookingConfirmation(d: DocumentData): { html: string; zalo
             <td><strong>${isEN ? 'Total' : 'TỔNG CỘNG'}</strong></td>
             <td class="tr"><strong>${fmt(d.grandTotal)}</strong></td>
           </tr>
+          ${hasGroupTotal(d) ? `
+          <tr>
+            <td>${isEN ? 'Group total (all rooms)' : 'Tổng cả đoàn (tất cả phòng)'}</td>
+            <td class="tr">${fmt(d.groupGrandTotal)}</td>
+          </tr>` : ''}
           ${hasDeposit ? `
           <tr class="paid-row">
             <td>${isEN ? 'Deposit paid' : 'Đã đặt cọc'}</td>
@@ -192,7 +198,7 @@ Here's your booking summary:
 🌙 Nights: ${d.nights}
 👥 Guests: ${d.guestsCount}
 💰 Total: ${fmtVND_EN(d.grandTotal)}
-${d.surcharge > 0 ? `💳 Card surcharge (4%): ${fmtVND_EN(d.surcharge)} included` : ''}
+${hasGroupTotal(d) ? `👥 Group total (all rooms): ${fmtVND_EN(d.groupGrandTotal)}\n` : ''}${d.surcharge > 0 ? `💳 Card surcharge (4%): ${fmtVND_EN(d.surcharge)} included` : ''}
 ${hasDeposit ? `✅ Deposit paid: ${fmtVND_EN(d.paid)} — Balance due: ${fmtVND_EN(bal)}` : ''}
 ${d.otaBookingNumber ? `📋 Booking ref: ${d.otaBookingNumber}` : ''}
 
@@ -220,7 +226,7 @@ Xin chào ${d.guestName},
 🌙 Số đêm: ${d.nights}
 👥 Số khách: ${d.guestsCount}
 💰 Tổng tiền: ${fmtVND(d.grandTotal)}
-${d.surcharge > 0 ? `💳 Phụ thu thẻ (4%): ${fmtVND(d.surcharge)} đã tính vào tổng` : ''}
+${hasGroupTotal(d) ? `👥 Tổng cả đoàn: ${fmtVND(d.groupGrandTotal)}\n` : ''}${d.surcharge > 0 ? `💳 Phụ thu thẻ (4%): ${fmtVND(d.surcharge)} đã tính vào tổng` : ''}
 ${hasDeposit ? `✅ Đã cọc: ${fmtVND(d.paid)} — Còn lại: ${fmtVND(bal)}` : ''}
 ${d.otaBookingNumber ? `📋 Mã booking: ${d.otaBookingNumber}` : ''}
 
@@ -443,8 +449,10 @@ export function renderDepositConfirmation(d: DocumentData): { html: string; zalo
             <td></td>
           </tr>
           <tr>
-            <td colspan="2" style="color:#5a4a30">${isEN ? 'Total charge' : 'Tổng hóa đơn'}</td>
-            <td class="tr" style="color:#1a1a1a">${fmt(d.grandTotal)}</td>
+            <td colspan="2" style="color:#5a4a30">${hasGroupTotal(d)
+              ? (isEN ? 'Group total (all rooms)' : 'Tổng hóa đơn cả đoàn')
+              : (isEN ? 'Total charge' : 'Tổng hóa đơn')}</td>
+            <td class="tr" style="color:#1a1a1a">${fmt(d.groupGrandTotal)}</td>
             <td></td>
           </tr>
           <tr class="due-row">
@@ -483,7 +491,7 @@ We've received your deposit:
 🛏 Room: ${d.roomName}
 📅 ${nightsLabel_EN(d)}
 💵 Total: ${fmtVND_EN(d.grandTotal)}
-${bal > 0 ? `⏳ Balance due at check-in: ${fmtVND_EN(bal)}` : '🎉 Fully paid!'}
+${hasGroupTotal(d) ? `👥 Group total (all rooms): ${fmtVND_EN(d.groupGrandTotal)}\n` : ''}${bal > 0 ? `⏳ Balance due at check-in: ${fmtVND_EN(bal)}` : '🎉 Fully paid!'}
 
 ✅ Your room is confirmed!
 
@@ -503,7 +511,7 @@ Chúng tôi đã nhận khoản đặt cọc:
 🛏 Phòng: ${d.roomName}
 📅 ${nightsLabel_VI(d)}
 💵 Tổng tiền: ${fmtVND(d.grandTotal)}
-${bal > 0 ? `⏳ Còn lại khi check-in: ${fmtVND(bal)}` : '🎉 Đã thanh toán đủ!'}
+${hasGroupTotal(d) ? `👥 Tổng cả đoàn: ${fmtVND(d.groupGrandTotal)}\n` : ''}${bal > 0 ? `⏳ Còn lại khi check-in: ${fmtVND(bal)}` : '🎉 Đã thanh toán đủ!'}
 
 ✅ Phòng của bạn đã được giữ chắc chắn!
 
@@ -610,6 +618,11 @@ export function renderInvoice(d: DocumentData): { html: string; zaloText: string
             <td colspan="3"><strong>${isEN ? 'Total' : 'TỔNG CỘNG'}</strong></td>
             <td class="tr"><strong>${fmt(d.grandTotal)}</strong></td>
           </tr>
+          ${hasGroupTotal(d) ? `
+          <tr>
+            <td colspan="3" class="tr">${isEN ? 'Group total (all rooms)' : 'Tổng cả đoàn (tất cả phòng)'}</td>
+            <td class="tr">${fmt(d.groupGrandTotal)}</td>
+          </tr>` : ''}
           ${d.paid > 0 ? (
             d.payments.length > 1
               // Nhiều lần thanh toán → break down từng dòng
@@ -673,7 +686,7 @@ ${d.surcharge > 0 ? `• Card surcharge (4%): ${fmtVND_EN(d.surcharge)}` : ''}
 ${d.discounts.map(disc => `• Discount (${disc.description ?? '—'}): −${fmtVND_EN(disc.amount)}`).join('\n')}
 
 💰 TOTAL: ${fmtVND_EN(d.grandTotal)}
-${d.paid > 0 ? `✅ Paid: ${fmtVND_EN(d.paid)}` : ''}
+${hasGroupTotal(d) ? `👥 Group total (all rooms): ${fmtVND_EN(d.groupGrandTotal)}\n` : ''}${d.paid > 0 ? `✅ Paid: ${fmtVND_EN(d.paid)}` : ''}
 ${bal > 0 ? `⏳ Balance due: *${fmtVND_EN(bal)}*` : '🎉 Fully settled'}
 
 Thank you for staying at Hello Dalat! 🌿`
@@ -690,7 +703,7 @@ ${d.surcharge > 0 ? `• Phụ thu thẻ (4%): ${fmtVND(d.surcharge)}` : ''}
 ${d.discounts.map(disc => `• Giảm (${disc.description ?? '—'}): −${fmtVND(disc.amount)}`).join('\n')}
 
 💰 TỔNG: ${fmtVND(d.grandTotal)}
-${d.paid > 0 ? `✅ Đã trả: ${fmtVND(d.paid)}` : ''}
+${hasGroupTotal(d) ? `👥 Tổng cả đoàn: ${fmtVND(d.groupGrandTotal)}\n` : ''}${d.paid > 0 ? `✅ Đã trả: ${fmtVND(d.paid)}` : ''}
 ${bal > 0 ? `⏳ Còn lại: *${fmtVND(bal)}*` : '🎉 Đã thanh toán đủ'}
 
 Cảm ơn bạn đã ở lại Hello Dalat! 🌿`;

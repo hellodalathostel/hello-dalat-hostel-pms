@@ -41,12 +41,12 @@ const columns: ColumnsType<UnpaidGroup> = [
     sorter: (a, b) => a.check_out.localeCompare(b.check_out),
   },
   {
-    title: 'Doanh thu (k)',
-    dataIndex: 'net_revenue',
-    key: 'net_revenue',
+    title: 'Tổng tiền (k)',
+    dataIndex: 'grand_total',
+    key: 'grand_total',
     align: 'right',
     render: (v: number) => fmt(v),
-    sorter: (a, b) => a.net_revenue - b.net_revenue,
+    sorter: (a, b) => a.grand_total - b.grand_total,
   },
   {
     title: 'Đã thu (k)',
@@ -110,9 +110,9 @@ function UnpaidCardList({ data }: { data: UnpaidGroup[] }) {
             <Flex gap={12}>
               <Flex vertical>
                 <Text type="secondary" style={{ fontSize: 11 }}>
-                  Doanh thu
+                  Tổng tiền
                 </Text>
-                <Text style={{ fontSize: 13 }}>{fmt(row.net_revenue)}k</Text>
+                <Text style={{ fontSize: 13 }}>{fmt(row.grand_total)}k</Text>
               </Flex>
               <Flex vertical>
                 <Text type="secondary" style={{ fontSize: 11 }}>

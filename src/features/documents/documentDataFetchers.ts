@@ -57,7 +57,7 @@ export async function fetchDocumentData(
       .single(),
     supabase
       .from('groups')
-      .select('id, customer_name, customer_phone, source, ota_booking_number, paid, deposit_method')
+      .select('id, customer_name, customer_phone, source, ota_booking_number, grand_total, paid, deposit_method')
       .eq('id', groupId)
       .single(),
   ]);
@@ -124,6 +124,9 @@ export async function fetchDocumentData(
     roomSubtotal: booking.room_subtotal ?? 0,
     surcharge: booking.surcharge ?? 0,
     grandTotal: booking.grand_total,
+    // "Đã trả/còn lại" tính cùng cấp group: groups.grand_total − groups.paid
+    // (booking.grand_total − groups.paid sai với đoàn nhiều phòng).
+    groupGrandTotal: group.grand_total ?? booking.grand_total,
     services: (services ?? []).map(s => ({
       name: s.name,
       price: s.price,

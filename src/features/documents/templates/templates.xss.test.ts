@@ -25,6 +25,7 @@ function singleData(guestName: string): DocumentData {
     roomSubtotal: 600000,
     surcharge: 0,
     grandTotal: 700000,
+    groupGrandTotal: 700000,
     services: [{ name: guestName, price: 100000, qty: 1 }],
     discounts: [{ description: guestName, amount: 0 }],
     paid: 200000,
