@@ -37,7 +37,7 @@ interface RoomCalendarRawRecord {
   booking_id?: string | null
   code?: string | null
   block_id?: string | null
-  entry_type?: 'booking' | 'block' | null
+  entry_type?: 'booking' | 'block' | 'ota_block' | null
   group_id?: string | null
   booking_status?: 'booked' | 'checked-in' | 'checked-out' | 'cancelled' | null
   is_blocked?: boolean | null
