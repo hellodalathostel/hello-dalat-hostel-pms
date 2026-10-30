@@ -1,3 +1,14 @@
+
 {
-  "recommendations": ["denoland.vscode-deno"]
+  "recommendations": [
+    "anthropic.claude-code",
+    "dbaeumer.vscode-eslint",
+    "denoland.vscode-deno",
+    "vitest.explorer",
+    "ms-ossdata.vscode-pgsql",
+    "supabase.vscode-supabase-extension",
+    "usernamehw.errorlens",
+    "eamodio.gitlens",
+    "mikestead.dotenv"
+  ]
 }
