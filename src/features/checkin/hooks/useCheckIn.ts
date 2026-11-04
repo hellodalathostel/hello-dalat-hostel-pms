@@ -25,6 +25,10 @@ function translateCheckinError(errorMessage: string): string {
 	if (errorMessage.includes('CHECKIN_TIMEOUT')) {
 		return 'Check-in quá 20 giây không phản hồi. Kiểm tra mạng rồi thử lại — nếu lặp lại, tải lại trang.'
 	}
+	// Rule 2: RPC từ chối check-in trước ngày dự kiến — hiện nguyên message tiếng Việt từ DB
+	if (errorMessage.includes('CHECKIN_TOO_EARLY:')) {
+		return errorMessage.slice(errorMessage.indexOf('CHECKIN_TOO_EARLY:') + 'CHECKIN_TOO_EARLY:'.length).trim()
+	}
 	if (errorMessage.includes('BOOKING_NOT_FOUND')) return 'Không tìm thấy booking'
 	if (errorMessage.includes('INVALID_STATUS')) return 'Booking không ở trạng thái hợp lệ để check-in'
 	if (errorMessage.includes('customers_gender_check')) return 'Giới tính không hợp lệ — chọn Nam/Nữ hoặc để trống'

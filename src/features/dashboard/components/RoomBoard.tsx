@@ -1,5 +1,6 @@
 // FILE: src/features/dashboard/components/RoomBoard.tsx
 import { Button, Tooltip } from 'antd'
+import dayjs from 'dayjs'
 import { MoreOutlined } from '@ant-design/icons'
 import type { DashboardRoom } from '@/types/dashboard'
 import {
@@ -170,11 +171,24 @@ export function RoomBoard({
               </span>
 
               <span className={styles.action}>
-                {state === 'vacant' && (
-                  <Button type="primary" onClick={() => onCheckinClick(room)}>
-                    {room.booking_id ? 'Nhận phòng' : 'Đặt phòng'}
-                  </Button>
-                )}
+                {state === 'vacant' && (() => {
+                  // Rule 2: booking chưa đến ngày check-in dự kiến → khoá "Nhận phòng" (DB cũng chặn)
+                  const isFutureCheckin =
+                    Boolean(room.booking_id) && Boolean(room.check_in) && dayjs(room.check_in).isAfter(dayjs(), 'day')
+                  return (
+                    <Tooltip
+                      title={
+                        isFutureCheckin
+                          ? `Chưa đến ngày check-in (dự kiến ${dayjs(room.check_in).format('DD/MM/YYYY')}). Sửa ngày check-in trước nếu khách đến sớm.`
+                          : undefined
+                      }
+                    >
+                      <Button type="primary" disabled={isFutureCheckin} onClick={() => onCheckinClick(room)}>
+                        {room.booking_id ? 'Nhận phòng' : 'Đặt phòng'}
+                      </Button>
+                    </Tooltip>
+                  )
+                })()}
                 {isOccupiedLikeState(state) && (
                   <Button onClick={() => onCheckoutClick(room)}>
                     Trả phòng

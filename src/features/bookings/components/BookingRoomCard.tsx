@@ -85,6 +85,11 @@ export function BookingRoomCard({
   const primaryGuest = booking.booking_guests?.find((guest) => guest.is_primary)?.customers ?? null
   const status = booking.status as BookingStatus
   const canCheckin = ACTION_STATUSES.canCheckin.includes(status)
+  // Rule 2: chưa đến ngày check-in dự kiến → khoá nút (DB cũng chặn trong checkin_booking_txn)
+  const isFutureCheckin = dayjs(booking.check_in).isAfter(dayjs(), 'day')
+  const futureCheckinTip = isFutureCheckin
+    ? `Chưa đến ngày check-in (dự kiến ${dayjs(booking.check_in).format('DD/MM/YYYY')}). Sửa ngày check-in trước nếu khách đến sớm.`
+    : undefined
   const canCheckout = ACTION_STATUSES.canCheckout.includes(status)
   const canAddService = ACTION_STATUSES.canAddService.includes(status)
   const canEarlyLate = ACTION_STATUSES.canEarlyLate.includes(status)
@@ -276,12 +281,27 @@ export function BookingRoomCard({
               {/* Nhận phòng (C4: đổi nhãn "Check-in" cho đồng nhất với dashboard) */}
               {canCheckin && (
                 <>
-                  <Button type="primary" size="small" icon={<LoginOutlined />} onClick={() => onCheckin?.(booking.id)}>
-                    Nhận phòng
-                  </Button>
-                  <Button size="small" icon={<FileExcelOutlined />} onClick={() => onCheckinImport?.(booking.id)}>
-                    Nhập Excel
-                  </Button>
+                  <Tooltip title={futureCheckinTip}>
+                    <Button
+                      type="primary"
+                      size="small"
+                      icon={<LoginOutlined />}
+                      disabled={isFutureCheckin}
+                      onClick={() => onCheckin?.(booking.id)}
+                    >
+                      Nhận phòng
+                    </Button>
+                  </Tooltip>
+                  <Tooltip title={futureCheckinTip}>
+                    <Button
+                      size="small"
+                      icon={<FileExcelOutlined />}
+                      disabled={isFutureCheckin}
+                      onClick={() => onCheckinImport?.(booking.id)}
+                    >
+                      Nhập Excel
+                    </Button>
+                  </Tooltip>
                 </>
               )}
 
