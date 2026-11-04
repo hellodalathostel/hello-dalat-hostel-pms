@@ -40,6 +40,11 @@ function mapKnownRpcMessage(message: string): string {
     return 'Check-out phải sau check-in.'
   }
 
+  // Rule 2: checkin_booking_txn chặn check-in trước ngày dự kiến — giữ câu tiếng Việt từ DB, bỏ mã lỗi
+  if (message.startsWith('CHECKIN_TOO_EARLY')) {
+    return message.replace(/^CHECKIN_TOO_EARLY:?\s*/, '') || 'Chưa đến ngày check-in dự kiến.'
+  }
+
   if (message.startsWith('PERMISSION_DENIED')) {
     // Hiện đúng message từ DB (vd 'Chỉ Owner mới được huỷ booking đang checked-in.'), fallback câu chung
     return message.replace(/^PERMISSION_DENIED:?\s*/, '') || 'Không có quyền thực hiện thao tác này.'
