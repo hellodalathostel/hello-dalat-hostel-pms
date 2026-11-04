@@ -21,7 +21,8 @@ interface CheckinRpcResponse {
 const CHECKIN_TIMEOUT_MS = 20_000
 
 // Dịch lỗi RPC/mạng sang tiếng Việt. KHÔNG đưa số giấy tờ/tên khách vào thông báo.
-function translateCheckinError(errorMessage: string): string {
+// Dùng chung cho luồng Import Excel (useCheckinImport).
+export function translateCheckinError(errorMessage: string): string {
 	if (errorMessage.includes('CHECKIN_TIMEOUT')) {
 		return 'Check-in quá 20 giây không phản hồi. Kiểm tra mạng rồi thử lại — nếu lặp lại, tải lại trang.'
 	}

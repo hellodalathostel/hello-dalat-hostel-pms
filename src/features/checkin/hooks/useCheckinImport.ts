@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/api/supabase'
 import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
 import { parseCheckinExcel, type GuestImportRow } from '../utils/parseCheckinExcel'
+import { translateCheckinError } from './useCheckIn'
 
 type ImportStatus = 'success' | 'no_booking' | 'error'
 
@@ -159,7 +160,9 @@ export function useCheckinImport() {
             })
           })
         } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : 'Lỗi không xác định'
+          // Dịch lỗi giống luồng check-in tay (vd CHECKIN_TOO_EARLY → câu tiếng Việt từ DB)
+          const errorMessage =
+            error instanceof Error ? translateCheckinError(error.message) : 'Lỗi không xác định'
           groupRows.forEach((row) => {
             nextResults.push({
               ...row,
