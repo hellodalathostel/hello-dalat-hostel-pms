@@ -41,7 +41,8 @@ function mapKnownRpcMessage(message: string): string {
   }
 
   if (message.startsWith('PERMISSION_DENIED')) {
-    return 'Không có quyền thực hiện thao tác này.'
+    // Hiện đúng message từ DB (vd 'Chỉ Owner mới được huỷ booking đang checked-in.'), fallback câu chung
+    return message.replace(/^PERMISSION_DENIED:?\s*/, '') || 'Không có quyền thực hiện thao tác này.'
   }
 
   return message
