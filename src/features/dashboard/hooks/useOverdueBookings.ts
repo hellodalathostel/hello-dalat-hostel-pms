@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import dayjs from 'dayjs'
 import { supabase } from '@/api/supabase'
 import { normalizeError } from '@/shared/utils/normalizeError'
+import { getTodayIct } from '@/shared/utils/dateIct'
 
 export type OverdueBooking = {
   bookingId: string
@@ -41,10 +42,8 @@ interface RawActiveBooking {
   group_id: string
 }
 
-// Hôm nay theo ICT (YYYY-MM-DD) — không dùng toISOString() vì lệch ngày trước 07:00 sáng.
-export function getTodayIct(): string {
-  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' })
-}
+// Hôm nay theo ICT — helper dùng chung; re-export giữ nguyên API cũ của file này.
+export { getTodayIct }
 
 export async function fetchOverdueBookings(today: string = getTodayIct()): Promise<OverdueBooking[]> {
   // Bước A: booking quá hạn
