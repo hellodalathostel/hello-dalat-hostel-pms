@@ -35,6 +35,7 @@ import { formatVND } from '@/features/bookings/components/bookingDetailShared'
 import { supabase } from '@/api/supabase'
 import { formatMoney, formatRoomLabel } from '@/shared/utils/format'
 import { getOtaRoundingDiff } from '@/features/bookings/utils/otaRounding'
+import { appendOverCapacityNote, isOverCapacity, overCapacityMessage } from '@/shared/utils/overCapacity'
 
 const sourceOptions: Array<{ label: NewBookingFormValues['source']; value: NewBookingFormValues['source'] }> = [
   { label: 'Booking.com', value: 'Booking.com' },
@@ -84,7 +85,7 @@ function getDefaultValues(prefillRoomId?: string, prefillCheckIn?: string): NewB
 export default function NewBooking(): JSX.Element {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const { message } = useAppFeedback()
+  const { message, modal } = useAppFeedback()
   const createBookingMutation = useCreateBooking()
   const { data: rooms = [], isLoading: roomsLoading } = useRooms()
 
@@ -172,13 +173,16 @@ export default function NewBooking(): JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [suggestKeys])
 
-  // U-04: lỗi số khách theo sức chứa phòng — không tự ép giá trị, khoá nút tạo khi còn lỗi
+  // U-04: lỗi số khách < 1 — không tự ép giá trị, khoá nút tạo khi còn lỗi.
+  // Rule 1: vượt sức chứa chỉ cảnh báo (không khoá), xác nhận lúc bấm lưu.
   const guestsErrors = (bookingValues ?? []).map((booking) => {
     const count = booking?.guests_count
     if (count == null || count < 1) return 'Số khách phải từ 1 trở lên'
-    const capacity = rooms.find((r) => r.id === booking?.room_id)?.capacity
-    if (capacity && count > capacity) return `Phòng này tối đa ${capacity} khách`
     return null
+  })
+  const guestsWarnings = (bookingValues ?? []).map((booking) => {
+    const capacity = rooms.find((r) => r.id === booking?.room_id)?.capacity
+    return isOverCapacity(booking?.guests_count, capacity) ? `Vượt sức chứa phòng (tối đa ${capacity} khách)` : null
   })
   const hasGuestsError = guestsErrors.some(Boolean)
 
@@ -250,7 +254,7 @@ export default function NewBooking(): JSX.Element {
       ? getOtaRoundingDiff(importedOtaTotal, importedPricePerNight, importedNights)
       : 0
 
-  const onSubmit = async (values: NewBookingFormValues) => {
+  const submitBooking = async (values: NewBookingFormValues) => {
     const feeRate = values.channel_fee_rate ?? DEFAULT_FEE_RATES[values.source] ?? 0
 
     try {
@@ -273,6 +277,46 @@ export default function NewBooking(): JSX.Element {
     } catch {
       // Lỗi đã được hook mutation xử lý bằng notification.
     }
+  }
+
+  // Rule 1: có phòng vượt sức chứa → hỏi xác nhận; Đồng ý thì đánh dấu note rồi lưu, Huỷ thì giữ nguyên form.
+  const onSubmit = (values: NewBookingFormValues) => {
+    const overLines = values.bookings.flatMap((booking) => {
+      const capacity = rooms.find((r) => r.id === booking.room_id)?.capacity
+      return isOverCapacity(booking.guests_count, capacity) && booking.guests_count != null && capacity != null
+        ? [`Phòng ${booking.room_id}: ${overCapacityMessage(booking.guests_count, capacity)}`]
+        : []
+    })
+
+    if (overLines.length === 0) {
+      void submitBooking(values)
+      return
+    }
+
+    modal.confirm({
+      title: 'Vượt sức chứa phòng',
+      content: (
+        <div>
+          {overLines.map((line) => (
+            <p key={line} style={{ marginBottom: 4 }}>
+              {line}
+            </p>
+          ))}
+        </div>
+      ),
+      okText: 'Đồng ý',
+      cancelText: 'Huỷ',
+      onOk: () =>
+        submitBooking({
+          ...values,
+          bookings: values.bookings.map((booking) => {
+            const capacity = rooms.find((r) => r.id === booking.room_id)?.capacity
+            return isOverCapacity(booking.guests_count, capacity)
+              ? { ...booking, note: appendOverCapacityNote(booking.note) }
+              : booking
+          }),
+        }),
+    })
   }
 
   return (
@@ -568,8 +612,10 @@ export default function NewBooking(): JSX.Element {
                               <Form.Item
                                 label={roomCapacity ? `Số khách (tối đa ${roomCapacity})` : 'Số khách'}
                                 required
-                                validateStatus={guestsErrors[index] || fieldState.error ? 'error' : ''}
-                                help={guestsErrors[index] ?? fieldState.error?.message}
+                                validateStatus={
+                                  guestsErrors[index] || fieldState.error ? 'error' : guestsWarnings[index] ? 'warning' : ''
+                                }
+                                help={guestsErrors[index] ?? fieldState.error?.message ?? guestsWarnings[index]}
                               >
                                 {/* U-04: bỏ min/max (tự ép giá trị) — giữ nguyên đầu vào, báo lỗi cạnh ô */}
                                 <InputNumber

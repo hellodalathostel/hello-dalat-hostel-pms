@@ -11,6 +11,7 @@ import { useRooms } from '@/features/bookings/hooks/useRooms';
 import { useAddRoomToGroup } from '@/hooks/useAddRoomToGroup';
 import { useAppFeedback } from '@/shared/hooks/useAppFeedback';
 import { formatRoomLabel } from '@/shared/utils/format';
+import { appendOverCapacityNote, isOverCapacity, overCapacityMessage } from '@/shared/utils/overCapacity';
 
 const schema = z.object({
   room_id:         z.string().min(1, 'Chọn phòng'),
@@ -33,7 +34,7 @@ interface Props {
 }
 
 export function AddRoomModal({ open, groupId, defaultCheckIn, defaultCheckOut, onClose }: Props) {
-  const { message } = useAppFeedback();
+  const { message, modal } = useAppFeedback();
   const { mutate: addRoom, isPending } = useAddRoomToGroup();
 
   // M1 fix: dùng canonical useRooms() thay vì tự query riêng (chỉ phòng active).
@@ -67,14 +68,15 @@ export function AddRoomModal({ open, groupId, defaultCheckIn, defaultCheckOut, o
   const watchCheckIn = watch('check_in');
   const watchGuests  = watch('guests_count');
 
-  // U-04: kiểm tra sức chứa phòng — giữ nguyên giá trị nhập, báo lỗi + khoá nút
+  // U-04: số khách < 1 → báo lỗi + khoá nút. Rule 1: vượt sức chứa chỉ cảnh báo, xác nhận khi lưu.
   const selectedCapacity = rooms.find(r => r.id === watchRoomId)?.capacity ?? null;
   const guestsError =
     watchGuests == null || watchGuests < 1
       ? 'Số khách phải từ 1 trở lên'
-      : selectedCapacity && watchGuests > selectedCapacity
-        ? `Phòng này tối đa ${selectedCapacity} khách`
-        : null;
+      : null;
+  const guestsWarning = isOverCapacity(watchGuests, selectedCapacity)
+    ? `Vượt sức chứa phòng (tối đa ${selectedCapacity} khách)`
+    : null;
 
   useEffect(() => {
     if (!watchRoomId || !watchCheckIn) return;
@@ -88,11 +90,7 @@ export function AddRoomModal({ open, groupId, defaultCheckIn, defaultCheckOut, o
       });
   }, [watchRoomId, watchCheckIn, setValue]);
 
-  const onSubmit = (values: FormValues) => {
-    if (guestsError) {
-      message.error(guestsError);
-      return;
-    }
+  const submitRoom = (values: FormValues, note: string | undefined) => {
     addRoom(
       {
         group_id:        groupId,
@@ -101,7 +99,7 @@ export function AddRoomModal({ open, groupId, defaultCheckIn, defaultCheckOut, o
         check_out:       values.check_out.format('YYYY-MM-DD'),
         price_per_night: values.price_per_night,
         guests_count:    values.guests_count ?? undefined,
-        note:            values.note,
+        note,
       },
       {
         onSuccess: onClose,
@@ -110,6 +108,26 @@ export function AddRoomModal({ open, groupId, defaultCheckIn, defaultCheckOut, o
         },
       },
     );
+  };
+
+  const onSubmit = (values: FormValues) => {
+    if (guestsError) {
+      message.error(guestsError);
+      return;
+    }
+    const capacity = rooms.find(r => r.id === values.room_id)?.capacity ?? null;
+    if (values.guests_count != null && capacity != null && isOverCapacity(values.guests_count, capacity)) {
+      // Rule 1: Đồng ý → lưu kèm dòng đánh dấu trong note; Huỷ → không lưu, giữ form.
+      modal.confirm({
+        title: 'Vượt sức chứa phòng',
+        content: overCapacityMessage(values.guests_count, capacity),
+        okText: 'Đồng ý',
+        cancelText: 'Huỷ',
+        onOk: () => submitRoom(values, appendOverCapacityNote(values.note)),
+      });
+      return;
+    }
+    submitRoom(values, values.note);
   };
 
   return (
@@ -225,8 +243,8 @@ export function AddRoomModal({ open, groupId, defaultCheckIn, defaultCheckOut, o
             <Col span={12}>
               <Form.Item
                 label="Số khách"
-                validateStatus={guestsError ? 'error' : ''}
-                help={guestsError ?? undefined}
+                validateStatus={guestsError ? 'error' : guestsWarning ? 'warning' : ''}
+                help={guestsError ?? guestsWarning ?? undefined}
               >
                 <Controller
                   name="guests_count"

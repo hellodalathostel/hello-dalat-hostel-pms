@@ -9,6 +9,7 @@ import type { BookingRow } from '@/features/bookings/hooks/useBookingDetail'
 import { useRooms } from '@/features/bookings/hooks/useRooms'
 import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
 import { formatRoomLabel } from '@/shared/utils/format'
+import { appendOverCapacityNote, isOverCapacity, overCapacityMessage } from '@/shared/utils/overCapacity'
 
 type EditBookingModalProps = {
   booking: BookingRow | null
@@ -63,7 +64,7 @@ export function EditBookingModal({ booking, onClose, onSuccess }: EditBookingMod
     mode: 'onSubmit',
   })
 
-  // U-04: kiểm tra sức chứa phòng ngay khi nhập — giữ nguyên giá trị, chỉ báo lỗi + khoá nút lưu
+  // U-04: số khách < 1 → báo lỗi + khoá nút lưu. Rule 1: vượt sức chứa chỉ cảnh báo, xác nhận khi lưu.
   // eslint-disable-next-line react-hooks/incompatible-library -- RHF watch() không tương thích React Compiler, known issue
   const watchedRoomId = watch('room_id')
   const watchedGuests = watch('guests_count')
@@ -71,9 +72,10 @@ export function EditBookingModal({ booking, onClose, onSuccess }: EditBookingMod
   const guestsError =
     watchedGuests == null || watchedGuests < 1
       ? 'Số khách phải từ 1 trở lên'
-      : selectedRoomCapacity && watchedGuests > selectedRoomCapacity
-        ? `Phòng này tối đa ${selectedRoomCapacity} khách`
-        : null
+      : null
+  const guestsWarning = isOverCapacity(watchedGuests, selectedRoomCapacity)
+    ? `Vượt sức chứa phòng (tối đa ${selectedRoomCapacity} khách)`
+    : null
 
   useEffect(() => {
     if (!booking) {
@@ -98,7 +100,7 @@ export function EditBookingModal({ booking, onClose, onSuccess }: EditBookingMod
       return
     }
 
-    const doUpdate = async (override: boolean) => {
+    const doUpdate = async (override: boolean, note: string | undefined) => {
       try {
         await updateMutation.mutateAsync({
           bookingId: booking.id,
@@ -108,7 +110,7 @@ export function EditBookingModal({ booking, onClose, onSuccess }: EditBookingMod
           pricePerNight: values.price_per_night,
           guestsCount: values.guests_count ?? undefined,
           guestName: values.guest_name,
-          note: values.note,
+          note,
           overrideCheckin: override,
         })
         message.success('Cap nhat booking thanh cong')
@@ -118,20 +120,37 @@ export function EditBookingModal({ booking, onClose, onSuccess }: EditBookingMod
       }
     }
 
-    // Flow A: booking checked-in -> confirm truoc khi override
-    if (booking.status === 'checked-in') {
+    const proceed = async (note: string | undefined) => {
+      // Flow A: booking checked-in -> confirm truoc khi override
+      if (booking.status === 'checked-in') {
+        modal.confirm({
+          title: 'Xac nhan chinh sua booking dang Dang o',
+          content: 'Booking nay dang check-in. Ban co chac muon luu thay doi?',
+          okText: 'Xac nhan luu',
+          cancelText: 'Huy',
+          okButtonProps: { danger: true },
+          onOk: () => doUpdate(true, note),
+        })
+        return
+      }
+
+      await doUpdate(false, note)
+    }
+
+    // Rule 1: vượt sức chứa → xác nhận; Đồng ý thì nối dòng đánh dấu vào note, Huỷ thì giữ nguyên form.
+    const capacity = rooms.find((r) => r.id === values.room_id)?.capacity ?? null
+    if (values.guests_count != null && capacity != null && isOverCapacity(values.guests_count, capacity)) {
       modal.confirm({
-        title: 'Xac nhan chinh sua booking dang Dang o',
-        content: 'Booking nay dang check-in. Ban co chac muon luu thay doi?',
-        okText: 'Xac nhan luu',
-        cancelText: 'Huy',
-        okButtonProps: { danger: true },
-        onOk: () => doUpdate(true),
+        title: 'Vượt sức chứa phòng',
+        content: overCapacityMessage(values.guests_count, capacity),
+        okText: 'Đồng ý',
+        cancelText: 'Huỷ',
+        onOk: () => proceed(appendOverCapacityNote(values.note)),
       })
       return
     }
 
-    await doUpdate(false)
+    await proceed(values.note)
   }
 
   return (
@@ -276,8 +295,8 @@ export function EditBookingModal({ booking, onClose, onSuccess }: EditBookingMod
             <Form.Item
               label='Số khách'
               required
-              validateStatus={guestsError || fieldState.error ? 'error' : ''}
-              help={guestsError ?? fieldState.error?.message}
+              validateStatus={guestsError || fieldState.error ? 'error' : guestsWarning ? 'warning' : ''}
+              help={guestsError ?? fieldState.error?.message ?? guestsWarning}
             >
               <InputNumber
                 value={field.value}
