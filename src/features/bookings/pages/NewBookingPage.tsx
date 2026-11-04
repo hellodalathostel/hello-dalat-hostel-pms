@@ -32,7 +32,7 @@ import { DiscountSection } from '@/features/bookings/components/DiscountSection'
 import { DepositSection } from '@/features/bookings/components/DepositSection'
 import type { DepositInput, DiscountLineItem, ServiceLineItem } from '@/features/bookings/types/booking'
 import { formatVND } from '@/features/bookings/components/bookingDetailShared'
-import { supabase } from '@/api/supabase'
+import { fetchNightlySuggestedPrices } from '@/features/bookings/utils/suggestedPrice'
 import { formatMoney, formatRoomLabel } from '@/shared/utils/format'
 import { getOtaRoundingDiff } from '@/features/bookings/utils/otaRounding'
 import { appendOverCapacityNote, isOverCapacity, overCapacityMessage } from '@/shared/utils/overCapacity'
@@ -135,11 +135,18 @@ export default function NewBooking(): JSX.Element {
     name: 'bookings',
   })
 
-  // U-02: điền sẵn giá từ get_suggested_price(p_room_id, p_date) khi đổi phòng/ngày check-in.
-  // Chỉ ghi đè khi giá đang 0 hoặc vẫn là giá gợi ý lần trước (chưa bị sửa tay / chưa import PDF).
+  // Rule 3: điền sẵn giá từ get_suggested_price(p_room_id, p_date) gọi cho TỪNG đêm [check_in, check_out).
+  // Điền giá đêm đầu; các đêm khác giá → hiện gợi ý "Giá thay đổi theo đêm: min–max".
+  // Chỉ điền khi người dùng chưa tự sửa ô giá (manualPriceRef) và giá đang 0 / vẫn là giá gợi ý lần trước
+  // (giá import từ PDF coi như đã nhập tay). Lỗi RPC → để trống ô giá + toast cảnh báo, không chặn lưu.
   const suggestedRef = useRef<Map<string, { key: string; price: number }>>(new Map())
+  const manualPriceRef = useRef<Set<string>>(new Set())
+  const [priceRanges, setPriceRanges] = useState<Record<string, { min: number; max: number } | null>>({})
   const suggestKeys = (bookingValues ?? [])
-    .map((b, i) => `${fields[i]?.id ?? i}|${b?.room_id ?? ''}|${b?.check_in?.format('YYYY-MM-DD') ?? ''}`)
+    .map(
+      (b, i) =>
+        `${fields[i]?.id ?? i}|${b?.room_id ?? ''}|${b?.check_in?.format('YYYY-MM-DD') ?? ''}|${b?.check_out?.format('YYYY-MM-DD') ?? ''}`,
+    )
     .join(',')
 
   useEffect(() => {
@@ -148,28 +155,41 @@ export default function NewBooking(): JSX.Element {
       const fieldId = fields[index]?.id
       const roomId = booking?.room_id
       const checkIn = booking?.check_in
-      if (!fieldId || !roomId || !checkIn) return
+      const checkOut = booking?.check_out
+      if (!fieldId || !roomId || !checkIn || !checkOut || !checkOut.isAfter(checkIn, 'day')) return
 
-      const key = `${roomId}|${checkIn.format('YYYY-MM-DD')}`
+      const key = `${roomId}|${checkIn.format('YYYY-MM-DD')}|${checkOut.format('YYYY-MM-DD')}`
       const prev = suggestedRef.current.get(fieldId)
       if (prev?.key === key) return
 
       const currentPrice = booking.price_per_night ?? 0
-      const isUntouched = currentPrice === 0 || currentPrice === prev?.price
+      const isUntouched =
+        !manualPriceRef.current.has(fieldId) && (currentPrice === 0 || currentPrice === prev?.price)
       if (!isUntouched) return
 
-      void supabase
-        .rpc('get_suggested_price', { p_room_id: roomId, p_date: checkIn.format('YYYY-MM-DD') })
-        .then(({ data, error }: { data: number | null; error: unknown }) => {
-          if (cancelled || error || !data || data <= 0) return
-          suggestedRef.current.set(fieldId, { key, price: data })
-          setValue(`bookings.${index}.price_per_night`, data, { shouldDirty: true })
+      fetchNightlySuggestedPrices(roomId, checkIn, checkOut)
+        .then((suggestion) => {
+          if (cancelled) return
+          const price = suggestion?.first ?? 0
+          suggestedRef.current.set(fieldId, { key, price })
+          setValue(`bookings.${index}.price_per_night`, price, { shouldDirty: true })
+          setPriceRanges((prevRanges) => ({
+            ...prevRanges,
+            [fieldId]: suggestion && suggestion.min !== suggestion.max ? { min: suggestion.min, max: suggestion.max } : null,
+          }))
+        })
+        .catch(() => {
+          if (cancelled) return
+          suggestedRef.current.set(fieldId, { key, price: 0 })
+          setValue(`bookings.${index}.price_per_night`, 0, { shouldDirty: true })
+          setPriceRanges((prevRanges) => ({ ...prevRanges, [fieldId]: null }))
+          message.warning('Không lấy được giá gợi ý — vui lòng nhập giá tay')
         })
     })
     return () => {
       cancelled = true
     }
-    // suggestKeys gom room_id + check_in của mọi dòng — đủ để chạy lại đúng lúc
+    // suggestKeys gom room_id + check_in + check_out của mọi dòng — đủ để chạy lại đúng lúc
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [suggestKeys])
 
@@ -570,6 +590,18 @@ export default function NewBooking(): JSX.Element {
                               draftNights > 0 && draftPrice > 0
                                 ? `Tạm tính: ${draftNights} đêm × ${formatMoney(draftPrice)} = ${formatMoney(draftNights * draftPrice)}`
                                 : null
+                            // Rule 3: các đêm có giá gợi ý khác nhau → gợi ý nhỏ cạnh ô giá
+                            const range = priceRanges[field.id]
+                            const rangeText = range
+                              ? `Giá thay đổi theo đêm: ${formatMoney(range.min)}–${formatMoney(range.max)}`
+                              : null
+                            const extraText =
+                              draftText || rangeText ? (
+                                <>
+                                  {rangeText ? <div>{rangeText}</div> : null}
+                                  {draftText ? <div>{draftText}</div> : null}
+                                </>
+                              ) : null
 
                             return (
                             <Form.Item
@@ -577,11 +609,15 @@ export default function NewBooking(): JSX.Element {
                               required
                               validateStatus={fieldState.error ? 'error' : ''}
                               help={fieldState.error?.message}
-                              extra={draftText}
+                              extra={extraText}
                             >
                               <InputNumber
                                 value={bookingField.value}
-                                onChange={(value) => bookingField.onChange(value ?? 0)}
+                                onChange={(value) => {
+                                  // Người dùng tự sửa → không ghi đè khi đổi ngày/phòng
+                                  manualPriceRef.current.add(field.id)
+                                  bookingField.onChange(value ?? 0)
+                                }}
                                 min={1}
                                 style={{ width: '100%' }}
                                 formatter={(value) => {

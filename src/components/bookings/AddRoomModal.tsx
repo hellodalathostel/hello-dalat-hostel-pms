@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Modal, Form, Select, DatePicker, InputNumber, Input, Row, Col, Spin,
 } from 'antd';
@@ -6,11 +6,11 @@ import dayjs, { Dayjs } from 'dayjs';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { supabase } from '@/api/supabase';
 import { useRooms } from '@/features/bookings/hooks/useRooms';
+import { fetchNightlySuggestedPrices } from '@/features/bookings/utils/suggestedPrice';
 import { useAddRoomToGroup } from '@/hooks/useAddRoomToGroup';
 import { useAppFeedback } from '@/shared/hooks/useAppFeedback';
-import { formatRoomLabel } from '@/shared/utils/format';
+import { formatMoney, formatRoomLabel } from '@/shared/utils/format';
 import { appendOverCapacityNote, isOverCapacity, overCapacityMessage } from '@/shared/utils/overCapacity';
 
 const schema = z.object({
@@ -66,7 +66,10 @@ export function AddRoomModal({ open, groupId, defaultCheckIn, defaultCheckOut, o
   // eslint-disable-next-line react-hooks/incompatible-library -- RHF watch() không tương thích React Compiler, known issue
   const watchRoomId  = watch('room_id');
   const watchCheckIn = watch('check_in');
+  const watchCheckOut = watch('check_out');
   const watchGuests  = watch('guests_count');
+  const manualPriceRef = useRef(false);
+  const [priceRange, setPriceRange] = useState<{ min: number; max: number } | null>(null);
 
   // U-04: số khách < 1 → báo lỗi + khoá nút. Rule 1: vượt sức chứa chỉ cảnh báo, xác nhận khi lưu.
   const selectedCapacity = rooms.find(r => r.id === watchRoomId)?.capacity ?? null;
@@ -78,17 +81,35 @@ export function AddRoomModal({ open, groupId, defaultCheckIn, defaultCheckOut, o
     ? `Vượt sức chứa phòng (tối đa ${selectedCapacity} khách)`
     : null;
 
+  // Rule 3: gợi ý giá theo từng đêm [check_in, check_out) — điền giá đêm đầu, hiện min–max nếu khác nhau.
+  // Đã tự sửa ô giá thì không ghi đè. Lỗi RPC → để trống + toast cảnh báo, không chặn lưu.
   useEffect(() => {
-    if (!watchRoomId || !watchCheckIn) return;
-    supabase
-      .rpc('get_suggested_price', {
-        p_room_id: watchRoomId,
-        p_date:    watchCheckIn.format('YYYY-MM-DD'),
+    if (open) {
+      manualPriceRef.current = false;
+      setPriceRange(null);
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (!watchRoomId || !watchCheckIn || !watchCheckOut || !watchCheckOut.isAfter(watchCheckIn, 'day')) return;
+    if (manualPriceRef.current) return;
+    let cancelled = false;
+    fetchNightlySuggestedPrices(watchRoomId, watchCheckIn, watchCheckOut)
+      .then((suggestion) => {
+        if (cancelled || manualPriceRef.current) return;
+        setValue('price_per_night', suggestion?.first ?? 0);
+        setPriceRange(suggestion && suggestion.min !== suggestion.max ? { min: suggestion.min, max: suggestion.max } : null);
       })
-      .then(({ data }: { data: number | null }) => {
-        if (data && data > 0) setValue('price_per_night', data);
+      .catch(() => {
+        if (cancelled || manualPriceRef.current) return;
+        setValue('price_per_night', 0);
+        setPriceRange(null);
+        message.warning('Không lấy được giá gợi ý — vui lòng nhập giá tay');
       });
-  }, [watchRoomId, watchCheckIn, setValue]);
+    return () => {
+      cancelled = true;
+    };
+  }, [watchRoomId, watchCheckIn, watchCheckOut, setValue, message]);
 
   const submitRoom = (values: FormValues, note: string | undefined) => {
     addRoom(
@@ -222,6 +243,7 @@ export function AddRoomModal({ open, groupId, defaultCheckIn, defaultCheckOut, o
                 label="Giá/đêm (VND)"
                 validateStatus={errors.price_per_night ? 'error' : ''}
                 help={errors.price_per_night?.message}
+                extra={priceRange ? `Giá thay đổi theo đêm: ${formatMoney(priceRange.min)}–${formatMoney(priceRange.max)}` : undefined}
                 required
               >
                 <Controller
@@ -230,6 +252,11 @@ export function AddRoomModal({ open, groupId, defaultCheckIn, defaultCheckOut, o
                   render={({ field }) => (
                     <InputNumber
                       {...field}
+                      onChange={v => {
+                        // Người dùng tự sửa → không ghi đè khi đổi ngày/phòng
+                        manualPriceRef.current = true;
+                        field.onChange(v);
+                      }}
                       style={{ width: '100%' }}
                       formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
                       parser={v => Number(v?.replace(/,/g, '') ?? 0)}
