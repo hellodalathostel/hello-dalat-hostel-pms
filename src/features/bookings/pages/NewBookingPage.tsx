@@ -169,7 +169,8 @@ export default function NewBooking(): JSX.Element {
 
       fetchNightlySuggestedPrices(roomId, checkIn, checkOut)
         .then((suggestion) => {
-          if (cancelled) return
+          // Kết quả cũ (đã đổi ngày/phòng → cleanup) hoặc người dùng vừa sửa tay trong lúc chờ → bỏ qua
+          if (cancelled || manualPriceRef.current.has(fieldId)) return
           const price = suggestion?.first ?? 0
           suggestedRef.current.set(fieldId, { key, price })
           setValue(`bookings.${index}.price_per_night`, price, { shouldDirty: true })
@@ -179,7 +180,7 @@ export default function NewBooking(): JSX.Element {
           }))
         })
         .catch(() => {
-          if (cancelled) return
+          if (cancelled || manualPriceRef.current.has(fieldId)) return
           suggestedRef.current.set(fieldId, { key, price: 0 })
           setValue(`bookings.${index}.price_per_night`, 0, { shouldDirty: true })
           setPriceRanges((prevRanges) => ({ ...prevRanges, [fieldId]: null }))
