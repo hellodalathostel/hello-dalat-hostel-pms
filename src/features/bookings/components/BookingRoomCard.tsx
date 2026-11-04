@@ -29,6 +29,7 @@ import type {
 } from '@/features/bookings/hooks/useBookingDetail'
 import { useVoidBooking } from '@/features/bookings/hooks/useVoidBooking'
 import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
+import { isFutureCheckinIct } from '@/shared/utils/dateIct'
 import { BreakfastSection } from './BreakfastSection'
 import {
   STATUS_COLOR,
@@ -86,7 +87,7 @@ export function BookingRoomCard({
   const status = booking.status as BookingStatus
   const canCheckin = ACTION_STATUSES.canCheckin.includes(status)
   // Rule 2: chưa đến ngày check-in dự kiến → khoá nút (DB cũng chặn trong checkin_booking_txn)
-  const isFutureCheckin = dayjs(booking.check_in).isAfter(dayjs(), 'day')
+  const isFutureCheckin = isFutureCheckinIct(booking.check_in)
   const futureCheckinTip = isFutureCheckin
     ? `Chưa đến ngày check-in (dự kiến ${dayjs(booking.check_in).format('DD/MM/YYYY')}). Sửa ngày check-in trước nếu khách đến sớm.`
     : undefined

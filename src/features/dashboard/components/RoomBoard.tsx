@@ -15,6 +15,7 @@ import {
 } from '@/features/dashboard/utils/roomBoardState'
 import { useMarkRoomClean } from '@/features/housekeeping/hooks/useMarkRoomClean'
 import { formatMoney } from '@/shared/utils/format'
+import { isFutureCheckinIct } from '@/shared/utils/dateIct'
 import styles from './RoomBoard.module.css'
 
 interface RoomBoardProps {
@@ -173,8 +174,7 @@ export function RoomBoard({
               <span className={styles.action}>
                 {state === 'vacant' && (() => {
                   // Rule 2: booking chưa đến ngày check-in dự kiến → khoá "Nhận phòng" (DB cũng chặn)
-                  const isFutureCheckin =
-                    Boolean(room.booking_id) && Boolean(room.check_in) && dayjs(room.check_in).isAfter(dayjs(), 'day')
+                  const isFutureCheckin = Boolean(room.booking_id) && isFutureCheckinIct(room.check_in)
                   return (
                     <Tooltip
                       title={
