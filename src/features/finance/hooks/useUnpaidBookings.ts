@@ -25,6 +25,7 @@ async function fetchUnpaidBookings(): Promise<UnpaidGroup[]> {
       bookings!inner(check_out)
     `,
     )
+    .eq('is_deleted', false)
     .eq('bookings.is_deleted', false)
     .eq('bookings.status', 'checked-out')
 
