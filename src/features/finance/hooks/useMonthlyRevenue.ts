@@ -58,7 +58,8 @@ async function fetchMonthlyRevenue(month: dayjs.Dayjs): Promise<MonthlyRevenueSu
 
   const manual_revenue = (manualData ?? []).reduce((sum, r) => sum + (r.amount ?? 0), 0)
   const total_net = groups.reduce((sum, g) => sum + g.net_revenue, 0) + manual_revenue
-  const total_paid = groups.reduce((sum, g) => sum + g.paid, 0)
+  // Doanh thu thu tay (revenue_manual_log) là khoản đã thu tiền → tính vào đã thu
+  const total_paid = groups.reduce((sum, g) => sum + g.paid, 0) + manual_revenue
 
   return {
     groups,
