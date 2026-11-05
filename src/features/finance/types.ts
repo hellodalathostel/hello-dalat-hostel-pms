@@ -16,7 +16,7 @@ export interface MonthlyRevenueSummary {
   manual_revenue: number
   // computed client-side:
   total_net: number // SUM(net_revenue) + manual_revenue
-  total_paid: number // SUM(paid)
+  total_paid: number // SUM(paid) + manual_revenue
   total_debt: number // total_net - total_paid
   booking_count: number
 }
