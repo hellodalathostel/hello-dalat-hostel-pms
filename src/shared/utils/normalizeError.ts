@@ -53,7 +53,25 @@ function mapKnownRpcMessage(message: string): string {
   return message
 }
 
+const ROOM_OVERLAP_MESSAGE =
+  'Phòng vừa có booking khác trùng ngày. Hãy tải lại lịch phòng và chọn phòng/ngày khác.'
+
+// exclusion_violation (23P01) từ constraint no_overlapping_bookings_* khi 2 request đua nhau
+function isRoomOverlapViolation(error: unknown): boolean {
+  if (error === null || typeof error !== 'object') return false
+  const { code, message } = error as { code?: unknown; message?: unknown }
+  return code === '23P01' || (typeof message === 'string' && message.includes('no_overlapping_bookings'))
+}
+
 export function normalizeError(error: unknown): Error {
+  if (isRoomOverlapViolation(error)) {
+    if (error instanceof Error) {
+      error.message = ROOM_OVERLAP_MESSAGE
+      return error
+    }
+    return new Error(ROOM_OVERLAP_MESSAGE)
+  }
+
   if (error instanceof Error) {
     error.message = mapKnownRpcMessage(error.message)
     return error
