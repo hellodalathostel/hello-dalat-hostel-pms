@@ -195,6 +195,19 @@ export interface PaymentHistory {
 	updated_at: string
 }
 
+// Kết quả RPC record_payment_idempotent_txn (json). replayed=true: request_id đã ghi trước đó,
+// DB KHÔNG ghi lại mà trả kết quả lần đầu.
+export interface RecordPaymentIdempotentResult {
+	success: boolean
+	group_id: string
+	amount_recorded: number
+	surcharge_amount: number
+	total_paid: number
+	method: PaymentMethod
+	card_fee_applied: boolean
+	replayed: boolean
+}
+
 export interface Expense {
 	id: string
 	firebase_id: string | null

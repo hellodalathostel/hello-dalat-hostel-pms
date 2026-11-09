@@ -14,6 +14,7 @@ import { useDepositActions } from '@/features/bookings/hooks/useDepositActions'
 import { useServiceActions } from '@/features/bookings/hooks/useServiceActions'
 import { useDiscountActions } from '@/features/bookings/hooks/useDiscountActions'
 import { useVoidPayment } from '@/features/bookings/hooks/useVoidPayment'
+import { usePaymentRequestId } from '@/shared/hooks/usePaymentRequestId'
 import { formatMoney, formatDate, formatPaymentMethod, PAYMENT_METHOD_LABEL } from '@/shared/utils/format'
 
 const { Text } = Typography
@@ -64,6 +65,7 @@ type FolioPaymentRow = {
 export default function BookingFolioEditModal({ open, onClose, bookingId, groupId }: Props) {
   const { data: folio, isLoading } = useBookingFolio(bookingId)
   const { addDeposit } = useDepositActions()
+  const { getRequestId, rotateRequestId } = usePaymentRequestId()
   const { addService, deleteService } = useServiceActions()
   const { addDiscount, deleteDiscount } = useDiscountActions()
   const voidPaymentMutation = useVoidPayment()
@@ -99,14 +101,15 @@ export default function BookingFolioEditModal({ open, onClose, bookingId, groupI
     staleTime: 5 * 60 * 1000, // 5 phút — catalog ít thay đổi
   })
 
-  // Reset cả 3 form khi modal đóng
+  // Reset cả 3 form khi modal đóng (+ bỏ request_id thanh toán, lần mở sau dùng id mới)
   useEffect(() => {
     if (!open) {
       depositForm.resetFields()
       serviceForm.resetFields()
       discountForm.resetFields()
+      rotateRequestId()
     }
-  }, [open, depositForm, serviceForm, discountForm])
+  }, [open, depositForm, serviceForm, discountForm, rotateRequestId])
 
   const handleVoidPayment = async (paymentId: string) => {
     setPendingVoidPaymentId(paymentId)
@@ -127,16 +130,21 @@ export default function BookingFolioEditModal({ open, onClose, bookingId, groupI
   const handleDepositSubmit = async () => {
     try {
       const values = await depositForm.validateFields()
+      // Khoá idempotency = đúng bộ ba DB so sánh. Lỗi/retry giữ nguyên id; đổi số tiền/phương thức → id mới.
+      const requestId = getRequestId(`${groupId}|${values.amount}|${values.method}`)
       await addDeposit.mutateAsync({
         groupId,
         amount: values.amount,
         method: values.method,
         note: values.note,
         firstBookingId: bookingId,
+        requestId,
       })
+      // Ghi thành công (kể cả replayed) → id mới cho khoản sau
+      rotateRequestId()
       depositForm.resetFields()
     } catch {
-      // validateFields throw khi form invalid — lỗi mutation đã được hook xử lý
+      // validateFields throw khi form invalid — lỗi mutation đã được hook xử lý. KHÔNG rotate khi lỗi.
     }
   }
 

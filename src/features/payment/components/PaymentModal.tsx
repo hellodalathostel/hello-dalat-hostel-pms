@@ -7,6 +7,7 @@ import type { PaymentFormValues } from '@/lib/schemas'
 import { useRecordPayment } from '@/features/payment/hooks/usePayment'
 import type { DashboardRoom } from '@/types/dashboard'
 import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
+import { usePaymentRequestId } from '@/shared/hooks/usePaymentRequestId'
 import { formatMoney, PAYMENT_METHOD_LABEL } from '@/shared/utils/format'
 
 interface PaymentModalProps {
@@ -33,6 +34,7 @@ function getDefaultValues(room: DashboardRoom): PaymentFormValues {
 export function PaymentModal({ visible, room, onCancel }: PaymentModalProps): JSX.Element {
   const { notification } = useAppFeedback()
   const recordPaymentMutation = useRecordPayment()
+  const { getRequestId, rotateRequestId } = usePaymentRequestId()
 
   const {
     control,
@@ -62,6 +64,7 @@ export function PaymentModal({ visible, room, onCancel }: PaymentModalProps): JS
           : null
 
   const handleClose = () => {
+    rotateRequestId()
     reset(getDefaultValues(room))
     onCancel()
   }
@@ -84,6 +87,10 @@ export function PaymentModal({ visible, room, onCancel }: PaymentModalProps): JS
       return
     }
 
+    // Khoá idempotency = đúng bộ ba DB so sánh (amount làm tròn như hook gửi lên).
+    // Lỗi/retry giữ nguyên id; đổi số tiền/phương thức → id mới.
+    const requestId = getRequestId(`${room.group_id}|${Math.round(values.amount)}|${values.method}`)
+
     try {
       await recordPaymentMutation.mutateAsync({
         groupId: room.group_id,
@@ -92,12 +99,15 @@ export function PaymentModal({ visible, room, onCancel }: PaymentModalProps): JS
         amount: values.amount,
         method: values.method,
         note: values.note,
+        requestId,
       })
 
+      // Ghi thành công (kể cả replayed) → id mới cho khoản sau
+      rotateRequestId()
       reset(getDefaultValues(room))
       onCancel()
     } catch {
-      // Lỗi mutation đã được xử lý trong hook (onError toast).
+      // Lỗi mutation đã được xử lý trong hook (onError toast). KHÔNG rotate — giữ id để retry an toàn.
     }
   }
 

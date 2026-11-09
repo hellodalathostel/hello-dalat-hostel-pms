@@ -13,11 +13,14 @@ import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
 import { normalizeError } from '@/shared/utils/normalizeError'
 import { useRefreshBookingData } from '@/shared/hooks/useRefreshBookingData'
 import type { PaymentFormValues } from '@/lib/schemas'
+import type { RecordPaymentIdempotentResult } from '@/types/database'
 
 interface RecordPaymentPayload extends PaymentFormValues {
   groupId: string
   // undefined khi method !== 'card' — RPC nhận null, không bắt buộc
   firstBookingId?: string
+  // Sinh ở component (usePaymentRequestId) — KHÔNG sinh trong mutationFn để retry giữ nguyên id
+  requestId: string
 }
 
 // Dịch mã lỗi RPC sang thông báo tiếng Việt rõ ràng cho staff.
@@ -57,9 +60,10 @@ export function useRecordPayment() {
 
   return useMutation({
     mutationKey: ['record-payment'],
-    mutationFn: async (payload: RecordPaymentPayload) => {
+    mutationFn: async (payload: RecordPaymentPayload): Promise<RecordPaymentIdempotentResult> => {
       try {
-        const { data, error } = await supabase.rpc('record_payment_txn', {
+        const { data, error } = await supabase.rpc('record_payment_idempotent_txn', {
+          p_request_id: payload.requestId,
           p_group_id: payload.groupId,
           // Làm tròn tránh float gây lỗi Postgres integer
           p_amount: Math.round(payload.amount),
@@ -73,13 +77,17 @@ export function useRecordPayment() {
           throw error
         }
 
-        return data
+        return data as RecordPaymentIdempotentResult
       } catch (error) {
         throw normalizeError(error)
       }
     },
-    onSuccess: async () => {
-      message.success('Ghi nhận thanh toán thành công')
+    onSuccess: async (data) => {
+      if (data?.replayed === true) {
+        message.info('Khoản thanh toán này đã được ghi trước đó, hệ thống không ghi lại lần nữa.')
+      } else {
+        message.success('Ghi nhận thanh toán thành công')
+      }
       // Tải lại danh sách + drawer + folio + dashboard (B-02)
       await refreshBookingData()
     },
