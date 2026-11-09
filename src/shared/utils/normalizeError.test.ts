@@ -27,3 +27,17 @@ describe('normalizeError — exclusion_violation trùng phòng', () => {
     )
   })
 })
+
+describe('normalizeError — record_payment_idempotent_txn', () => {
+  it('REQUEST_ID_REUSED (P0017) → câu tiếng Việt', () => {
+    expect(normalizeError({ code: 'P0017', message: 'REQUEST_ID_REUSED: request_id đã dùng' }).message).toBe(
+      'Mã giao dịch thanh toán đã dùng cho một khoản khác. Hãy đóng cửa sổ, mở lại rồi thử lại.',
+    )
+  })
+
+  it('MISSING_REQUEST_ID (P0016) → câu tiếng Việt', () => {
+    expect(normalizeError(new Error('MISSING_REQUEST_ID')).message).toBe(
+      'Thiếu mã giao dịch thanh toán. Hãy tải lại trang rồi thử lại.',
+    )
+  })
+})

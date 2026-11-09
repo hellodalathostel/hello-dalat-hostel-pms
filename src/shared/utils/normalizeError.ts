@@ -16,6 +16,16 @@ function mapKnownRpcMessage(message: string): string {
     return 'Số tiền vượt quá số dư còn lại của booking.'
   }
 
+  // record_payment_idempotent_txn: cùng request_id nhưng khác group/số tiền/method (P0017)
+  if (message.includes('REQUEST_ID_REUSED')) {
+    return 'Mã giao dịch thanh toán đã dùng cho một khoản khác. Hãy đóng cửa sổ, mở lại rồi thử lại.'
+  }
+
+  // record_payment_idempotent_txn: thiếu p_request_id (P0016)
+  if (message.includes('MISSING_REQUEST_ID')) {
+    return 'Thiếu mã giao dịch thanh toán. Hãy tải lại trang rồi thử lại.'
+  }
+
   if (message.includes('invalid input value for enum payment_method')) {
     return 'Phương thức thanh toán không hợp lệ.'
   }
