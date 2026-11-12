@@ -4,6 +4,7 @@ import { supabase } from '@/api/supabase'
 import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
 import { parseCheckinExcel, type GuestImportRow } from '../utils/parseCheckinExcel'
 import { translateCheckinError } from './useCheckIn'
+import { computeOverCapacityGroups, type OverCapacityGroup } from '../utils/importOverCapacity'
 
 type ImportStatus = 'success' | 'no_booking' | 'error'
 
@@ -65,6 +66,36 @@ export function useCheckinImport() {
   const [processing, setProcessing] = useState(false)
   const [rows, setRows] = useState<GuestImportRow[]>([])
   const [results, setResults] = useState<ImportRowResult[]>([])
+  const [overCapacityGroups, setOverCapacityGroups] = useState<OverCapacityGroup[]>([])
+
+  // Cảnh báo (không chặn): số khách trong file vượt sức chứa phòng.
+  // Lỗi tra cứu → bỏ qua cảnh báo, DB và luồng import vẫn chạy bình thường.
+  async function detectOverCapacity(parsedRows: GuestImportRow[]): Promise<OverCapacityGroup[]> {
+    const validRows = parsedRows.filter((row) => getRowValidationMessage(row) === null)
+    const roomIds = [
+      ...new Set(
+        validRows
+          .map((row) => row.roomId)
+          .filter((id): id is string => typeof id === 'string' && id !== ''),
+      ),
+    ]
+
+    if (roomIds.length === 0) return []
+
+    const { data, error } = await supabase.from('rooms').select('id, capacity').in('id', roomIds)
+
+    if (error || !data) {
+      message.warning('Không kiểm tra được sức chứa phòng, bỏ qua cảnh báo vượt sức chứa.')
+      return []
+    }
+
+    const capacityByRoom: Record<string, number> = {}
+    for (const room of data) {
+      capacityByRoom[room.id] = room.capacity
+    }
+
+    return computeOverCapacityGroups(validRows, capacityByRoom)
+  }
 
   async function parseFile(file: File): Promise<GuestImportRow[]> {
     setParsing(true)
@@ -73,10 +104,12 @@ export function useCheckinImport() {
       const parsedRows = await parseCheckinExcel(file)
       setRows(parsedRows)
       setResults([])
+      setOverCapacityGroups(await detectOverCapacity(parsedRows))
       return parsedRows
     } catch (error) {
       setRows([])
       setResults([])
+      setOverCapacityGroups([])
       throw error
     } finally {
       setParsing(false)
@@ -197,6 +230,7 @@ export function useCheckinImport() {
   function reset() {
     setRows([])
     setResults([])
+    setOverCapacityGroups([])
   }
 
   return {
@@ -204,6 +238,7 @@ export function useCheckinImport() {
     processing,
     rows,
     results,
+    overCapacityGroups,
     parseFile,
     runImport,
     reset,

@@ -19,6 +19,7 @@ import {
 } from '@ant-design/icons'
 import type { UploadFile } from 'antd'
 import { useCheckinImport, type ImportRowResult } from '../hooks/useCheckinImport'
+import type { GuestImportRow } from '../utils/parseCheckinExcel'
 import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
 
 const { Dragger } = Upload
@@ -33,12 +34,13 @@ interface Props {
 type Step = 'upload' | 'preview' | 'result'
 
 export function CheckinImportModal({ open, onClose, onSuccess }: Props) {
-  const { message } = useAppFeedback()
+  const { message, modal } = useAppFeedback()
   const [step, setStep] = useState<Step>('upload')
   const [fileList, setFileList] = useState<UploadFile[]>([])
   const [parseError, setParseError] = useState<string | null>(null)
 
-  const { parsing, processing, rows, results, parseFile, runImport, reset } = useCheckinImport()
+  const { parsing, processing, rows, results, overCapacityGroups, parseFile, runImport, reset } =
+    useCheckinImport()
 
   function handleClose() {
     setStep('upload')
@@ -70,10 +72,58 @@ export function CheckinImportModal({ open, onClose, onSuccess }: Props) {
     }
   }
 
+  const overCapacityKeys = new Set(
+    overCapacityGroups.map((group) => `${group.roomId}__${group.checkInDate}`),
+  )
+
+  const overCapacityLines = overCapacityGroups.map(
+    (group) =>
+      `Phòng ${group.roomId} (ngày đến ${group.checkInDate}): ${group.guests} khách, sức chứa ${group.capacity}`,
+  )
+
+  function runImportWithFeedback() {
+    return handleImport().catch((error: Error) => {
+      message.error(`Import thất bại: ${error.message}`)
+    })
+  }
+
+  // Vượt sức chứa: cảnh báo + xác nhận rồi vẫn cho check-in (quy tắc 29/10/2026).
+  function handleImportClick() {
+    if (overCapacityGroups.length === 0) {
+      void runImportWithFeedback()
+      return
+    }
+
+    modal.confirm({
+      title: 'Có phòng vượt sức chứa',
+      content: (
+        <div>
+          {overCapacityLines.map((line) => (
+            <div key={line}>{line}</div>
+          ))}
+          <div style={{ marginTop: 8 }}>Vẫn thực hiện check-in?</div>
+        </div>
+      ),
+      okText: 'Vẫn check-in',
+      cancelText: 'Xem lại',
+      onOk: runImportWithFeedback,
+    })
+  }
+
   const previewColumns = [
     { title: '#', dataIndex: 'rowIndex', width: 50 },
     { title: 'Họ tên', dataIndex: 'fullName', ellipsis: true },
-    { title: 'Phòng', dataIndex: 'roomId', width: 70 },
+    {
+      title: 'Phòng',
+      dataIndex: 'roomId',
+      width: 90,
+      render: (value: string, row: GuestImportRow) =>
+        overCapacityKeys.has(`${row.roomId}__${row.checkInDate}`) ? (
+          <Tag icon={<WarningOutlined />} color="warning">{value}</Tag>
+        ) : (
+          value
+        ),
+    },
     {
       title: 'Ngày đến',
       dataIndex: 'checkInDate',
@@ -141,11 +191,7 @@ export function CheckinImportModal({ open, onClose, onSuccess }: Props) {
               type="primary"
               icon={<ArrowRightOutlined />}
               loading={processing}
-              onClick={() => {
-                handleImport().catch((error: Error) => {
-                  message.error(`Import thất bại: ${error.message}`)
-                })
-              }}
+              onClick={handleImportClick}
             >
               Thực hiện check-in ({rows.length} khách)
             </Button>
@@ -207,6 +253,17 @@ export function CheckinImportModal({ open, onClose, onSuccess }: Props) {
 
       {step === 'preview' && (
         <>
+          {overCapacityGroups.length > 0 && (
+            <Alert
+              type="warning"
+              showIcon
+              style={{ marginBottom: 16 }}
+              message="Có phòng vượt sức chứa (chỉ cảnh báo, vẫn check-in được sau khi xác nhận)"
+              description={overCapacityLines.map((line) => (
+                <div key={line}>{line}</div>
+              ))}
+            />
+          )}
           <Alert
             type="info"
             message={`Đọc được ${rows.length} khách. Kiểm tra trước khi check-in.`}
