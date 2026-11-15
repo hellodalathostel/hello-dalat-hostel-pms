@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/api/supabase'
 import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
@@ -72,6 +72,7 @@ export function useCheckinImport() {
   const [rows, setRows] = useState<GuestImportRow[]>([])
   const [results, setResults] = useState<ImportRowResult[]>([])
   const [overCapacityGroups, setOverCapacityGroups] = useState<OverCapacityGroup[]>([])
+  const parseIdRef = useRef(0)
 
   // Cảnh báo (không chặn): số khách trong file vượt sức chứa phòng.
   // Lỗi tra cứu → bỏ qua cảnh báo, DB và luồng import vẫn chạy bình thường.
@@ -139,19 +140,28 @@ export function useCheckinImport() {
   async function parseFile(file: File): Promise<GuestImportRow[]> {
     setParsing(true)
 
+    // Chọn file mới khi file cũ còn đang parse → bỏ kết quả của lần parse cũ,
+    // để rows và cảnh báo luôn thuộc cùng một file.
+    const parseId = ++parseIdRef.current
+
     try {
       const parsedRows = await parseCheckinExcel(file)
+      const groups = await detectOverCapacity(parsedRows)
+      if (parseId !== parseIdRef.current) return parsedRows
+
       setRows(parsedRows)
       setResults([])
-      setOverCapacityGroups(await detectOverCapacity(parsedRows))
+      setOverCapacityGroups(groups)
       return parsedRows
     } catch (error) {
-      setRows([])
-      setResults([])
-      setOverCapacityGroups([])
+      if (parseId === parseIdRef.current) {
+        setRows([])
+        setResults([])
+        setOverCapacityGroups([])
+      }
       throw error
     } finally {
-      setParsing(false)
+      if (parseId === parseIdRef.current) setParsing(false)
     }
   }
 
@@ -270,6 +280,9 @@ export function useCheckinImport() {
     setRows([])
     setResults([])
     setOverCapacityGroups([])
+    // Huỷ kết quả của lần parse đang chạy (nếu có).
+    parseIdRef.current += 1
+    setParsing(false)
   }
 
   return {
