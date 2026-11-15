@@ -28,6 +28,23 @@ describe('computeOverCapacityGroups', () => {
     expect(computeOverCapacityGroups([row('999'), row('999')], capacities)).toEqual([])
   })
 
+  it('cộng khách đã có sẵn trong booking (import nhiều đợt)', () => {
+    const rows = [{ ...row('103'), documentType: 'CCCD' as const, documentNumber: 'C' }]
+    const existing = { '103__2026-11-12': ['CCCD|A', 'CCCD|B'] }
+    expect(computeOverCapacityGroups(rows, capacities, existing)).toEqual([
+      { roomId: '103', checkInDate: '2026-11-12', guests: 3, capacity: 2 },
+    ])
+  })
+
+  it('không đếm trùng khách import lại đã có trong booking', () => {
+    const rows = [
+      { ...row('103'), documentType: 'CCCD' as const, documentNumber: 'A' },
+      { ...row('103'), documentType: 'CCCD' as const, documentNumber: 'B' },
+    ]
+    const existing = { '103__2026-11-12': ['CCCD|A', 'CCCD|B'] }
+    expect(computeOverCapacityGroups(rows, capacities, existing)).toEqual([])
+  })
+
   it('chỉ trả về nhóm vượt, bỏ nhóm đủ chỗ', () => {
     const rows = [row('101'), row('101'), row('102'), row('102')]
     expect(computeOverCapacityGroups(rows, capacities)).toEqual([

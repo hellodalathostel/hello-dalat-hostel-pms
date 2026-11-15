@@ -4,7 +4,12 @@ import { supabase } from '@/api/supabase'
 import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
 import { parseCheckinExcel, type GuestImportRow } from '../utils/parseCheckinExcel'
 import { translateCheckinError } from './useCheckIn'
-import { computeOverCapacityGroups, type OverCapacityGroup } from '../utils/importOverCapacity'
+import {
+  computeOverCapacityGroups,
+  getGuestDocumentKey,
+  getImportGroupKey,
+  type OverCapacityGroup,
+} from '../utils/importOverCapacity'
 
 type ImportStatus = 'success' | 'no_booking' | 'error'
 
@@ -94,7 +99,41 @@ export function useCheckinImport() {
       capacityByRoom[room.id] = room.capacity
     }
 
-    return computeOverCapacityGroups(validRows, capacityByRoom)
+    // Khách đã gắn sẵn vào booking đích (check-in nhiều đợt). Chọn booking giống runImport:
+    // cùng phòng + ngày đến, status booked/checked-in, id nhỏ nhất.
+    const checkInDates = [...new Set(validRows.map((row) => row.checkInDate))]
+    const { data: bookings, error: bookingsError } = await supabase
+      .from('bookings')
+      .select('id, room_id, check_in, booking_guests ( customers ( document_type, document_number ) )')
+      .in('room_id', roomIds)
+      .in('check_in', checkInDates)
+      .in('status', ['booked', 'checked-in'])
+      .order('id', { ascending: true })
+
+    if (bookingsError) {
+      message.warning('Không kiểm tra được sức chứa phòng, bỏ qua cảnh báo vượt sức chứa.')
+      return []
+    }
+
+    const existingGuestKeysByGroup: Record<string, string[]> = {}
+    for (const booking of bookings ?? []) {
+      const groupKey = getImportGroupKey(booking.room_id, booking.check_in)
+      if (existingGuestKeysByGroup[groupKey]) continue
+
+      const rawGuests: Array<{ customers?: unknown }> = Array.isArray(booking.booking_guests)
+        ? booking.booking_guests
+        : []
+      existingGuestKeysByGroup[groupKey] = rawGuests.flatMap((guest) => {
+        const customer = (Array.isArray(guest.customers) ? guest.customers[0] : guest.customers) as
+          | { document_type?: string | null; document_number?: string | null }
+          | null
+          | undefined
+        const key = getGuestDocumentKey(customer?.document_type, customer?.document_number)
+        return key ? [key] : []
+      })
+    }
+
+    return computeOverCapacityGroups(validRows, capacityByRoom, existingGuestKeysByGroup)
   }
 
   async function parseFile(file: File): Promise<GuestImportRow[]> {
