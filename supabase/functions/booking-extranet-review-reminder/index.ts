@@ -101,9 +101,32 @@ function buildMessage(groups: GroupRow[]): string {
   return msg.trim();
 }
 
+// Telegram gioi han 4096 ky tu/tin -> cat theo ranh gioi dong, moi phan <= 4000.
+// Moi dong trong buildMessage tu dong the HTML cua no nen cat theo dong khong lam vo the.
+const MAX_CHUNK = 4000;
+
+function splitByLines(text: string): string[] {
+  const chunks: string[] = [];
+  let current = "";
+  for (const line of text.split("\n")) {
+    const candidate = current ? `${current}\n${line}` : line;
+    if (candidate.length > MAX_CHUNK && current) {
+      chunks.push(current);
+      current = line;
+    } else {
+      current = candidate;
+    }
+  }
+  if (current.trim()) chunks.push(current);
+  return chunks;
+}
+
 async function sendTelegramMessage(text: string): Promise<boolean> {
   try {
-    await sendReport(text, { parseMode: "HTML" });
+    // Gui tuan tu de giu thu tu; mot phan that bai = ca lan gui that bai
+    for (const chunk of splitByLines(text)) {
+      await sendReport(chunk, { parseMode: "HTML" });
+    }
     return true;
   } catch (err) {
     console.error("Telegram sendMessage failed:", err instanceof Error ? err.message : String(err));
@@ -153,6 +176,15 @@ Deno.serve(async (req) => {
       missing_ota_number_count: groups.filter((g) => !g.ota_booking_number).length,
       telegram_sent: sent,
     };
+
+    // Gui Telegram that bai -> khong duoc bao thanh cong, de ops-guardian thay loi
+    if (!sent) {
+      await reportRun("error", Date.now() - startedAt, detail, "Telegram sendMessage failed");
+      return new Response(JSON.stringify({ ok: false, ...detail }, null, 2), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
 
     await reportRun("ok", Date.now() - startedAt, detail);
     return new Response(JSON.stringify({ ok: true, ...detail }, null, 2), {
