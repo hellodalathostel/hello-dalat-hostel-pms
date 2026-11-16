@@ -33,11 +33,18 @@ export async function sendReport(
   if (options.parseMode) body.parse_mode = options.parseMode;
   if (options.disableWebPagePreview) body.disable_web_page_preview = true;
 
-  const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  let res: Response;
+  try {
+    res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  } catch (err) {
+    // Loi mang cua Deno chua nguyen URL (kem token) -> che token truoc khi ném lên
+    const raw = err instanceof Error ? err.message : String(err);
+    throw new Error(`Telegram fetch that bai: ${raw.replaceAll(token, "***")}`);
+  }
 
   if (!res.ok) {
     throw new Error(`Telegram sendMessage that bai: ${res.status} ${await res.text()}`);
