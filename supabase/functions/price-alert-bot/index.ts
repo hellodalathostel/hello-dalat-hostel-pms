@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { reportRun } from "../_shared/heartbeat.ts";
+import { sendReport } from "../_shared/telegram-report.ts";
 
 const JOB = "price-alert-bot";
 
@@ -65,8 +66,6 @@ Deno.serve(async (_req) => {
 	try {
 		const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 		const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-		const botToken = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
-		const chatId = Deno.env.get("TELEGRAM_CHAT_ID")!;
 
 		const supabase = createClient(supabaseUrl, serviceKey);
 
@@ -177,15 +176,7 @@ Deno.serve(async (_req) => {
 		}
 		msg += "Vao PMS cap nhat gia neu can.";
 
-		const tgRes = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({
-				chat_id: chatId,
-				text: msg,
-			}),
-		});
-		if (!tgRes.ok) throw new Error(`Telegram error: ${await tgRes.text()}`);
+		await sendReport(msg);
 
 		await reportRun(JOB, "ok", t0, {
 			alert_count: alerts.length,

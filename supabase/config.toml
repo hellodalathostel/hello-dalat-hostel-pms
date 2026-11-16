@@ -76,3 +76,15 @@ verify_jwt = false
 enabled = true
 verify_jwt = true
 entrypoint = "./functions/deposit-sender/index.ts"
+
+[functions.ops-guardian]
+verify_jwt = true
+
+[functions.weekly-review-reminder]
+verify_jwt = true
+
+[functions.price-alert-bot]
+verify_jwt = false
+
+[functions.booking-extranet-review-reminder]
+verify_jwt = false

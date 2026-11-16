@@ -8,13 +8,12 @@
 // hom nay/mai. Extranet khong co API public cho hostel nho -> khong the
 // tu dong hoa hoan toan, chi co the nhac + chuan bi du lieu san.
 
-const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
-const TELEGRAM_CHAT_ID = Deno.env.get("TELEGRAM_CHAT_ID")!;
 const CRON_SECRET = Deno.env.get("CRON_SECRET") ?? "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { sendReport } from "../_shared/telegram-report.ts";
 
 const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
@@ -103,15 +102,13 @@ function buildMessage(groups: GroupRow[]): string {
 }
 
 async function sendTelegramMessage(text: string): Promise<boolean> {
-  const res = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text, parse_mode: "HTML" }),
-  });
-  if (!res.ok) {
-    console.error("Telegram sendMessage failed:", res.status, await res.text());
+  try {
+    await sendReport(text, { parseMode: "HTML" });
+    return true;
+  } catch (err) {
+    console.error("Telegram sendMessage failed:", err instanceof Error ? err.message : String(err));
+    return false;
   }
-  return res.ok;
 }
 
 async function reportRun(status: "ok" | "error", durationMs: number, detail: Record<string, unknown>, errorMessage?: string) {

@@ -15,11 +15,10 @@
 
 import "@supabase/functions-js/edge-runtime.d.ts";
 import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2";
+import { sendReport } from "../_shared/telegram-report.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
-const TELEGRAM_CHAT_ID = Deno.env.get("TELEGRAM_CHAT_ID")!;
 
 const JOB_NAME = "ops-guardian";
 
@@ -133,25 +132,7 @@ function formatVNTime(iso: string | null): string {
 }
 
 async function sendTelegram(text: string): Promise<void> {
-  const res = await fetch(
-    `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: TELEGRAM_CHAT_ID,
-        text,
-        parse_mode: "HTML",
-        disable_web_page_preview: true,
-      }),
-    },
-  );
-  // Bắt buộc check res.ok — Telegram 400 bị nuốt lặng lẽ nếu không check.
-  if (!res.ok) {
-    const body = await res.text();
-    console.error(`[telegram] ${res.status}: ${body}`);
-    throw new Error(`Telegram ${res.status}`);
-  }
+  await sendReport(text, { parseMode: "HTML", disableWebPagePreview: true });
 }
 
 const ISSUE_LABEL: Record<string, string> = {
