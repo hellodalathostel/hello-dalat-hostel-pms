@@ -35,7 +35,7 @@ function formatDateVN(iso: string): string {
 }
 
 async function getActiveBookingComGroups(): Promise<GroupRow[]> {
-  const today = new Date().toISOString().split("T")[0];
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Ho_Chi_Minh" });
 
   // Lay tat ca bookings active (chua checkout, chua huy) cua nguon Booking.com,
   // gop theo group, lay check_in/check_out nho nhat/lon nhat cua group do.

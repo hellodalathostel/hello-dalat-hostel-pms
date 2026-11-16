@@ -6,10 +6,11 @@ Deno.serve(async (req) => {
   const t0 = performance.now();
 
   // Ca dac biet: 1 function phuc vu 2 dong registry (tax-reminder-15 / -20).
-  // Fallback getUTCDate() de chay tay khong kem body van ghi dung dong —
+  // Fallback ngay hien tai (gio VN) de chay tay khong kem body van ghi dung dong —
   // khong co fallback thi mot trong hai dong nam never_run vinh vien.
   const body = await req.json().catch(() => ({}));
-  const day: number = Number(body?.day) || new Date().getUTCDate();
+  const day: number = Number(body?.day) ||
+    Number(new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Ho_Chi_Minh" }).slice(8, 10));
   const JOB = day >= 20 ? "tax-reminder-20" : "tax-reminder-15";
 
   try {
