@@ -9,8 +9,8 @@ Deno.serve(async () => {
   try {
     const text =
       "🔔 Thứ Hai — đến giờ GRAPH 2 (Weekly Review).\n" +
-      "Gõ với Claude: \"chạy weekly review\" để chạy 4 query Brain song song + số liặu tuần, " +
-      "rối duyệt trim/route/outcome như thường lệ.";
+      "Gõ với Claude: \"chạy weekly review\" để chạy 4 query Brain song song + số liệu tuần, " +
+      "rồi duyệt trim/route/outcome như thường lệ.";
 
     await sendReport(text);
 
