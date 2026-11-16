@@ -1,4 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { reportRun } from "../_shared/heartbeat.ts";
+
+const JOB = "price-alert-bot";
 
 interface Room {
 	id: string;
@@ -26,6 +29,16 @@ interface PriceAlert {
 const SCAN_DAYS = 7;
 const ALERT_THRESHOLD_PCT = 10;
 
+// get_suggested_price() tra ve Net (tu 18/08/2026, migration
+// get_suggested_price_returns_net). base_price va price_per_night van
+// la Gross (Standard Rate = Net / NET_FACTOR). Quy doi ve cung mot don
+// vi (Net) truoc khi so sanh — xem brain.knowledge.cong_thuc_standard_rate.
+const NET_FACTOR = 0.5814;
+
+function toNet(gross: number): number {
+	return gross * NET_FACTOR;
+}
+
 function fmtVND(n: number): string {
 	return `${(n / 1000).toFixed(0)}k`;
 }
@@ -46,7 +59,9 @@ function getDateVN(offsetDays: number): string {
 	return vnDate.toISOString().slice(0, 10);
 }
 
-Deno.serve(async () => {
+Deno.serve(async (_req) => {
+	const t0 = performance.now();
+
 	try {
 		const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 		const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -90,6 +105,7 @@ Deno.serve(async () => {
 				);
 				if (priceErr || suggested === null) continue;
 
+				// suggestedPrice la Net (tra thang tu Brain, xem NET_FACTOR o tren)
 				const suggestedPrice = suggested as number;
 
 				const coveringBooking = (bookingsByRoom[room.id] ?? []).find(
@@ -97,22 +113,24 @@ Deno.serve(async () => {
 				);
 
 				if (coveringBooking) {
-					const currentPrice = coveringBooking.price_per_night;
-					const diffPct = ((suggestedPrice - currentPrice) / currentPrice) * 100;
+					// price_per_night la Gross (khach tra) -> quy doi ve Net de so
+					const currentPriceNet = toNet(coveringBooking.price_per_night);
+					const diffPct = ((suggestedPrice - currentPriceNet) / currentPriceNet) * 100;
 					if (diffPct >= ALERT_THRESHOLD_PCT) {
 						alerts.push({
 							roomId: room.id,
 							roomName: room.name,
 							date: dateStr,
-							currentPrice,
+							currentPrice: currentPriceNet,
 							suggestedPrice,
 							diffPct,
 							hasBooking: true,
 						});
 					}
 				} else {
-					const basePrice = room.base_price;
-					const diffPct = ((suggestedPrice - basePrice) / basePrice) * 100;
+					// base_price la Gross (Standard Rate niem yet) -> quy doi ve Net
+					const basePriceNet = toNet(room.base_price);
+					const diffPct = ((suggestedPrice - basePriceNet) / basePriceNet) * 100;
 					if (diffPct >= ALERT_THRESHOLD_PCT) {
 						alerts.push({
 							roomId: room.id,
@@ -129,6 +147,7 @@ Deno.serve(async () => {
 		}
 
 		if (alerts.length === 0) {
+			await reportRun(JOB, "ok", t0, { alert_count: 0, skipped_reason: "no_price_gap" });
 			return new Response(
 				JSON.stringify({ sent: false, reason: "Khong co chenh lech gia dang ke" }),
 				{ headers: { "Content-Type": "application/json" } },
@@ -141,17 +160,17 @@ Deno.serve(async () => {
 			byDate[a.date].push(a);
 		}
 
-		let msg = `Canh bao gia - ${SCAN_DAYS} ngay toi\n`;
+		let msg = `Canh bao gia (Net) - ${SCAN_DAYS} ngay toi\n`;
 		msg += `(${fmtDate(scanStart)} -> ${fmtDate(scanEnd)})\n\n`;
 
 		for (const [date, dayAlerts] of Object.entries(byDate).sort()) {
 			msg += `${fmtDate(date)}\n`;
 			for (const a of dayAlerts) {
 				if (a.hasBooking) {
-					msg += `  - P${a.roomId} ${a.roomName}: booking ${fmtVND(a.currentPrice)} -> de xuat ${fmtVND(a.suggestedPrice)} (+${a.diffPct.toFixed(0)}%)\n`;
+					msg += `  - P${a.roomId} ${a.roomName}: booking net ${fmtVND(a.currentPrice)} -> de xuat net ${fmtVND(a.suggestedPrice)} (+${a.diffPct.toFixed(0)}%)\n`;
 				} else {
-					const base = a.suggestedPrice / (1 + a.diffPct / 100);
-					msg += `  - P${a.roomId} ${a.roomName}: trong - de xuat ${fmtVND(a.suggestedPrice)} (base ${fmtVND(base)})\n`;
+					const baseNet = a.suggestedPrice / (1 + a.diffPct / 100);
+					msg += `  - P${a.roomId} ${a.roomName}: trong - de xuat net ${fmtVND(a.suggestedPrice)} (base net ${fmtVND(baseNet)})\n`;
 				}
 			}
 			msg += "\n";
@@ -168,6 +187,11 @@ Deno.serve(async () => {
 		});
 		if (!tgRes.ok) throw new Error(`Telegram error: ${await tgRes.text()}`);
 
+		await reportRun(JOB, "ok", t0, {
+			alert_count: alerts.length,
+			dates_flagged: Object.keys(byDate).length,
+		});
+
 		return new Response(
 			JSON.stringify({
 				sent: true,
@@ -177,8 +201,10 @@ Deno.serve(async () => {
 			{ headers: { "Content-Type": "application/json" } },
 		);
 	} catch (err) {
-		console.error("price-alert-bot error:", err);
-		return new Response(JSON.stringify({ error: String(err) }), {
+		const msg = err instanceof Error ? err.message : String(err);
+		console.error(`${JOB} error:`, msg);
+		await reportRun(JOB, "error", t0, null, msg);
+		return new Response(JSON.stringify({ error: msg }), {
 			status: 500,
 			headers: { "Content-Type": "application/json" },
 		});
