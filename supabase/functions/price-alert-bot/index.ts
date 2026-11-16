@@ -75,6 +75,7 @@ Deno.serve(async (_req) => {
 		const { data: rooms, error: roomErr } = await supabase
 			.from("rooms")
 			.select("id, name, base_price")
+			.eq("is_active", true)
 			.order("id");
 		if (roomErr) throw roomErr;
 
@@ -82,6 +83,7 @@ Deno.serve(async (_req) => {
 			.from("bookings")
 			.select("room_id, price_per_night, check_in, check_out")
 			.in("status", ["booked", "checked-in"])
+			.eq("is_deleted", false)
 			.lt("check_in", scanEnd)
 			.gt("check_out", scanStart);
 		if (bookErr) throw bookErr;
@@ -94,14 +96,25 @@ Deno.serve(async (_req) => {
 
 		const alerts: PriceAlert[] = [];
 
+		// Goi get_suggested_price song song cho moi cap (ngay, phong) thay vi tuan tu (N+1).
+		// Mang ket qua giu dung thu tu ngay -> phong cua vong lap ben duoi.
+		const pricePromises = [];
+		for (let offset = 1; offset <= SCAN_DAYS; offset++) {
+			const dateStr = getDateVN(offset);
+			for (const room of (rooms as Room[])) {
+				pricePromises.push(
+					supabase.rpc("get_suggested_price", { p_room_id: room.id, p_date: dateStr }),
+				);
+			}
+		}
+		const priceResults = await Promise.all(pricePromises);
+		let priceIdx = 0;
+
 		for (let offset = 1; offset <= SCAN_DAYS; offset++) {
 			const dateStr = getDateVN(offset);
 
 			for (const room of (rooms as Room[])) {
-				const { data: suggested, error: priceErr } = await supabase.rpc(
-					"get_suggested_price",
-					{ p_room_id: room.id, p_date: dateStr },
-				);
+				const { data: suggested, error: priceErr } = priceResults[priceIdx++];
 				if (priceErr || suggested === null) continue;
 
 				// suggestedPrice la Net (tra thang tu Brain, xem NET_FACTOR o tren)
