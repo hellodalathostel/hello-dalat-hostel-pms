@@ -155,6 +155,26 @@ serve(async (req) => {
     `?amount=${deposit}` +
     `&accountName=${encodeURIComponent(VIETQR_NAME)}&addInfo=${addInfo}`;
 
+  // Thong bao Telegram (khong chan response cho khach neu loi)
+  const lines = [
+    "🔔 <b>Yêu cầu đặt phòng mới</b> (landing page)",
+    "",
+    `Khách: ${escapeHtml(name!.trim())}`,
+    `SĐT: ${escapeHtml(phone!.trim())}`,
+  ];
+  if (email?.trim()) lines.push(`Email: ${escapeHtml(email.trim())}`);
+  lines.push(
+    `Phòng: ${escapeHtml(room.id)} (${escapeHtml(room.name)})`,
+    `Ngày: ${fmtDate(check_in!)} → ${fmtDate(check_out!)} (${nights} đêm)`,
+    `Cọc gợi ý: ${deposit > 0 ? fmtVnd(deposit) : "chưa có giá"}`,
+  );
+  if (has_conflict) {
+    lines.push("", "⚠️ Phòng này đã có booking trùng ngày, kiểm tra trước khi xác nhận");
+  }
+  if (note?.trim()) lines.push("", `Ghi chú: ${escapeHtml(note.trim())}`);
+  lines.push("", `Mở PMS để xác nhận hoặc từ chối: ${PMS_URL}`);
+  await notifyTelegram(lines.join("\n"));
+
   return json({
     success: true,
     request_id: inserted.id,
@@ -170,6 +190,51 @@ serve(async (req) => {
     },
   });
 });
+
+// ---------- Telegram thong bao (bot van hanh) ----------
+const PMS_URL = "https://hello-dalat-hostel-pms.vercel.app";
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function fmtDate(d: string): string {
+  const [y, m, day] = d.split("-");
+  return `${day}/${m}/${y}`;
+}
+
+function fmtVnd(n: number): string {
+  return `${n.toLocaleString("vi-VN")}đ`;
+}
+
+// Khong bao gio throw: loi Telegram khong duoc lam hong yeu cau dat phong da luu.
+async function notifyTelegram(text: string): Promise<void> {
+  const token = Deno.env.get("TELEGRAM_BOT_TOKEN");
+  const chatId = Deno.env.get("TELEGRAM_CHAT_ID");
+  if (!token || !chatId) {
+    console.error("[telegram] thieu TELEGRAM_BOT_TOKEN hoac TELEGRAM_CHAT_ID");
+    return;
+  }
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text,
+        parse_mode: "HTML",
+        disable_web_page_preview: true,
+      }),
+      signal: AbortSignal.timeout(4000),
+    });
+    if (!res.ok) {
+      console.error(`[telegram] sendMessage that bai: ${res.status} ${await res.text()}`);
+    }
+  } catch (err) {
+    const raw = err instanceof Error ? err.message : String(err);
+    console.error(`[telegram] fetch loi: ${raw.replaceAll(token, "***")}`);
+  }
+}
 
 // Helper
 function json(data: unknown, status = 200): Response {
