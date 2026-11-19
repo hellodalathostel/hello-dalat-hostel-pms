@@ -57,7 +57,9 @@ async function sendTelegram(text: string): Promise<boolean> {
         parse_mode: "HTML",
         disable_web_page_preview: true,
       }),
-      signal: AbortSignal.timeout(5000),
+      // Ngan hon timeout 5s cua pg_net trong trigger, chua cho boot + cac query DB,
+      // de pg_net nhan duoc 502 thay vi tu timeout.
+      signal: AbortSignal.timeout(3000),
     });
     if (!res.ok) {
       console.error(`[notify-booking-request] sendMessage that bai: ${res.status} ${await res.text()}`);
@@ -117,25 +119,37 @@ Deno.serve(async (req) => {
     .eq("id", reqRow.room_id)
     .maybeSingle();
 
-  // Canh bao trung phong (soft): loc is_deleted o CA bookings va groups.
+  // Canh bao trung phong (soft): cung pham vi voi check_room_availability (luc xac nhan)
+  // = booking chua huy (ke ca checked-out) + room_blocks; loc is_deleted o CA bookings va groups.
   // Quan he bookings.group_id -> groups.id (bookings_group_id_fkey) da xac minh.
-  // Neu embed loi -> bao "khong kiem tra duoc" thay vi im lang.
+  // Neu query loi -> bao "khong kiem tra duoc" thay vi im lang.
   let conflictLine: string | null = null;
-  const { data: conflicts, error: confErr } = await supabase
-    .from("bookings")
-    .select("id, groups!inner(is_deleted)")
-    .eq("room_id", reqRow.room_id)
-    .in("status", ["booked", "checked-in"])
-    .eq("is_deleted", false)
-    .eq("groups.is_deleted", false)
-    .lt("check_in", reqRow.check_out)
-    .gt("check_out", reqRow.check_in)
-    .limit(1);
-  if (confErr) {
-    console.error("[notify-booking-request] check conflict loi:", confErr.message);
+  const [{ data: conflicts, error: confErr }, { data: blocks, error: blockErr }] = await Promise.all([
+    supabase
+      .from("bookings")
+      .select("id, groups!inner(is_deleted)")
+      .eq("room_id", reqRow.room_id)
+      .neq("status", "cancelled")
+      .eq("is_deleted", false)
+      .eq("groups.is_deleted", false)
+      .lt("check_in", reqRow.check_out)
+      .gt("check_out", reqRow.check_in)
+      .limit(1),
+    supabase
+      .from("room_blocks")
+      .select("id")
+      .eq("room_id", reqRow.room_id)
+      .lt("start_date", reqRow.check_out)
+      .gt("end_date", reqRow.check_in)
+      .limit(1),
+  ]);
+  if (confErr || blockErr) {
+    console.error("[notify-booking-request] check conflict loi:", (confErr ?? blockErr)!.message);
     conflictLine = "⚠️ Không kiểm tra được trùng phòng, hãy xem lịch phòng trước khi xác nhận";
   } else if ((conflicts?.length ?? 0) > 0) {
     conflictLine = "⚠️ Phòng này đã có booking trùng ngày, kiểm tra trước khi xác nhận";
+  } else if ((blocks?.length ?? 0) > 0) {
+    conflictLine = "⚠️ Phòng này đang bị khoá (room block) trùng ngày, kiểm tra trước khi xác nhận";
   }
 
   // Coc goi y = gia dem dau (get_suggested_price tra INTEGER)
