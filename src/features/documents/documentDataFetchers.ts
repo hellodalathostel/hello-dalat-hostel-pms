@@ -108,7 +108,7 @@ export async function fetchDocumentData(
   return {
     bookingId: booking.id,
     groupId: group.id,
-    roomName: room.name,
+    roomName: room.id, // số phòng (rooms.id); rooms.name chỉ là loại phòng, trùng tên giữa các phòng
     roomType: room.type,
     checkIn: booking.check_in,
     checkOut: booking.check_out,
@@ -226,7 +226,7 @@ export async function fetchGroupDocumentData(
     const room = Array.isArray(roomArr) ? roomArr[0] ?? null : roomArr;
     return {
       bookingId: b.id,
-      roomName: room?.name ?? b.room_id,
+      roomName: b.room_id, // số phòng (rooms.id), không dùng rooms.name vì trùng tên
       roomType: room?.type ?? '',
       checkIn: b.check_in,
       checkOut: b.check_out,
