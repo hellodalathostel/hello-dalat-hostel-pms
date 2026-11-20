@@ -39,6 +39,8 @@ export interface GroupBookingRow {
   services: BookingServiceItem[];
   discounts: BookingDiscountItem[];
   grandTotal: number;
+  hasEarlyCheckIn: boolean;
+  hasLateCheckOut: boolean;
 }
 
 export interface GroupDocumentData {
@@ -279,11 +281,38 @@ export const htmlFooter = (extra?: string, lang: 'vi' | 'en' = 'vi') => `
 
 // ─── House Rules ──────────────────────────────────────────────────────────────
 
-export const houseRulesHtml = (lang: 'vi' | 'en' = 'vi') => lang === 'en' ? `
+/**
+ * Dòng giờ check-in/check-out trong nội quy.
+ * Mặc định giờ chuẩn 14:00 / 12:00. Booking có nhận sớm / trả muộn → không in giờ chuẩn
+ * cho phía đó (tránh mâu thuẫn), thay bằng "giờ theo thỏa thuận" (DB chưa lưu giờ cụ thể).
+ * perRoom = true (tài liệu đoàn): giữ giờ chuẩn + chú thích xem chi tiết từng phòng,
+ * vì chỉ một số phòng trong đoàn có nhận sớm / trả muộn.
+ */
+export interface CheckTimeOpts {
+  hasEarly?: boolean;
+  hasLate?: boolean;
+  perRoom?: boolean;
+}
+
+export const checkTimeRuleText = (lang: 'vi' | 'en' = 'vi', o: CheckTimeOpts = {}) => {
+  const early = !!o.hasEarly && !o.perRoom;
+  const late = !!o.hasLate && !o.perRoom;
+  const note = o.perRoom && (o.hasEarly || o.hasLate);
+  if (lang === 'en') {
+    const ci = early ? 'Early check-in (time as arranged)' : 'Check-in from 14:00';
+    const co = late ? 'Late check-out (time as arranged)' : 'Check-out by 12:00';
+    return `${ci} — ${co}${note ? ' (rooms with early check-in / late check-out: see room details)' : ''}`;
+  }
+  const ci = early ? 'Check-in sớm (giờ theo thỏa thuận)' : 'Check-in từ 14:00';
+  const co = late ? 'Check-out muộn (giờ theo thỏa thuận)' : 'Check-out trước 12:00';
+  return `${ci} — ${co}${note ? ' (phòng có nhận sớm / trả muộn: xem chi tiết từng phòng)' : ''}`;
+};
+
+export const houseRulesHtml = (lang: 'vi' | 'en' = 'vi', o: CheckTimeOpts = {}) => lang === 'en' ? `
 <div class="section">
   <div class="section-label">House Rules</div>
   <ul class="rules-list">
-    <li><span class="rules-icon">◆</span><span>Check-in from 14:00 — Check-out by 12:00</span></li>
+    <li><span class="rules-icon">◆</span><span>${checkTimeRuleText('en', o)}</span></li>
     <li><span class="rules-icon">◆</span><span>Quiet hours after 22:00 — please be considerate of other guests</span></li>
     <li><span class="rules-icon">◆</span><span>No smoking inside the room or common areas</span></li>
     <li><span class="rules-icon">◆</span><span>Please return your key card at check-out</span></li>
@@ -293,7 +322,7 @@ export const houseRulesHtml = (lang: 'vi' | 'en' = 'vi') => lang === 'en' ? `
 <div class="section">
   <div class="section-label">Nội quy phòng</div>
   <ul class="rules-list">
-    <li><span class="rules-icon">◆</span><span>Check-in từ 14:00 — Check-out trước 12:00</span></li>
+    <li><span class="rules-icon">◆</span><span>${checkTimeRuleText('vi', o)}</span></li>
     <li><span class="rules-icon">◆</span><span>Giữ yên lặng sau 22:00, tránh làm phiền các phòng khác</span></li>
     <li><span class="rules-icon">◆</span><span>Không hút thuốc trong phòng và khu vực chung</span></li>
     <li><span class="rules-icon">◆</span><span>Vui lòng trả chìa khoá khi check-out</span></li>

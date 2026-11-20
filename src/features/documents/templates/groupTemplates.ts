@@ -237,7 +237,10 @@ export function renderGroupConfirmation(data: GroupDocumentData, lang: 'vi' | 'e
 
   const bookingRows = data.bookings.map(b => `
     <tr>
-      <td><strong>${b.roomName}</strong></td>
+      <td><strong>${b.roomName}</strong>${b.hasEarlyCheckIn || b.hasLateCheckOut ? `<br><small style="color:#8a7a60">${[
+        b.hasEarlyCheckIn ? (isEn ? 'Early check-in, time as arranged' : 'Nhận sớm, giờ theo thỏa thuận') : '',
+        b.hasLateCheckOut ? (isEn ? 'Late check-out, time as arranged' : 'Trả muộn, giờ theo thỏa thuận') : '',
+      ].filter(Boolean).join(' · ')}</small>` : ''}</td>
       <td class="tc">${fmtDate(b.checkIn)}</td>
       <td class="tc">${fmtDate(b.checkOut)}</td>
       <td class="tc">${b.nights}</td>
@@ -399,7 +402,11 @@ export function renderGroupConfirmation(data: GroupDocumentData, lang: 'vi' | 'e
     ${totalSection}
     ${qrSection}
     ${cancelSection}
-    ${houseRulesHtml(lang)}
+    ${houseRulesHtml(lang, {
+      perRoom: true,
+      hasEarly: data.bookings.some(b => b.hasEarlyCheckIn),
+      hasLate: data.bookings.some(b => b.hasLateCheckOut),
+    })}
 
   </div>
   ${htmlFooter(undefined, lang)}

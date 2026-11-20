@@ -84,11 +84,11 @@ export function renderBookingConfirmation(d: DocumentData): { html: string; zalo
         </div>
         <div class="info-cell">
           <div class="info-key">Check-in</div>
-          <div class="info-val">${fmtDate(d.checkIn)} · ${isEN ? 'from' : 'từ'} 14:00${d.hasEarlyCheckIn ? ` <span class="badge badge-amber">${isEN ? 'Early CI' : 'Early'}</span>` : ''}</div>
+          <div class="info-val">${fmtDate(d.checkIn)} · ${d.hasEarlyCheckIn ? (isEN ? 'early check-in, time as arranged' : 'nhận sớm, giờ theo thỏa thuận') : `${isEN ? 'from' : 'từ'} 14:00`}</div>
         </div>
         <div class="info-cell">
           <div class="info-key">Check-out</div>
-          <div class="info-val">${fmtDate(d.checkOut)} · ${isEN ? 'by' : 'trước'} 12:00${d.hasLateCheckOut ? ` <span class="badge badge-amber">${isEN ? 'Late CO' : 'Late'}</span>` : ''}</div>
+          <div class="info-val">${fmtDate(d.checkOut)} · ${d.hasLateCheckOut ? (isEN ? 'late check-out, time as arranged' : 'trả muộn, giờ theo thỏa thuận') : `${isEN ? 'by' : 'trước'} 12:00`}</div>
         </div>
         <div class="info-cell">
           <div class="info-key">${isEN ? 'Nights' : 'Số đêm'}</div>
@@ -171,7 +171,7 @@ export function renderBookingConfirmation(d: DocumentData): { html: string; zalo
     }
 
     <hr class="divider">
-    ${houseRulesHtml(lang)}
+    ${houseRulesHtml(lang, { hasEarly: d.hasEarlyCheckIn, hasLate: d.hasLateCheckOut })}
     ${cancelPolicyHtml(hasDeposit, lang)}
   </div>
 

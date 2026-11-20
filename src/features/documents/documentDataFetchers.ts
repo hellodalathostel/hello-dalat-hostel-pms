@@ -190,6 +190,8 @@ export async function fetchGroupDocumentData(
       surcharge,
       grand_total,
       status,
+      has_early_check_in,
+      has_late_check_out,
       booking_services (
         name,
         price,
@@ -249,6 +251,8 @@ export async function fetchGroupDocumentData(
         amount: d.amount,
       })),
       grandTotal: b.grand_total ?? 0,
+      hasEarlyCheckIn: b.has_early_check_in ?? false,
+      hasLateCheckOut: b.has_late_check_out ?? false,
     };
   });
 
