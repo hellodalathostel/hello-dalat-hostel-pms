@@ -23,7 +23,6 @@ import {
   DownOutlined,
   CopyOutlined,
   FileProtectOutlined,
-  WalletOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { useDocumentGeneratorByGroup as useDocumentGenerator } from './useDocumentGenerator'
@@ -33,8 +32,6 @@ const { Text } = Typography
 
 interface Props {
   groupId: string
-  /** Nếu remaining > 0, hiển thị thêm các doc deposit */
-  remaining?: number
 }
 
 interface DepositOptions {
@@ -42,7 +39,7 @@ interface DepositOptions {
   deadline?: string
 }
 
-export function DocumentActionsMenu({ groupId, remaining = 0 }: Props) {
+export function DocumentActionsMenu({ groupId }: Props) {
   const [depositModalOpen, setDepositModalOpen] = useState(false)
   const [pendingKind, setPendingKind] = useState<DocKind | null>(null)
   const [pendingFormat, setPendingFormat] = useState<'print' | 'zalo'>('print')
@@ -53,21 +50,6 @@ export function DocumentActionsMenu({ groupId, remaining = 0 }: Props) {
 
   const { isGenerating, zaloText, clearZaloText, generateAndPrint, generateAndCopyZalo } =
     useDocumentGenerator({ groupId })
-
-  // Các loại doc luôn có
-  const alwaysItems: { kind: DocKind; icon: React.ReactNode }[] = [
-    { kind: 'booking_confirmation', icon: <FileTextOutlined /> },
-    { kind: 'arrival_notice', icon: <FileTextOutlined /> },
-    { kind: 'invoice', icon: <FileTextOutlined /> },
-  ]
-
-  // Deposit items chỉ khi còn nợ
-  const depositItems: { kind: DocKind; icon: React.ReactNode }[] = remaining > 0
-    ? [
-        { kind: 'deposit_request', icon: <FileTextOutlined /> },
-        { kind: 'deposit_confirmation', icon: <FileTextOutlined /> },
-      ]
-    : []
 
   /** Trigger generate — nếu là deposit_request thì mở modal nhập số tiền cọc */
   async function triggerGenerate(kind: DocKind, format: 'print' | 'zalo') {
@@ -135,54 +117,32 @@ export function DocumentActionsMenu({ groupId, remaining = 0 }: Props) {
     ],
   })
 
+  const singleItem = (kind: DocKind) =>
+    buildSubItems(kind, DOC_KIND_LABELS[kind], <FileTextOutlined />)
+
+  const groupItem = (
+    kind: 'group_confirmation' | 'group_invoice',
+    icon: React.ReactNode
+  ): NonNullable<MenuProps['items']>[number] => ({
+    key: kind,
+    icon,
+    label: DOC_KIND_LABELS[kind],
+    children: [
+      {
+        key: `${kind}__print`,
+        icon: <PrinterOutlined />,
+        label: 'In / Tải PDF',
+        onClick: () => triggerGenerate(kind, 'print'),
+      },
+    ],
+  })
+
+  // Chỉ giữ 4 tài liệu: xác nhận đặt phòng (đơn/đoàn), hóa đơn (đơn/đoàn)
   const menuItems: MenuProps['items'] = [
-    ...alwaysItems.map(({ kind, icon }) =>
-      buildSubItems(kind, DOC_KIND_LABELS[kind], icon)
-    ),
-    {
-      key: 'group_invoice',
-      icon: <FileTextOutlined />,
-      label: DOC_KIND_LABELS['group_invoice'],
-      children: [
-        {
-          key: 'group_invoice__print',
-          icon: <PrinterOutlined />,
-          label: 'In / Tải PDF',
-          onClick: () => triggerGenerate('group_invoice', 'print'),
-        },
-      ],
-    },
-    {
-      key: 'group_confirmation',
-      icon: <FileProtectOutlined />,
-      label: DOC_KIND_LABELS['group_confirmation'],
-      children: [
-        {
-          key: 'group_confirmation__print',
-          icon: <PrinterOutlined />,
-          label: 'In / Tải PDF',
-          onClick: () => triggerGenerate('group_confirmation', 'print'),
-        },
-      ],
-    },
-    {
-      key: 'group_deposit_request',
-      icon: <WalletOutlined />,
-      label: DOC_KIND_LABELS['group_deposit_request'],
-      children: [
-        {
-          key: 'group_deposit_request__zalo',
-          icon: <MessageOutlined />,
-          label: 'Copy Zalo',
-          onClick: () => triggerGenerate('group_deposit_request', 'zalo'),
-        },
-      ],
-    },
-    ...(depositItems.length > 0
-      ? [{ type: 'divider' as const }, ...depositItems.map(({ kind, icon }) =>
-          buildSubItems(kind, DOC_KIND_LABELS[kind], icon)
-        )]
-      : []),
+    singleItem('booking_confirmation'),
+    groupItem('group_confirmation', <FileProtectOutlined />),
+    singleItem('invoice'),
+    groupItem('group_invoice', <FileTextOutlined />),
   ]
 
   return (

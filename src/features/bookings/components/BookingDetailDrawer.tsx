@@ -282,7 +282,7 @@ export default function BookingDetailDrawer({ groupId = null, bookingId = null, 
               >
                 Lịch sử
               </Button>
-              <DocumentActionsMenu groupId={effectiveGroupId} remaining={Math.max(0, balanceDue)} />
+              <DocumentActionsMenu groupId={effectiveGroupId} />
             </Space>
           ) : null
         }
