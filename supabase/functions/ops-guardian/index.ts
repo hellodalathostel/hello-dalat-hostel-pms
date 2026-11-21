@@ -15,11 +15,10 @@
 
 import "@supabase/functions-js/edge-runtime.d.ts";
 import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2";
+import { sendReport } from "../_shared/telegram-report.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
-const TELEGRAM_CHAT_ID = Deno.env.get("TELEGRAM_CHAT_ID")!;
 
 const JOB_NAME = "ops-guardian";
 
@@ -58,6 +57,26 @@ interface SemanticScan {
   results: SemanticResult[];
 }
 
+interface CronResult {
+  job_name: string;
+  severity: string;
+  cron_job_name: string;
+  cron_active: boolean | null;
+  last_status: string | null;
+  last_run_at: string | null;
+  verdict: "ok" | "fail" | "unknown";
+  reason: string | null;
+  last_message: string;
+}
+
+interface CronScan {
+  checked: number;
+  failed: number;
+  unknown: number;
+  results: CronResult[];
+  scanned_at: string;
+}
+
 interface ResolvedAlert {
   job_name: string;
   alert_type: string;
@@ -75,6 +94,7 @@ interface ScanResult {
   all_issues: Issue[];
   ok_count: number;
   scanned_at: string;
+  cron?: CronScan;
   semantic?: SemanticScan;
   resolved?: ResolvedBlock;
 }
@@ -98,26 +118,21 @@ function hourICT(): number {
   );
 }
 
+/** Định dạng thời điểm theo giờ VN, dùng cho log cron. */
+function formatVNTime(iso: string | null): string {
+  if (!iso) return "chưa rõ";
+  return new Date(iso).toLocaleString("vi-VN", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 async function sendTelegram(text: string): Promise<void> {
-  const res = await fetch(
-    `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: TELEGRAM_CHAT_ID,
-        text,
-        parse_mode: "HTML",
-        disable_web_page_preview: true,
-      }),
-    },
-  );
-  // Bắt buộc check res.ok — Telegram 400 bị nuốt lặng lẽ nếu không check.
-  if (!res.ok) {
-    const body = await res.text();
-    console.error(`[telegram] ${res.status}: ${body}`);
-    throw new Error(`Telegram ${res.status}`);
-  }
+  await sendReport(text, { parseMode: "HTML", disableWebPagePreview: true });
 }
 
 const ISSUE_LABEL: Record<string, string> = {
@@ -139,6 +154,56 @@ function formatIssue(i: Issue): string {
   if (i.silent_for) line += `\n   Im lặng: ${escapeHtml(i.silent_for)}`;
   if (i.last_error) line += `\n   Lỗi: ${escapeHtml(i.last_error)}`;
   return line;
+}
+
+const CRON_REASON_LABEL: Record<string, string> = {
+  cron_job_missing: "chưa đăng ký trong cron.job",
+  cron_disabled: "cron job đang tắt (active=false)",
+  cron_command_error: "cron gọi Edge Function nhưng lỗi",
+};
+
+/** ~150 ký tự — đủ để thấy lỗi Postgres nhưng không làm tin nhắn quá dài. */
+function truncateMessage(msg: string): string {
+  return msg.length > 150 ? `${msg.slice(0, 150)}…` : msg;
+}
+
+function formatCronIssue(c: CronResult): string {
+  const reason = CRON_REASON_LABEL[c.reason ?? ""] ?? c.reason ?? "không rõ";
+  let line = `🔴 <b>${escapeHtml(c.job_name)}</b> — ${escapeHtml(reason)}`;
+  line += `\n   Chạy lần cuối: ${escapeHtml(formatVNTime(c.last_run_at))}`;
+  if (c.last_message) {
+    line += `\n   Log: ${escapeHtml(truncateMessage(c.last_message))}`;
+  }
+  return line;
+}
+
+/**
+ * Render phần cron chết — đặt TRƯỚC heartbeat/semantic vì cron chết là
+ * nguyên nhân gốc (heartbeat im lặng chỉ là triệu chứng theo sau).
+ * verdict='unknown' (chưa đủ bằng chứng) không đưa vào đây, chỉ 'fail' thật sự.
+ */
+function renderCronBlock(scan: ScanResult): string {
+  const failed = (scan.cron?.results ?? []).filter((c) => c.verdict === "fail");
+  if (failed.length === 0) return "";
+  const lines = failed.map(formatCronIssue).join("\n\n");
+  return `\n🔴 <b>Cron chết — Edge Function không được gọi</b>\n\n${lines}\n`;
+}
+
+/** Dòng tổng cuối message, cộng cả 3 tầng: cron / heartbeat (im lặng) / semantic. */
+function summaryLine(scan: ScanResult): string {
+  const unhealthy = new Set<string>();
+  for (const i of scan.all_issues ?? []) unhealthy.add(i.job_name);
+  for (const r of scan.semantic?.results ?? []) {
+    if (r.verdict === "fail") unhealthy.add(r.job_name);
+  }
+  for (const c of scan.cron?.results ?? []) {
+    if (c.verdict === "fail") unhealthy.add(c.job_name);
+  }
+  const total = scan.ok_count + unhealthy.size;
+  const cronFailed = scan.cron?.failed ?? 0;
+  const silent = scan.all_issues?.length ?? 0;
+  const semanticFailed = scan.semantic?.failed ?? 0;
+  return `${total} job — ${cronFailed} cron lỗi, ${silent} im lặng, ${semanticFailed} sai ngữ nghĩa`;
 }
 
 /**
@@ -215,16 +280,19 @@ Deno.serve(async (_req: Request) => {
     const scan = data as ScanResult;
     const newAlerts = scan.new_alerts ?? [];
     const allIssues = scan.all_issues ?? [];
+    const cronFailed = scan.cron?.failed ?? 0;
     const isMorningReport = hourICT() === 8;
 
     let sent = false;
+    const cronBlock = renderCronBlock(scan);
 
-    if (newAlerts.length > 0) {
-      // Có vấn đề MỚI -> báo ngay
-      const lines = newAlerts.map(formatIssue).join("\n\n");
+    if (newAlerts.length > 0 || cronFailed > 0) {
+      // Có vấn đề MỚI (heartbeat) hoặc cron chết -> báo ngay
+      const heartbeatLines = newAlerts.map(formatIssue).join("\n\n");
+      const heartbeatSection = heartbeatLines ? `\n\n${heartbeatLines}` : "";
       await sendTelegram(
-        `⚠️ <b>Ops Guardian — phát hiện sự cố</b>\n\n${lines}\n\n` +
-          `Đang khoẻ: ${scan.ok_count} job`,
+        `⚠️ <b>Ops Guardian — phát hiện sự cố</b>\n${cronBlock}${heartbeatSection}\n\n` +
+          summaryLine(scan),
       );
       sent = true;
     } else if (isMorningReport) {
@@ -232,12 +300,12 @@ Deno.serve(async (_req: Request) => {
       let message: string;
       if (allIssues.length === 0) {
         message = `✅ <b>Ops Guardian — báo cáo sáng</b>\n\n` +
-          `Tất cả ${scan.ok_count} job đang chạy bình thường.`;
+          `Tất cả đang chạy bình thường. ${summaryLine(scan)}`;
       } else {
         const lines = allIssues.map(formatIssue).join("\n\n");
-        message = `📋 <b>Ops Guardian — báo cáo sáng</b>\n\n` +
+        message = `📋 <b>Ops Guardian — báo cáo sáng</b>\n${cronBlock}\n` +
           `Còn tồn ${allIssues.length} sự cố chưa xử lý:\n\n${lines}\n\n` +
-          `Đang khoẻ: ${scan.ok_count} job`;
+          summaryLine(scan);
       }
       message += renderSemanticBlock(scan);
       await sendTelegram(message);
@@ -248,6 +316,7 @@ Deno.serve(async (_req: Request) => {
     await reportHeartbeat(supabase, startedAt, {
       new_alerts: newAlerts.length,
       all_issues: allIssues.length,
+      cron_failed: cronFailed,
       ok_count: scan.ok_count,
       telegram_sent: sent,
       morning_report: isMorningReport,
@@ -260,6 +329,7 @@ Deno.serve(async (_req: Request) => {
         ok: true,
         new_alerts: newAlerts.length,
         all_issues: allIssues.length,
+        cron_failed: cronFailed,
         ok_count: scan.ok_count,
         telegram_sent: sent,
       }),

@@ -1,16 +1,24 @@
 import "@supabase/functions-js/edge-runtime.d.ts";
+import { reportRun } from "../_shared/heartbeat.ts";
+import { sendReport } from "../_shared/telegram-report.ts";
 
-const TELEGRAM_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
-const CHAT_ID = Deno.env.get("TELEGRAM_CHAT_ID")!;
+const JOB = "dk13-reminder";
 
 Deno.serve(async () => {
-  const msg = "🚔 <b>Nhắc nhở ĐK13 — Báo cáo an ninh quý</b>\n\nĐến hạn nộp báo cáo lưu trú quý cho Công an Phường Xuân Hương.\n• Điền mẫu ĐK13\n• Ký tên: Nguyễn Anh Minh\n• Nộp tại: Công an Phường Xuân Hương";
+  const t0 = performance.now();
 
-  await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: CHAT_ID, text: msg, parse_mode: "HTML" }),
-  });
+  try {
+    const msg = "🚔 <b>Nhắc nhở ĐK13 — Báo cáo an ninh quý</b>\n\nĐến hạn nộp báo cáo lưu trú quý cho Công an Phường Xuân Hương.\n• Điền mẫu ĐK13\n• Ký tên: Nguyễn Anh Minh\n• Nộp tại: Công an Phường Xuân Hương";
 
-  return new Response("OK", { status: 200 });
+    await sendReport(msg, { parseMode: "HTML" });
+
+    await reportRun(JOB, "ok", t0, {});
+
+    return new Response("OK", { status: 200 });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`${JOB} error:`, msg);
+    await reportRun(JOB, "error", t0, null, msg);
+    return new Response(msg, { status: 500 });
+  }
 });

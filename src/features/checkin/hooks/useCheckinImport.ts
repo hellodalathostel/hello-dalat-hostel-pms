@@ -1,9 +1,15 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/api/supabase'
 import { useAppFeedback } from '@/shared/hooks/useAppFeedback'
 import { parseCheckinExcel, type GuestImportRow } from '../utils/parseCheckinExcel'
 import { translateCheckinError } from './useCheckIn'
+import {
+  computeOverCapacityGroups,
+  getGuestDocumentKey,
+  getImportGroupKey,
+  type OverCapacityGroup,
+} from '../utils/importOverCapacity'
 
 type ImportStatus = 'success' | 'no_booking' | 'error'
 
@@ -65,21 +71,97 @@ export function useCheckinImport() {
   const [processing, setProcessing] = useState(false)
   const [rows, setRows] = useState<GuestImportRow[]>([])
   const [results, setResults] = useState<ImportRowResult[]>([])
+  const [overCapacityGroups, setOverCapacityGroups] = useState<OverCapacityGroup[]>([])
+  const parseIdRef = useRef(0)
+
+  // Cảnh báo (không chặn): số khách trong file vượt sức chứa phòng.
+  // Lỗi tra cứu → bỏ qua cảnh báo, DB và luồng import vẫn chạy bình thường.
+  async function detectOverCapacity(parsedRows: GuestImportRow[]): Promise<OverCapacityGroup[]> {
+    const validRows = parsedRows.filter((row) => getRowValidationMessage(row) === null)
+    const roomIds = [
+      ...new Set(
+        validRows
+          .map((row) => row.roomId)
+          .filter((id): id is string => typeof id === 'string' && id !== ''),
+      ),
+    ]
+
+    if (roomIds.length === 0) return []
+
+    const { data, error } = await supabase.from('rooms').select('id, capacity').in('id', roomIds)
+
+    if (error || !data) {
+      message.warning('Không kiểm tra được sức chứa phòng, bỏ qua cảnh báo vượt sức chứa.')
+      return []
+    }
+
+    const capacityByRoom: Record<string, number> = {}
+    for (const room of data) {
+      capacityByRoom[room.id] = room.capacity
+    }
+
+    // Khách đã gắn sẵn vào booking đích (check-in nhiều đợt). Chọn booking giống runImport:
+    // cùng phòng + ngày đến, status booked/checked-in, id nhỏ nhất.
+    const checkInDates = [...new Set(validRows.map((row) => row.checkInDate))]
+    const { data: bookings, error: bookingsError } = await supabase
+      .from('bookings')
+      .select('id, room_id, check_in, booking_guests ( customers ( document_type, document_number ) )')
+      .in('room_id', roomIds)
+      .in('check_in', checkInDates)
+      .in('status', ['booked', 'checked-in'])
+      .order('id', { ascending: true })
+
+    if (bookingsError) {
+      message.warning('Không kiểm tra được sức chứa phòng, bỏ qua cảnh báo vượt sức chứa.')
+      return []
+    }
+
+    const existingGuestKeysByGroup: Record<string, string[]> = {}
+    for (const booking of bookings ?? []) {
+      const groupKey = getImportGroupKey(booking.room_id, booking.check_in)
+      if (existingGuestKeysByGroup[groupKey]) continue
+
+      const rawGuests: Array<{ customers?: unknown }> = Array.isArray(booking.booking_guests)
+        ? booking.booking_guests
+        : []
+      existingGuestKeysByGroup[groupKey] = rawGuests.flatMap((guest) => {
+        const customer = (Array.isArray(guest.customers) ? guest.customers[0] : guest.customers) as
+          | { document_type?: string | null; document_number?: string | null }
+          | null
+          | undefined
+        const key = getGuestDocumentKey(customer?.document_type, customer?.document_number)
+        return key ? [key] : []
+      })
+    }
+
+    return computeOverCapacityGroups(validRows, capacityByRoom, existingGuestKeysByGroup)
+  }
 
   async function parseFile(file: File): Promise<GuestImportRow[]> {
     setParsing(true)
 
+    // Chọn file mới khi file cũ còn đang parse → bỏ kết quả của lần parse cũ,
+    // để rows và cảnh báo luôn thuộc cùng một file.
+    const parseId = ++parseIdRef.current
+
     try {
       const parsedRows = await parseCheckinExcel(file)
+      const groups = await detectOverCapacity(parsedRows)
+      if (parseId !== parseIdRef.current) return parsedRows
+
       setRows(parsedRows)
       setResults([])
+      setOverCapacityGroups(groups)
       return parsedRows
     } catch (error) {
-      setRows([])
-      setResults([])
+      if (parseId === parseIdRef.current) {
+        setRows([])
+        setResults([])
+        setOverCapacityGroups([])
+      }
       throw error
     } finally {
-      setParsing(false)
+      if (parseId === parseIdRef.current) setParsing(false)
     }
   }
 
@@ -197,6 +279,10 @@ export function useCheckinImport() {
   function reset() {
     setRows([])
     setResults([])
+    setOverCapacityGroups([])
+    // Huỷ kết quả của lần parse đang chạy (nếu có).
+    parseIdRef.current += 1
+    setParsing(false)
   }
 
   return {
@@ -204,6 +290,7 @@ export function useCheckinImport() {
     processing,
     rows,
     results,
+    overCapacityGroups,
     parseFile,
     runImport,
     reset,

@@ -1,22 +1,14 @@
 import "@supabase/functions-js/edge-runtime.d.ts";
 import { reportRun } from "../_shared/heartbeat.ts";
+import { sendReport } from "../_shared/telegram-report.ts";
 
 const JOB = "daily-revenue";
 
-const TELEGRAM_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
-const CHAT_ID = Deno.env.get("TELEGRAM_CHAT_ID")!;
 const SHEETS_ID = Deno.env.get("GOOGLE_SHEETS_ID")!;
 const SHEETS_TOKEN = Deno.env.get("GOOGLE_SHEETS_TOKEN")!;
 
 async function sendTelegram(message: string) {
-  const res = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: CHAT_ID, text: message, parse_mode: "HTML" }),
-  });
-  if (!res.ok) {
-    throw new Error(`Telegram sendMessage that bai: ${res.status} ${await res.text()}`);
-  }
+  await sendReport(message, { parseMode: "HTML" });
 }
 
 Deno.serve(async (_req) => {
